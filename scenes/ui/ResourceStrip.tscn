@@ -1,0 +1,8 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scenes/ui/ResourceStrip.gd" id="1_resstrip"]
+
+[node name="ResourceStrip" type="PanelContainer"]
+offset_right = 480.0
+offset_bottom = 64.0
+script = ExtResource("1_resstrip")

@@ -1,0 +1,33 @@
+# Godot 4 ----------------------------------------------------------------
+# Editor cache + imported asset binaries (regenerated on open).
+.godot/
+
+# Export output.
+/builds/
+/export/
+*.exe
+*.pck
+*.zip
+
+# Godot may create these per-platform.
+/android/
+/ios/
+
+# Mono/C# (unused here, but safe to ignore).
+.mono/
+data_*/
+
+# OS / editor cruft -------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
+
+# Local tooling -----------------------------------------------------------
+# Claude Code local settings (machine-specific).
+.claude/
+
+# Design handoff reference bundle (not part of the buildable game).
+# Remove this line to track the Grimhollow design files in the repo.
+.design_ref/
