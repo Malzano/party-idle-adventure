@@ -82,6 +82,7 @@ func _create(id: String) -> Window:
 	w.title = def["title"]
 	w.size = def["size"]
 	w.min_size = Vector2i(960, 540)
+	w.initial_position = Window.WINDOW_INITIAL_POSITION_CENTER_MAIN_WINDOW_SCREEN
 	w.transient = false
 	w.exclusive = false
 	w.visible = false

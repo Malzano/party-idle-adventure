@@ -45,6 +45,10 @@ signal sim_stage_changed(label: String, stage_name: String)
 ## Auto-loot ticker entry: [who, verb, item, rarity].
 signal sim_loot(entry: Array)
 
+## One enemy of the current wave died (wave damage crossed its HP share).
+## The battlefield kills a token and respawns a fresh one from an edge.
+signal sim_enemy_killed
+
 ## Party HP/mana percentages changed (arrays of 4 floats, 0..100).
 signal sim_party_vitals(hp: Array, mana: Array)
 

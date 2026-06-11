@@ -12,6 +12,14 @@ const _ENEMY_SIZE := Vector2(62, 82)
 const _ELITE_SIZE := Vector2(92, 116)
 const _MAX_FLOATERS := 15
 
+## The roaming advance: the party reads as walking toward the top-right while
+## the world scrolls past underneath (CLAUDE.md §6 endless-travel feel).
+const TRAVEL_DIR := Vector2(0.7547, -0.656)  # unit vector at -41°
+const SCROLL_SPEED := 26.0                   # world px/s at 1× sim speed
+const PARTY_CENTER := Vector2(24.5, 65.75)   # cluster centroid (battlefield %)
+const STEP_SPACING := 26.0                   # px walked between footsteps
+const STEP_LIFE := 6.0                       # seconds before a footstep fades out
+
 var _t: float = 0.0
 var _layouts: Array[Callable] = []
 var _bobs: Array[Dictionary] = []
@@ -19,6 +27,18 @@ var _pulses: Array[Dictionary] = []
 var _floater_holder: Control
 var _relayout_pending: bool = false
 var _rng := RandomNumberGenerator.new()
+
+# --- living-world state ---
+var _floor: _IsoFloor
+var _steps_holder: Control
+var _units_holder: Control
+var _props: Array[Dictionary] = []      # {node, pct}
+var _enemies: Array[Dictionary] = []    # {node, sprite, bar, pct, engage, start_d, speed, elite, state}
+var _footsteps: Array[Dictionary] = []  # {node, pct, life}
+var _respawn_at: Array[float] = []      # _t deadlines for replacement spawns
+var _step_accum: float = 0.0
+var _step_side: bool = false
+var _resort_accum: float = 0.0
 
 
 func _ready() -> void:
@@ -28,6 +48,7 @@ func _ready() -> void:
 	_build()
 	resized.connect(_request_relayout)
 	EventBus.sim_floater.connect(_on_floater)
+	EventBus.sim_enemy_killed.connect(_on_enemy_killed)
 	_request_relayout()
 
 
@@ -53,13 +74,30 @@ func _process(delta: float) -> void:
 		m.a = lerpf(float(p["min"]), float(p["max"]), wv2)
 		ci.modulate = m
 
+	# ---- living world: scroll, enemy approach, deaths, respawns ----
+	if size.x < 4.0:
+		return
+	var spd := float(CombatSim.speed)
+	var drift_px := TRAVEL_DIR * SCROLL_SPEED * spd * delta
+	var drift_pct := Vector2(drift_px.x / size.x, drift_px.y / size.y) * 100.0
+	_scroll_world(drift_px, drift_pct, delta)
+	_update_enemies(delta, spd)
+	while not _respawn_at.is_empty() and _respawn_at[0] <= _t:
+		_respawn_at.pop_front()
+		_spawn_enemy(false)
+	_resort_accum += delta
+	if _resort_accum >= 0.2:
+		_resort_accum = 0.0
+		_resort_depth()
+
 
 # =========================================================================
 # Build
 # =========================================================================
 
 func _build() -> void:
-	add_child(_IsoFloor.new())
+	_floor = _IsoFloor.new()
+	add_child(_floor)
 	add_child(_IsoFog.new())
 
 	# ---- travel trail (where the party came from, bottom-left) ----
@@ -68,16 +106,15 @@ func _build() -> void:
 	add_child(smear)
 	_place_center(smear, 20.0, 74.0)
 
+	# Dynamic footsteps: seeded from the design's TRAIL, then continuously
+	# laid down behind the striding party and drifted away with the world.
+	_steps_holder = Control.new()
+	_steps_holder.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_steps_holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_steps_holder)
 	for i in GameContent.TRAIL.size():
 		var tr: Dictionary = GameContent.TRAIL[i]
-		var step := _Footstep.new()
-		step.size = Vector2(18, 7)
-		step.rotation_degrees = -35.0
-		if i % 2 == 1:
-			step.scale = Vector2(-1, 1)
-		step.modulate = Color(1, 1, 1, float(tr["o"]))
-		add_child(step)
-		_place_center(step, float(tr["x"]), float(tr["y"]))
+		_add_footstep(Vector2(float(tr["x"]), float(tr["y"])), i % 2 == 1, STEP_LIFE * float(tr["o"]))
 
 	# ---- path ahead: ember beam + pulsing chevrons toward the top-right ----
 	var beam := _Beam.new()
@@ -99,17 +136,27 @@ func _build() -> void:
 		_place_center(ch, float(c["x"]), float(c["y"]), true)
 		_pulses.append({"node": ch, "period": 1.5, "delay": float(i) * 0.18, "min": 0.12, "max": 0.9})
 
-	# ---- props + enemies + heroes, painter-sorted by depth (zIndex = y) ----
-	var entries: Array = []
+	# ---- props + enemies + heroes live in one holder, re-depth-sorted as
+	# they move (painter order by feet y, heroes biased +12 like the design) ----
+	_units_holder = Control.new()
+	_units_holder.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_units_holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_units_holder)
+
 	for p: Dictionary in GameContent.PROPS:
-		entries.append([roundi(float(p["y"])), _make_prop(p)])
-	for e: Dictionary in GameContent.ENEMIES:
-		entries.append([roundi(float(e["y"])), _make_enemy(e)])
+		var prop := _make_prop(p)
+		_units_holder.add_child(prop)
+		_props.append({"node": prop, "pct": Vector2(float(p["x"]), float(p["y"]))})
+
 	for i in GameContent.PARTY.size():
-		entries.append([roundi(float(GameContent.PARTY[i]["y"])) + 12, _make_hero(GameContent.PARTY[i], i)])
-	entries.sort_custom(func(a: Array, b: Array) -> bool: return int(a[0]) < int(b[0]))
-	for en: Array in entries:
-		add_child(en[1])
+		var hero := _make_hero(GameContent.PARTY[i], i)
+		hero.set_meta("depth_bias", 12.0)
+		_units_holder.add_child(hero)
+
+	# Initial enemy wave: one elite + regulars, staggered along their approach
+	# so the field opens with the design's far/mid/near depth mix.
+	for i in Balance.inum("enemy.per_wave", 8):
+		_spawn_enemy(true)
 
 	# ---- "ADVANCING ↗" at the party, rotated with the travel direction ----
 	var adv := HBoxContainer.new()
@@ -189,45 +236,87 @@ func _make_prop(p: Dictionary) -> Control:
 		unit.add_child(flame)
 		_pulses.append({"node": flame, "period": 1.8, "delay": 0.0, "min": 0.5, "max": 1.0})
 
-	_place_bottom(unit, float(p["x"]), float(p["y"]))
+	# Position is driven per-frame by the world scroll (_scroll_world).
 	return unit
 
 
-## Enemy: depth scale/fade, hp bar overhead, elite epic glow, lunge streak +
-## lunge/approach motion, ground shadow, hover tooltip.
-func _make_enemy(e: Dictionary) -> Control:
-	var elite := bool(e.get("elite", false))
-	var dist := String(e["dist"])
-	var lunge := bool(e.get("lunge", false))
-	var usz := _ELITE_SIZE if elite else _ENEMY_SIZE
-	var d: Dictionary = GameContent.DIST.get(dist, GameContent.DIST["mid"])
+## Spawn one enemy at a screen edge and send it at the party. [param initial]
+## fast-forwards it a random way down its approach so the opening frame has
+## the design's far/mid/near depth mix.
+func _spawn_enemy(initial: bool) -> void:
+	var has_elite := false
+	for e in _enemies:
+		if bool(e["elite"]) and String(e["state"]) != "dying":
+			has_elite = true
+			break
+	var elite := not has_elite
+	var lunge := (not elite) and _rng.randf() < 0.45
+	var enemy_name := "Bone Warden" if elite else ("Marrow Stalker" if _rng.randf() < 0.4 else "Hollow Ghoul")
 
+	# Edge spawn point: hot (top-right) markers weighted ×3, elite always TR.
+	var spawn: Dictionary = GameContent.SPAWNS[0]
+	if not elite:
+		var pool: Array = []
+		for s: Dictionary in GameContent.SPAWNS:
+			var weight := 3 if bool(s.get("hot", false)) else 1
+			for _i in weight:
+				pool.append(s)
+		spawn = pool[_rng.randi_range(0, pool.size() - 1)]
+	var pct := Vector2(float(spawn["x"]) + _rng.randf_range(-3.0, 3.0), float(spawn["y"]) + _rng.randf_range(-3.0, 3.0))
+
+	# Engage slot: a spot on a loose ring around the clash zone.
+	var ang := _rng.randf_range(0.0, TAU)
+	var radius := _rng.randf_range(3.5, 8.5)
+	var engage := Vector2(
+		float(GameContent.CLASH["x"]) + cos(ang) * radius,
+		float(GameContent.CLASH["y"]) + sin(ang) * radius * 0.7)
+	if elite:
+		engage = Vector2(float(GameContent.CLASH["x"]) + 6.0, float(GameContent.CLASH["y"]) - 5.0)
+
+	if initial:
+		pct = pct.lerp(engage, _rng.randf_range(0.0, 0.85))
+
+	var unit := _make_enemy_node(enemy_name, elite, lunge)
+	_units_holder.add_child(unit)
+	var entry := {
+		"node": unit,
+		"sprite": unit.get_meta("sprite"),
+		"bar": unit.get_meta("bar"),
+		"pct": pct,
+		"engage": engage,
+		"start_d": maxf(1.0, pct.distance_to(engage)),
+		"speed": _rng.randf_range(5.0, 7.5),
+		"elite": elite,
+		"state": "approach",
+	}
+	_enemies.append(entry)
+	_update_enemy_visual(entry)
+
+
+## Build the enemy token (sprite/bar/glow/streak/shadow/tooltip); movement and
+## depth are driven per-frame by _update_enemies.
+func _make_enemy_node(enemy_name: String, elite: bool, lunge: bool) -> Control:
+	var usz := _ELITE_SIZE if elite else _ENEMY_SIZE
 	var unit := Control.new()
 	unit.size = usz
 	unit.pivot_offset = Vector2(usz.x * 0.5, usz.y)  # scale from the feet
-	unit.scale = Vector2(float(d["us"]), float(d["us"]))
-	unit.modulate = Color(1, 1, 1, float(d["uo"]))
 	unit.mouse_filter = Control.MOUSE_FILTER_STOP
 	unit.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-
-	var type_line := "Stage 4-7"
-	if dist == "far":
-		type_line = "Approaching · Stage 4-7"
-	elif elite:
-		type_line = "Elite · Stage 4-7"
-	var range_lbl := "Engaged" if dist == "near" else ("Closing" if dist == "mid" else "Distant")
-	Tip.attach(unit, {
-		"name": String(e["name"]),
-		"type": type_line,
+	Tip.attach(unit, func() -> Dictionary: return {
+		"name": enemy_name,
+		"type": ("Elite · Stage %s" if elite else "Stage %s") % CombatSim.stage_label(),
 		"rarity": "epic" if elite else "common",
-		"stats": [["HP", "240,000" if elite else "84,000"], ["Range", range_lbl]],
+		"stats": [
+			["HP", Style.group_int(int(CombatSim.wave_pool / Balance.inum("enemy.per_wave", 8) * (2.0 if elite else 1.0)))],
+			["Range", "Closing"],
+		],
 	})
 
 	if lunge:
 		var streak := _Streak.new()
 		streak.size = Vector2(68, 16)
 		streak.pivot_offset = Vector2(0, 8)
-		streak.rotation_degrees = float(e.get("trail_rot", 25.0))
+		streak.rotation_degrees = _rng.randf_range(10.0, 40.0)
 		streak.position = Vector2(usz.x * 0.5 - 68.0 * 0.12, usz.y * 0.42 - 8.0)
 		unit.add_child(streak)
 
@@ -240,9 +329,9 @@ func _make_enemy(e: Dictionary) -> Control:
 	sprite.size = usz
 	unit.add_child(sprite)
 	if lunge:
-		_bobs.append({"node": sprite, "base": Vector2.ZERO, "kind": "lunge", "period": 0.7, "delay": 0.0})
-	elif dist != "near":
-		_bobs.append({"node": sprite, "base": Vector2.ZERO, "kind": "approach", "period": 1.9, "delay": 0.0})
+		_bobs.append({"node": sprite, "base": Vector2.ZERO, "kind": "lunge", "period": 0.7, "delay": _rng.randf()})
+	else:
+		_bobs.append({"node": sprite, "base": Vector2.ZERO, "kind": "approach", "period": 1.9, "delay": _rng.randf()})
 
 	if elite:
 		var glow := Panel.new()
@@ -258,13 +347,168 @@ func _make_enemy(e: Dictionary) -> Control:
 		glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		unit.add_child(glow)
 
-	var bar := StatBar.new("hp", float(e["hp"]), 5.0)
+	var bar := StatBar.new("hp", 100.0, 5.0)
 	bar.size = Vector2(84.0 if elite else 54.0, 5.0)
 	bar.position = Vector2(usz.x * 0.5 - bar.size.x * 0.5, -10.0)
 	unit.add_child(bar)
 
-	_place_bottom(unit, float(e["x"]), float(e["y"]))
+	unit.set_meta("sprite", sprite)
+	unit.set_meta("bar", bar)
 	return unit
+
+
+# =========================================================================
+# Living world: scroll, approach, death, respawn
+# =========================================================================
+
+## Drift everything the party walks past: floor grid, props (wrapping back in
+## ahead of the travel direction), and the fading footstep trail.
+func _scroll_world(drift_px: Vector2, drift_pct: Vector2, delta: float) -> void:
+	_floor.scroll += drift_px
+	_floor.queue_redraw()
+
+	for p in _props:
+		var pct: Vector2 = p["pct"] - drift_pct
+		# Wrapped off the bottom-left → re-enter ahead (top-right), new lane.
+		if pct.x < -10.0 or pct.y > 115.0:
+			pct += Vector2(_rng.randf_range(115.0, 140.0), -_rng.randf_range(65.0, 90.0))
+			pct.y = clampf(pct.y + _rng.randf_range(-8.0, 8.0), -8.0, 108.0)
+		p["pct"] = pct
+		_pos_bottom(p["node"], pct)
+
+	# Footsteps drift + fade; fresh prints appear under the striding party.
+	var dead: Array = []
+	for f in _footsteps:
+		f["pct"] = (f["pct"] as Vector2) - drift_pct
+		f["life"] = float(f["life"]) - delta
+		var node := f["node"] as Control
+		var a := clampf(float(f["life"]) / STEP_LIFE, 0.0, 1.0) * 0.62
+		node.modulate = Color(1, 1, 1, a)
+		_pos_center(node, f["pct"])
+		if float(f["life"]) <= 0.0 or (f["pct"] as Vector2).x < -4.0 or (f["pct"] as Vector2).y > 108.0:
+			dead.append(f)
+	for f in dead:
+		(f["node"] as Control).queue_free()
+		_footsteps.erase(f)
+
+	_step_accum += drift_px.length()
+	while _step_accum >= STEP_SPACING:
+		_step_accum -= STEP_SPACING
+		_step_side = not _step_side
+		var perp := Vector2(-TRAVEL_DIR.y, TRAVEL_DIR.x) * (1.3 if _step_side else -1.3)
+		var at := PARTY_CENTER - Vector2(TRAVEL_DIR.x, TRAVEL_DIR.y) * 2.4 + perp + Vector2(_rng.randf_range(-0.6, 0.6), _rng.randf_range(-0.4, 0.4))
+		_add_footstep(at, _step_side, STEP_LIFE)
+
+
+func _add_footstep(at_pct: Vector2, flip: bool, life: float) -> void:
+	var step := _Footstep.new()
+	step.size = Vector2(18, 7)
+	step.pivot_offset = step.size * 0.5
+	step.rotation_degrees = -35.0
+	if flip:
+		step.scale = Vector2(-1, 1)
+	_steps_holder.add_child(step)
+	_footsteps.append({"node": step, "pct": at_pct, "life": life})
+	_pos_center(step, at_pct)
+
+
+## Approach + engage + cosmetic HP drain at the real time-to-kill rate.
+func _update_enemies(delta: float, spd: float) -> void:
+	var per_wave := Balance.inum("enemy.per_wave", 8)
+	var ttk := maxf(0.5, (CombatSim.wave_pool / float(per_wave)) / maxf(1.0, CombatSim.party_dps))
+	for e in _enemies:
+		if String(e["state"]) == "dying":
+			continue
+		var pct: Vector2 = e["pct"]
+		var engage: Vector2 = e["engage"]
+		if String(e["state"]) == "approach":
+			var to_go := engage - pct
+			var d := to_go.length()
+			if d < 0.8:
+				e["state"] = "engaged"
+			else:
+				pct += to_go / d * minf(d, float(e["speed"]) * spd * delta)
+				e["pct"] = pct
+			_update_enemy_visual(e)
+		else:
+			var bar := e["bar"] as StatBar
+			bar.pct = maxf(5.0, bar.pct - 100.0 / ttk * spd * delta)
+		_pos_bottom(e["node"], e["pct"])
+
+
+## Depth tier from approach progress: far (small/faint) → near (full).
+func _update_enemy_visual(e: Dictionary) -> void:
+	var d := (e["pct"] as Vector2).distance_to(e["engage"])
+	var t := clampf(1.0 - d / float(e["start_d"]), 0.0, 1.0)
+	var unit := e["node"] as Control
+	var s := lerpf(0.5, 1.0, t)
+	unit.scale = Vector2(s, s)
+	unit.modulate = Color(1, 1, 1, lerpf(0.45, 1.0, t))
+
+
+## A sim kill landed: drop the most-worn-down engaged token (elite last) with
+## a flatten-and-fade, then queue a replacement from the edges.
+func _on_enemy_killed() -> void:
+	var victim: Dictionary = {}
+	for e in _enemies:
+		if String(e["state"]) != "engaged":
+			continue
+		if victim.is_empty():
+			victim = e
+			continue
+		var v_better := (bool(victim["elite"]) and not bool(e["elite"])) \
+			or ((bool(victim["elite"]) == bool(e["elite"])) and (victim["bar"] as StatBar).pct > (e["bar"] as StatBar).pct)
+		if v_better:
+			victim = e
+	if victim.is_empty():
+		# Nothing engaged yet — take the closest approacher instead.
+		var best_d := INF
+		for e in _enemies:
+			if String(e["state"]) != "approach":
+				continue
+			var d := (e["pct"] as Vector2).distance_to(e["engage"])
+			if d < best_d:
+				best_d = d
+				victim = e
+	if victim.is_empty():
+		return
+
+	victim["state"] = "dying"
+	var unit := victim["node"] as Control
+	var sprite := victim["sprite"] as Control
+	_bobs = _bobs.filter(func(b: Dictionary) -> bool: return b["node"] != sprite)
+	var tw := unit.create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(unit, "scale:y", 0.06, 0.3).set_ease(Tween.EASE_IN)
+	tw.tween_property(unit, "modulate:a", 0.0, 0.32)
+	tw.chain().tween_callback(func() -> void:
+		_enemies.erase(victim)
+		unit.queue_free())
+	_respawn_at.append(_t + _rng.randf_range(0.4, 1.3) / maxf(1.0, float(CombatSim.speed) * 0.6))
+
+
+## Painter re-sort: children ordered by feet y (+ hero bias) as units move.
+func _resort_depth() -> void:
+	var entries: Array = []
+	for child in _units_holder.get_children():
+		var c := child as Control
+		if c == null:
+			continue
+		var bias := float(c.get_meta("depth_bias", 0.0))
+		entries.append([c.position.y + c.size.y + bias, c])
+	entries.sort_custom(func(a: Array, b: Array) -> bool: return float(a[0]) < float(b[0]))
+	for i in entries.size():
+		_units_holder.move_child(entries[i][1], i)
+
+
+## Bottom-center anchor at pct of the battlefield (CSS translate(-50%,-100%)).
+func _pos_bottom(node: Control, pct: Vector2) -> void:
+	node.position = Vector2(size.x * pct.x / 100.0 - node.size.x * 0.5, size.y * pct.y / 100.0 - node.size.y)
+
+
+## Center anchor at pct of the battlefield.
+func _pos_center(node: Control, pct: Vector2) -> void:
+	node.position = Vector2(size.x * pct.x / 100.0, size.y * pct.y / 100.0) - node.size * 0.5
 
 
 ## Hero: role-colored ground ring, striding pixel-slot sprite, shadow, tip.
@@ -434,6 +678,10 @@ class _IsoFloor:
 
 	const _GRID := Color(120.0 / 255.0, 104.0 / 255.0, 72.0 / 255.0, 0.10)
 
+	## Accumulated world travel (px); phase-shifts the iso grid so the floor
+	## streams past under the advancing party.
+	var scroll := Vector2.ZERO
+
 	func _ready() -> void:
 		set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -465,12 +713,16 @@ class _IsoFloor:
 		_blob(Vector2(0.92 * w, 0.50 * h), 0.30 * w, 0.26 * h, Palette.with_alpha(Palette.HP, 0.10))
 
 		# Iso grid: 1px lines at slope ±0.5 (26.57°), 58px gradient spacing.
+		# The world translation is -scroll, so each family's intercept shifts
+		# by (T.y ∓ 0.5·T.x); fposmod keeps the streaming loop seamless.
 		var spacing := 58.0 / cos(atan(0.5))
-		var c1 := -0.5 * w
+		var ph1 := fposmod(-scroll.y + 0.5 * scroll.x, spacing)
+		var c1 := -0.5 * w - spacing + ph1
 		while c1 < h:
 			draw_line(Vector2(0, c1), Vector2(w, c1 + 0.5 * w), _GRID, 1.0)
 			c1 += spacing
-		var c2 := 0.0
+		var ph2 := fposmod(-scroll.y - 0.5 * scroll.x, spacing)
+		var c2 := -spacing + ph2
 		while c2 < h + 0.5 * w:
 			draw_line(Vector2(0, c2), Vector2(w, c2 - 0.5 * w), _GRID, 1.0)
 			c2 += spacing

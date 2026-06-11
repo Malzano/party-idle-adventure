@@ -5,7 +5,8 @@
     "base_pool": 1500.0,
     "pool_growth": 1.076,
     "waves_per_stage": 5,
-    "stages_per_act": 50
+    "stages_per_act": 50,
+    "per_wave": 8
   },
 
   "rewards": {

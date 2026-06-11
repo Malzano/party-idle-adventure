@@ -48,6 +48,7 @@ var _accum: float = 0.0
 var _loot_cooldown: float = 21.0
 var _energy_accum: float = 0.0
 var _vitals_dirty_ticks: int = 0
+var _kills_emitted: int = 0
 var _rng := RandomNumberGenerator.new()
 
 
@@ -82,6 +83,7 @@ func _recompute_stats() -> void:
 func _reset_wave() -> void:
 	wave_pool = Balance.wave_pool(Balance.stage_index(act, stage))
 	wave_damage = 0.0
+	_kills_emitted = 0
 
 
 func wave_fill() -> float:
@@ -110,6 +112,13 @@ func _tick() -> void:
 	var dmg := party_dps / TICK_RATE
 	wave_damage += dmg
 	GameState.daily_damage += dmg
+	# Each wave is per_wave enemies; emit a kill whenever damage crosses the
+	# next enemy's HP share so the battlefield drops a token in sync.
+	var per_wave := Balance.inum("enemy.per_wave", 8)
+	var kills_due := mini(per_wave, int(wave_damage / wave_pool * float(per_wave)))
+	while _kills_emitted < kills_due:
+		_kills_emitted += 1
+		EventBus.sim_enemy_killed.emit()
 	if wave_damage >= wave_pool:
 		_on_wave_cleared()
 	EventBus.sim_wave_progress.emit(wave_fill())
