@@ -377,19 +377,15 @@ func _rate_row(c: Color, label: String, value: String) -> Control:
 func _do_pull(count: int) -> void:
 	if _rolling:
 		return
-	var cost := Balance.inum("gacha.cost_x1", GameContent.GACHA_COST_X1) if count == 1 \
-		else Balance.inum("gacha.cost_x10", GameContent.GACHA_COST_X10)
-	if not GameState.spend_soulstones(cost):
+	# Server-authoritative summons (BackendClient mocks the same schema until
+	# the backend is deployed): all side effects — soulstone spend, pity,
+	# roster — are applied by the client seam; this modal only renders.
+	var res: Dictionary = await BackendClient.gacha_pull(count)
+	if not bool(res["ok"]):
+		return  # insufficient funds (or network error) — buttons stay enabled
+	var pulls: Array = res["data"].get("results", [])
+	if pulls.is_empty():
 		return
-	var p := GameState.pity
-	var pulls: Array = []
-	for i in count:
-		var r := GameContent.gacha_roll_rarity(p, _rng)
-		p = 0 if r == "legendary" else p + 1
-		var hero: Dictionary = GameContent.gacha_pick(r, _rng)
-		pulls.append(hero)
-		GameState.add_roster_hero(hero)
-	GameState.set_pity(p)
 	_show_results(pulls)
 	_rolling = true
 	_update_buttons()

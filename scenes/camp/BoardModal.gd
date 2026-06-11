@@ -219,28 +219,10 @@ func _quest_row(i: int) -> Control:
 func _claim(i: int) -> void:
 	if GameState.quests_claimed.has(i):
 		return
-	GameState.claim_quest(i)
-	_grant_reward(String(GameContent.QUESTS[i]["rw"]))
-
-
-## Parse "240 Gold · 40 XP" style reward strings; token-only parts (Hearth
-## Token, Relic Shard, Iron ×3) grant nothing extra.
-func _grant_reward(rw: String) -> void:
-	var re := RegEx.new()
-	re.compile(r"^(\d+)\s+(.+)$")
-	for part in rw.split("·"):
-		var m := re.search(part.strip_edges())
-		if m == null:
-			continue
-		var n := int(m.get_string(1))
-		var what := m.get_string(2).to_lower()
-		if what.begins_with("gold"):
-			GameState.add_gold(n)
-		elif what.begins_with("xp"):
-			GameState.add_xp(n)
-		elif what.begins_with("soulstone"):
-			GameState.premium_currency += n
-			EventBus.currencies_changed.emit()
+	# Server-validated claim via the backend seam (mocked schema until the
+	# API is deployed). Reward parsing/granting lives in BackendClient so the
+	# mock matches the server's grants exactly; rows refresh on quests_changed.
+	await BackendClient.quest_claim(i)
 
 
 # =========================================================================
@@ -405,7 +387,9 @@ func _build_dungeon() -> Control:
 
 
 func _on_enter_dungeon() -> void:
-	if GameState.enter_daily_dungeon():
+	# Server-authoritative entry via the backend seam (mocked until deployed).
+	var res: Dictionary = await BackendClient.dungeon_enter()
+	if bool(res["ok"]):
 		_refresh_dungeon()
 
 

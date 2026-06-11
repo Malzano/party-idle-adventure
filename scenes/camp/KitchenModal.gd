@@ -209,7 +209,8 @@ func _cook() -> void:
 	if not bool(rc["have"]):
 		return
 	var b := String(rc["b"])
-	GameState.set_food_buff(String(rc["n"]), b, _parse_duration(b))
+	# Server-authoritative cook via the backend seam (mocked until deployed).
+	await BackendClient.kitchen_cook(String(rc["n"]), b, _parse_duration(b))
 	_update_buff_line()
 
 

@@ -51,6 +51,22 @@ static func reset_cache() -> void:
 	_data = {}
 
 
+## Live-ops overrides from GET /v1/config: deep-merge section dictionaries
+## over the local file (server wins per key). Callers must invalidate
+## PlayerStats afterwards so live values reprice.
+static func apply_overrides(overrides: Dictionary) -> void:
+	_ensure()
+	for section in overrides:
+		var vals: Variant = overrides[section]
+		if typeof(vals) != TYPE_DICTIONARY:
+			continue
+		if not _data.has(section) or typeof(_data[section]) != TYPE_DICTIONARY:
+			_data[section] = {}
+		var target: Dictionary = _data[section]
+		for key in (vals as Dictionary):
+			target[key] = vals[key]
+
+
 # --- Frequently used derived helpers ----------------------------------------
 
 ## Global stage index: act 1 stage 1 → 1; act 4 stage 7 → 157.

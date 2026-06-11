@@ -258,11 +258,14 @@ func _material_item(sprite_label: String, lit: bool, tip: Dictionary) -> HBoxCon
 # =========================================================================
 
 func _do_upgrade() -> void:
-	var res := GameState.try_forge_upgrade(_rng)
+	# Server-authoritative upgrade via the backend seam (mocked schema until
+	# the API is deployed; same response shape either way).
+	var res: Dictionary = await BackendClient.forge_upgrade()
 	if not bool(res["ok"]):
-		_show_result(String(res["reason"]), Palette.HP)
-	elif bool(res["success"]):
-		_show_result("+%d achieved!" % GameState.forge_level, Palette.GOLD_BRIGHT)
+		var err: Dictionary = res["data"].get("error", {})
+		_show_result(String(err.get("message", "Upgrade failed.")), Palette.HP)
+	elif bool(res["data"].get("success", false)):
+		_show_result("+%d achieved!" % int(res["data"]["forge_level"]), Palette.GOLD_BRIGHT)
 	else:
 		_show_result("The forge spits sparks — materials lost.", Palette.EMBER_HOT)
 	_refresh_all()

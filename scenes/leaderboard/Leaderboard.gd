@@ -451,17 +451,14 @@ func _refresh_scope_styles() -> void:
 		b.add_theme_color_override("font_pressed_color", Palette.CYAN_BRIGHT if active else Palette.TX_MUTE)
 
 
-## Filter by scope, sort by category, return the ranked pool (rank = index+1).
+## Fetch the ranked, scoped board from the backend seam. Entries arrive
+## pre-shaped (GameContent.PLAYERS element shape) and pre-sorted; the mock
+## sorts/filters the static dataset with the same rules the server uses.
 func _ranked() -> Array:
-	var pool: Array = GameContent.PLAYERS.duplicate()
-	if _scope == "friends":
-		pool = pool.filter(func(p: Dictionary) -> bool: return bool(p["friend"]) or bool(p["you"]))
-	elif _scope == "guild":
-		pool = pool.filter(func(p: Dictionary) -> bool: return String(p["guild"]) == _GUILD_HOME)
-	var cat := _cat
-	pool.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-		return GameContent.lb_sort_key(a, cat) > GameContent.lb_sort_key(b, cat))
-	return pool
+	var res: Dictionary = await BackendClient.leaderboard(_cat, _scope)
+	if not bool(res["ok"]):
+		return []
+	return res["data"].get("entries", [])
 
 
 func _cur_cat() -> Dictionary:
@@ -472,7 +469,7 @@ func _cur_cat() -> Dictionary:
 
 
 func _rebuild() -> void:
-	var ranked := _ranked()
+	var ranked: Array = await _ranked()
 	var cur := _cur_cat()
 
 	# Podium: order #2 #1 #3 (skip missing entries defensively).
