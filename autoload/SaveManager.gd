@@ -6,7 +6,7 @@ extends Node
 ## pending_offline_seconds for the offline-progress system to consume later.
 
 const SAVE_PATH := "user://savegame.json"
-const SAVE_VERSION := 1
+const SAVE_VERSION := 2  # v2: full Grimhollow profile (pity, talents, loadout)
 
 ## Hours of offline time beyond which no further progress accrues. Open
 ## question in CLAUDE.md §10.5 — placeholder until confirmed.
@@ -64,7 +64,12 @@ func load_game() -> bool:
 	var data: Dictionary = parsed
 	var state: Dictionary = data.get("state", {})
 	GameState.reset_to_defaults()
-	GameState.from_dict(state)
+	if int(data.get("version", 0)) < SAVE_VERSION:
+		# Pre-Grimhollow save: the profile schema changed wholesale, so start
+		# from the new defaults but keep the old timestamp for offline gains.
+		GameState.last_played_utc = int(state.get("last_played_utc", _now_utc()))
+	else:
+		GameState.from_dict(state)
 
 	_compute_offline_progress()
 	EventBus.game_loaded.emit()

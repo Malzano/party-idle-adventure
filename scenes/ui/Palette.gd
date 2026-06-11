@@ -3,8 +3,7 @@ extends RefCounted
 ## Grimhollow design tokens — dark gothic ARPG idle crawler.
 ##
 ## Ported 1:1 from the design handoff (.design_ref/project/styles.css :root).
-## Pure constants, referenced as Palette.GOLD etc. These are the single source
-## of truth for color; the rest of the UI must pull from here, never hardcode.
+## Pure constants + tiny lookup helpers; single source of truth for color.
 
 # --- Surfaces: near-black charcoal → cold stone grey ---
 const BG_0 := Color("0a0908")        # stage / deepest background
@@ -25,6 +24,7 @@ const IRON_EDGE := Color("0c0a07")
 const EMBER := Color("e8843a")
 const EMBER_BRIGHT := Color("ffac5c")
 const EMBER_DEEP := Color("b85a1f")
+const EMBER_HOT := Color("ff7a4d")   # danger label / hot spawn markers
 const GOLD := Color("d3ad62")
 const GOLD_BRIGHT := Color("f0cf86")
 const GOLD_DIM := Color("8a6e36")
@@ -41,6 +41,10 @@ const MANA := Color("3f9fd0")
 const MANA_D := Color("1d4f70")
 const XP := Color("c9a24a")
 
+# --- Floaters ---
+const DMG_CREAM := Color("fff2dd")
+const HEAL_GREEN := Color("8ef08a")
+
 # --- Text: warm parchment on charcoal ---
 const TX := Color("ece0c8")
 const TX_DIM := Color("b3a489")
@@ -54,6 +58,11 @@ const R_RARE := Color("4a8fd6")
 const R_EPIC := Color("a661d6")
 const R_LEGENDARY := Color("e6a93a")
 
+# --- Podium metals ---
+const SILVER := Color("aeb4ba")
+const SILVER_TEXT := Color("cdd2d6")
+const BRONZE := Color("c8884a")
+
 # --- Role colors (Tank / Healer / DPS / Mage) ---
 const ROLE_TANK := Color("d6a24a")
 const ROLE_HEALER := Color("6fcf6a")
@@ -65,5 +74,37 @@ const RAIL_W := 96.0
 const STRIP_H := 56.0
 
 ## Ember-glow intensity multiplier (the design's --glow tweak, default 1.0).
-## Scales the size/alpha of ember glow shadows so it can be tuned globally.
 const GLOW := 1.0
+
+
+## Rarity name → color ("" or unknown → common grey).
+static func rarity_color(rarity: String) -> Color:
+	match rarity:
+		"uncommon":
+			return R_UNCOMMON
+		"rare":
+			return R_RARE
+		"epic":
+			return R_EPIC
+		"legendary":
+			return R_LEGENDARY
+		_:
+			return R_COMMON
+
+
+## Role name → color.
+static func role_color(role: String) -> Color:
+	match role:
+		"tank":
+			return ROLE_TANK
+		"healer":
+			return ROLE_HEALER
+		"mage":
+			return ROLE_MAGE
+		_:
+			return ROLE_DPS
+
+
+## c with alpha a (convenience for glow shadows).
+static func with_alpha(c: Color, a: float) -> Color:
+	return Color(c.r, c.g, c.b, a)

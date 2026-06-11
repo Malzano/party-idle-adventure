@@ -1,16 +1,23 @@
 ; Engine configuration file.
-; "The Delve" — party-based idle dungeon crawler (Godot 4.x)
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
 ;
-; Format documented at https://docs.godotengine.org/en/stable/
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
 
 config_version=5
+
+[animation]
+
+compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 
 [application]
 
 config/name="The Delve"
 config/description="Party-based idle dungeon crawler."
 run/main_scene="res://scenes/main/Main.tscn"
-config/features=PackedStringArray("4.4", "GL Compatibility")
+config/features=PackedStringArray("4.6", "GL Compatibility")
 config/icon="res://icon.svg"
 
 [autoload]
@@ -18,13 +25,14 @@ config/icon="res://icon.svg"
 EventBus="*res://autoload/EventBus.gd"
 GameState="*res://autoload/GameState.gd"
 SaveManager="*res://autoload/SaveManager.gd"
+CombatSim="*res://systems/combat/CombatSim.gd"
+WindowManager="*res://autoload/WindowManager.gd"
 
 [display]
 
 window/size/viewport_width=1920
 window/size/viewport_height=1080
 window/stretch/mode="canvas_items"
-window/stretch/aspect="keep"
 
 [rendering]
 

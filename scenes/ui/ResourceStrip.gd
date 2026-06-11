@@ -48,26 +48,42 @@ func _make_divider() -> Control:
 
 
 func _make_rank_badge() -> Control:
-	var box := HBoxContainer.new()
-	box.add_theme_constant_override("separation", 7)
-	box.tooltip_text = "Global Rankings — coming soon"
-	box.mouse_filter = Control.MOUSE_FILTER_STOP
+	var btn := Button.new()
+	btn.flat = true
+	btn.focus_mode = Control.FOCUS_NONE
+	btn.pressed.connect(func() -> void: WindowManager.open(WindowManager.WIN_LEADERBOARD))
+	Tip.attach(btn, {
+		"name": "Global Rankings",
+		"type": "Season %s · %s" % [GameContent.SEASON["num"], GameContent.SEASON["name"]],
+		"rarity": "epic",
+		"stats": [["Your Rank", "#%d" % GameState.global_rank], ["Division", String(GameContent.SEASON["you"]["tier"])]],
+		"flavor": "View the global leaderboard · press L",
+	})
 
+	var box := HBoxContainer.new()
+	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	box.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.add_theme_constant_override("separation", 7)
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.add_child(_make_icon("res://assets/icons/crown.svg", 18, Color.WHITE))
 
 	var meta := VBoxContainer.new()
 	meta.add_theme_constant_override("separation", 1)
 	meta.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	var num := Style.display_label("#—", 15, Palette.GOLD_BRIGHT)
-	var lbl := Style.pixel_label("RANK", 8, Palette.TX_MUTE)
+	meta.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var num := Style.pixel_label("#%d" % GameState.global_rank, 13, Palette.GOLD_BRIGHT)
+	var lbl := Style.body_label("RANK", 8, Palette.TX_MUTE)
 	meta.add_child(num)
 	meta.add_child(lbl)
 	box.add_child(meta)
+	btn.add_child(box)
+	# Size the flat button to its content.
+	btn.custom_minimum_size = Vector2(74, 44)
 
 	var pad := MarginContainer.new()
 	pad.add_theme_constant_override("margin_left", 4)
 	pad.add_theme_constant_override("margin_right", 6)
-	pad.add_child(box)
+	pad.add_child(btn)
 	return pad
 
 
@@ -75,6 +91,18 @@ func _make_player_block() -> Control:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 9)
 	row.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.mouse_filter = Control.MOUSE_FILTER_STOP
+	Tip.attach(row, func() -> Dictionary: return {
+		"name": "%s, %s" % [GameState.player_name, GameState.player_title],
+		"type": "Account · Level %d" % GameState.player_level,
+		"rarity": "legendary",
+		"stats": [
+			["Renown", "%s / %s" % [Style.group_int(GameState.xp), Style.group_int(GameState.xp_to_next)]],
+			["Prestige", GameState.prestige],
+			["Rank", "#%d · %s" % [GameState.global_rank, String(GameContent.SEASON["you"]["tier"])]],
+		],
+		"flavor": "The deeper you delve, the brighter you burn.",
+	})
 
 	# Portrait (pixel-art drop-slot for a 48² face sprite).
 	var portrait := PanelContainer.new()
@@ -99,10 +127,23 @@ func _make_player_block() -> Control:
 	return row
 
 
+const _RES_TIPS := {
+	"gold": {"name": "Gold", "type": "Soft currency", "rarity": "legendary",
+		"flavor": "Earned from kills, quests, and selling loot at the Forge."},
+	"soul": {"name": "Soulstone", "type": "Premium currency", "rarity": "epic",
+		"flavor": "Spent at the Summoning Altar. Earned rarely, or purchased."},
+	"energy": {"name": "Energy", "type": "Stamina · +1 / 5 min", "rarity": "rare",
+		"flavor": "Consumed entering dungeons. Regenerates over time."},
+}
+
+
 func _make_resource(icon_path: String, value_color: Color, key: String) -> Control:
 	var box := HBoxContainer.new()
 	box.add_theme_constant_override("separation", 7)
 	box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	box.mouse_filter = Control.MOUSE_FILTER_STOP
+	if _RES_TIPS.has(key):
+		Tip.attach(box, _RES_TIPS[key])
 
 	box.add_child(_make_icon(icon_path, 18, Color.WHITE))
 

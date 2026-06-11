@@ -1,8 +1,8 @@
 extends Control
-## Persistent left navigation rail (Grimhollow .rail). Crest at top, three
-## icon buttons (CAMP 1 / FIGHT 2 / HERO 3) with an ember active state and a
-## left ember indicator, options gear at the bottom. Emits
-## EventBus.screen_changed on selection; number keys 1/2/3 also switch.
+## Persistent left navigation rail (Grimhollow .rail) on the MAIN window.
+## Crest at top, three icon buttons (CAMP 1 / FIGHT 2 / HERO 3), options gear
+## at the bottom. Fight is the main window itself (always lit); Camp and Hero
+## open their own OS windows — their buttons light while the window is open.
 
 ## Display order. id strings mirror the GameState.SCREEN_* constants.
 const _ENTRIES := [
@@ -12,18 +12,19 @@ const _ENTRIES := [
 ]
 
 var _entries_ui: Dictionary = {}  # id -> {button, icon, label, hot, indicator}
-var _current: String = ""
 
 
 func _ready() -> void:
 	custom_minimum_size = Vector2(Palette.RAIL_W, 0)
 	_build()
+	_apply_button_state("fight", true)  # the main window IS the fight scene
+	EventBus.window_state_changed.connect(_on_window_state_changed)
 
 
 func _build() -> void:
 	# Rail backing panel + gold right-edge line.
 	var panel := Panel.new()
-	panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	panel.add_theme_stylebox_override("panel", Style.rail_box())
 	add_child(panel)
 
@@ -37,7 +38,7 @@ func _build() -> void:
 	add_child(edge)
 
 	var column := VBoxContainer.new()
-	column.set_anchors_preset(Control.PRESET_FULL_RECT)
+	column.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	column.alignment = BoxContainer.ALIGNMENT_BEGIN
 	column.add_theme_constant_override("separation", 10)
 	column.offset_top = 14
@@ -83,7 +84,7 @@ func _make_rail_button(entry: Dictionary) -> Button:
 
 	# Icon + label stack, centered, transparent to clicks.
 	var stack := VBoxContainer.new()
-	stack.set_anchors_preset(Control.PRESET_FULL_RECT)
+	stack.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	stack.alignment = BoxContainer.ALIGNMENT_CENTER
 	stack.add_theme_constant_override("separation", 3)
 	stack.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -143,7 +144,7 @@ func _make_options_button() -> Button:
 		button.add_theme_stylebox_override(slot, Style.rail_btn_box(false))
 
 	var icon := TextureRect.new()
-	icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+	icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	icon.offset_left = 13
 	icon.offset_top = 13
 	icon.offset_right = -13
@@ -157,17 +158,22 @@ func _make_options_button() -> Button:
 	return button
 
 
-## Programmatic + user selection both funnel here so visuals stay authoritative.
+## Nav action: Fight focuses the main window; Camp/Hero open/focus their windows.
 func select(screen: String) -> void:
-	if screen == _current:
-		return
-	var previous := _current
-	_current = screen
-	if _entries_ui.has(previous):
-		_apply_button_state(previous, false)
-	if _entries_ui.has(screen):
-		_apply_button_state(screen, true)
-	EventBus.screen_changed.emit(screen)
+	match screen:
+		"camp":
+			WindowManager.open(WindowManager.WIN_CAMP)
+		"hero":
+			WindowManager.open(WindowManager.WIN_HERO)
+		_:
+			WindowManager.focus_main()
+
+
+func _on_window_state_changed(id: String, open: bool) -> void:
+	if _entries_ui.has(id):
+		_apply_button_state(id, open)
+	# Fight stays lit regardless — the main window never closes.
+	_apply_button_state("fight", true)
 
 
 func _apply_button_state(id: String, active: bool) -> void:
@@ -202,3 +208,5 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			select("fight")
 		KEY_3:
 			select("hero")
+		KEY_L:
+			WindowManager.open(WindowManager.WIN_LEADERBOARD)
