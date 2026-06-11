@@ -198,20 +198,26 @@ const GACHA_COST_X10 := 1600
 const PITY_SOFT := 74
 const PITY_HARD := 90
 
-## One gacha roll. Soft pity ramps from 74, hard pity at 90.
-## Returns rarity string; caller resets/increments the pity counter.
+## One gacha roll. Soft pity ramps the legendary chance; hard pity guarantees.
+## Rates/thresholds come from Balance (data/balance.json); the constants above
+## are display fallbacks. Caller resets/increments the pity counter.
 static func gacha_roll_rarity(pity: int, rng: RandomNumberGenerator) -> String:
-	var five_chance := 0.006
-	if pity >= PITY_SOFT:
-		five_chance = 0.006 + float(pity - (PITY_SOFT - 1)) * 0.06
-	if pity >= PITY_HARD:
+	var base := Balance.num("gacha.base_legendary", 0.006)
+	var soft := Balance.inum("gacha.soft_pity", PITY_SOFT)
+	var hard := Balance.inum("gacha.hard_pity", PITY_HARD)
+	var five_chance := base
+	if pity >= soft:
+		five_chance = base + float(pity - (soft - 1)) * Balance.num("gacha.soft_pity_step", 0.06)
+	if pity >= hard:
 		five_chance = 1.0
 	var x := rng.randf()
 	if x < five_chance:
 		return "legendary"
-	if x < five_chance + 0.051:
+	var epic := Balance.num("gacha.epic", 0.051)
+	var rare := Balance.num("gacha.rare", 0.18)
+	if x < five_chance + epic:
 		return "epic"
-	if x < five_chance + 0.051 + 0.18:
+	if x < five_chance + epic + rare:
 		return "rare"
 	return "uncommon" if rng.randf() < 0.5 else "common"
 

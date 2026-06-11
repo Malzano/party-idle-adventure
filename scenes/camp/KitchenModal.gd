@@ -7,6 +7,7 @@ extends "res://scenes/camp/ModalShell.gd"
 var _sel := 0
 var _outlines: Array[Control] = []
 var _panel_col: VBoxContainer
+var _buff_lbl: Label
 
 
 func _init() -> void:
@@ -47,6 +48,13 @@ func _build_body(body: VBoxContainer) -> void:
 	_panel_col.alignment = BoxContainer.ALIGNMENT_CENTER
 	panel.add_child(_panel_col)
 	row.add_child(panel)
+
+	# 1s tick so the active-buff countdown stays live while the modal is open.
+	var tick := Timer.new()
+	tick.wait_time = 1.0
+	tick.autostart = true
+	tick.timeout.connect(_update_buff_line)
+	add_child(tick)
 
 	_refresh_panel()
 
@@ -171,6 +179,11 @@ func _refresh_panel() -> void:
 	note.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_panel_col.add_child(note)
 
+	_buff_lbl = Style.body_label("", 12, Palette.CYAN_BRIGHT)
+	_buff_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_panel_col.add_child(_buff_lbl)
+	_update_buff_line()
+
 	var cook := Style.make_button("Cook Meal   ↵", "ember")
 	cook.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	cook.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
@@ -178,5 +191,33 @@ func _refresh_panel() -> void:
 	_panel_col.add_child(cook)
 
 
+## "<name> active · <m>m <s>s left" while a meal buff runs, else "No meal active".
+func _update_buff_line() -> void:
+	if _buff_lbl == null or not is_instance_valid(_buff_lbl):
+		return
+	if GameState.food_buff_active():
+		var left := maxi(0, GameState.food_buff_until - GameState.now_utc())
+		_buff_lbl.text = "%s active · %dm %ds left" % [GameState.food_buff, int(left / 60.0), left % 60]
+		_buff_lbl.add_theme_color_override("font_color", Palette.CYAN_BRIGHT)
+	else:
+		_buff_lbl.text = "No meal active"
+		_buff_lbl.add_theme_color_override("font_color", Palette.TX_MUTE)
+
+
 func _cook() -> void:
-	GameState.set_food_buff(String(GameContent.RECIPES[_sel]["n"]))
+	var rc: Dictionary = GameContent.RECIPES[_sel]
+	if not bool(rc["have"]):
+		return
+	var b := String(rc["b"])
+	GameState.set_food_buff(String(rc["n"]), b, _parse_duration(b))
+	_update_buff_line()
+
+
+## "+12% party ATK · 30 min" → 1800; "… · 15 min" → 900; no duration → 1800.
+func _parse_duration(b: String) -> int:
+	var re := RegEx.new()
+	re.compile(r"(\d+)\s*min")
+	var m := re.search(b)
+	if m == null:
+		return 1800
+	return int(m.get_string(1)) * 60

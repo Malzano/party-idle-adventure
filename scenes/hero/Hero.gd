@@ -16,6 +16,7 @@ const _TAB_DEFS := [["Equipment", "Q"], ["Pets", "W"], ["Relics", "E"], ["Talent
 var _tab_buttons: Array[Button] = []
 var _pages: Array[Control] = []
 var _current: int = -1
+var _power_num: Label
 
 
 func _ready() -> void:
@@ -52,6 +53,11 @@ func _ready() -> void:
 		_pages.append(page)
 
 	_select_tab(0)
+	EventBus.sim_stats_changed.connect(_refresh_power)
+
+
+func _refresh_power() -> void:
+	_power_num.text = Style.group_int(int(PlayerStats.compute()["total_power"]))
 
 
 # .prof-header: portrait · name/sub · Total Power · spacer · tabs.
@@ -114,9 +120,9 @@ func _build_header() -> Control:
 	power.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	var pcol := VBoxContainer.new()
 	pcol.add_theme_constant_override("separation", 3)
-	var pnum := Style.pixel_label("142,860", 20, Palette.EMBER_BRIGHT)
-	pnum.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	pcol.add_child(pnum)
+	_power_num = Style.pixel_label(Style.group_int(int(PlayerStats.compute()["total_power"])), 20, Palette.EMBER_BRIGHT)
+	_power_num.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	pcol.add_child(_power_num)
 	var plbl := Style.body_label("TOTAL POWER", 10, Palette.TX_MUTE)
 	plbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	pcol.add_child(plbl)

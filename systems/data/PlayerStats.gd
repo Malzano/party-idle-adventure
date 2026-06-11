@@ -1,0 +1,201 @@
+class_name PlayerStats
+extends RefCounted
+## Computes the live player profile from all stat sources (CLAUDE.md §7):
+## equipped gear (incl. forge upgrades) + allocated talents + active pet +
+## equipped relics + food buff + Team Aura + roster support. Pure functions of
+## GameState + GameContent + Balance, so the CombatSim can use it headless.
+##
+## Cached; call invalidate() (or listen to the EventBus signals that mutate
+## sources) and recompute lazily.
+
+static var _cache: Dictionary = {}
+static var _dirty := true
+
+
+static func invalidate() -> void:
+	_dirty = true
+
+
+## Full computed profile:
+## { block: StatBlock, party_dps: float, dps_label: String, attrs: Dictionary,
+##   derived: Dictionary, total_power: float, gear_power: float }
+static func compute() -> Dictionary:
+	if not _dirty and not _cache.is_empty():
+		return _cache
+	_dirty = false
+
+	var block := StatBlock.new()
+
+	# --- Gear (paperdoll, with forge growth on the upgraded weapon) ---------
+	for g in GameContent.GEAR_L + GameContent.GEAR_R:
+		var pairs: Array = g["stats"]
+		if String(g["name"]) == "Cindergrip Maul":
+			pairs = forged_weapon_stats()
+		var gb := StatBlock.new()
+		gb.apply_stat_pairs(pairs)
+		block.merge(gb)
+
+	# --- Talents (allocated node effects) ------------------------------------
+	var tree := _tree()
+	for node in tree["nodes"]:
+		if GameState.talents_allocated.has(int(node["id"])):
+			block.apply_effect(String(node["eff"]))
+
+	# --- Active pet aura ------------------------------------------------------
+	var pet: Dictionary = GameContent.PETS[clampi(GameState.active_pet, 0, GameContent.PETS.size() - 1)]
+	if bool(pet["owned"]):
+		block.apply_effect(String(pet["eff"]))
+
+	# --- Equipped relics ------------------------------------------------------
+	for relic in GameContent.RELICS:
+		if not bool(relic["empty"]):
+			block.apply_effect(String(relic["eff"]))
+
+	# --- Food buff (timed) ----------------------------------------------------
+	if GameState.food_buff_active():
+		block.apply_effect(GameState.food_buff_effect)
+
+	# --- Party DPS ------------------------------------------------------------
+	var base_dps := 0.0
+	var bases: Dictionary = Balance.value("heroes.base_dps", {})
+	for h in GameContent.PARTY:
+		base_dps += float(bases.get(String(h["id"]), 250000.0))
+
+	var half := Balance.num("dps_model.half_coef", 0.5)
+	var dps_mult := 1.0 + block.get_inc("all_damage") \
+		+ half * (block.get_inc("melee_damage") + block.get_inc("spell_damage") \
+		+ block.get_inc("fire_damage") + block.get_inc("attack_speed"))
+	var aura_mult := 1.0 + (Balance.num("heroes.team_aura_bonus", 0.18) if team_aura_optimal() else 0.0)
+
+	var roster_dps := 0.0
+	var support: Dictionary = Balance.value("roster.support_dps", {})
+	for hero in GameState.roster_extra:
+		roster_dps += float(support.get(String(hero.get("r", "common")), 0.0))
+
+	var party_dps := base_dps * dps_mult * aura_mult + roster_dps
+
+	# --- Attributes + derived -------------------------------------------------
+	var attrs := {}
+	for i in GameContent.MAIN_STATS.size():
+		var ms: Dictionary = GameContent.MAIN_STATS[i]
+		var canon: String = ["strength", "dexterity", "intelligence", "vitality", "luck"][i]
+		attrs[canon] = block.value(canon, float(ms["v"]))
+
+	var derived := {
+		"attack_dps": party_dps,
+		"maximum_life": block.value("maximum_life", Balance.num("derived_bases.maximum_life", 120000.0)),
+		"armour": block.value("armour", Balance.num("derived_bases.armour", 9000.0)),
+		"maximum_mana": block.value("maximum_mana", Balance.num("derived_bases.maximum_mana", 8000.0)),
+		"crit_chance": Balance.num("derived_bases.crit_chance", 0.18) + block.get_inc("crit_chance"),
+		"crit_multiplier": Balance.num("derived_bases.crit_multiplier", 2.5) * (1.0 + block.get_inc("crit_multiplier")),
+		"gold_find": block.get_inc("gold_find"),
+		"item_rarity": block.get_inc("item_rarity"),
+		"xp_gain": block.get_inc("xp_gain"),
+		"movement_speed": block.get_inc("movement_speed"),
+		"attack_speed": block.get_inc("attack_speed"),
+		"fire_resist": block.get_inc("fire_resist"),
+		"cold_resist": block.get_inc("cold_resist"),
+		"lightning_resist": block.get_inc("lightning_resist"),
+		"chaos_resist": block.get_inc("chaos_resist"),
+		"block_chance": Balance.num("derived_bases.block_chance", 0.0) + block.get_inc("block"),
+		"life_regen": block.value("life_regen", Balance.num("derived_bases.life_regen", 1500.0)),
+		"mana_regen": block.value("mana_regen", Balance.num("derived_bases.mana_regen", 700.0)) * (1.0 + block.get_inc("mana_regen")),
+		"evasion": block.value("evasion", Balance.num("derived_bases.evasion", 5000.0)),
+		"accuracy": Balance.num("derived_bases.accuracy", 0.90) + block.get_flat("accuracy") * 0.001,
+	}
+
+	# --- Powers ---------------------------------------------------------------
+	var gear_power := compute_gear_power()
+	var attr_sum := 0.0
+	for a in attrs.values():
+		attr_sum += float(a)
+	var total_power := party_dps * Balance.num("power.dps_w", 0.012) \
+		+ float(derived["maximum_life"]) * Balance.num("power.life_w", 0.2) \
+		+ float(derived["armour"]) * Balance.num("power.armour_w", 1.0) \
+		+ attr_sum * Balance.num("power.attr_w", 8.0) \
+		+ gear_power
+
+	_cache = {
+		"block": block,
+		"party_dps": party_dps,
+		"dps_label": format_dps(party_dps),
+		"attrs": attrs,
+		"derived": derived,
+		"total_power": total_power,
+		"gear_power": gear_power,
+	}
+	return _cache
+
+
+## Team Aura: exactly 1 tank + 1 healer + 2 DPS of different classes (§2).
+static func team_aura_optimal() -> bool:
+	var tanks := 0
+	var healers := 0
+	var dps_classes := {}
+	for h in GameContent.PARTY:
+		match String(h["role"]):
+			"tank":
+				tanks += 1
+			"healer":
+				healers += 1
+			_:
+				dps_classes[h["cls"]] = true
+	return tanks == 1 and healers == 1 and dps_classes.size() == 2
+
+
+## The forge-upgraded weapon's stat pairs, scaled by stat_growth^(levels above base).
+static func forged_weapon_stats() -> Array:
+	var base_level := Balance.inum("forge.base_level", 7)
+	var growth := pow(Balance.num("forge.stat_growth", 1.13), float(GameState.forge_level - base_level))
+	var out: Array = []
+	for pair in GameContent.GEAR_R[0]["stats"]:  # Cindergrip Maul
+		out.append([pair[0], _scale_value_text(String(pair[1]), growth)])
+	return out
+
+
+## Scales "470–664" / "+72" / "+8.5%" value text by [param mult].
+static func _scale_value_text(text: String, mult: float) -> String:
+	var range_re := RegEx.new()
+	range_re.compile(r"^(\d+(?:\.\d+)?)\s*[–-]\s*(\d+(?:\.\d+)?)$")
+	var rm := range_re.search(text)
+	if rm != null:
+		return "%d–%d" % [int(float(rm.get_string(1)) * mult), int(float(rm.get_string(2)) * mult)]
+	var re := RegEx.new()
+	re.compile(r"^([+\-]?)(\d+(?:\.\d+)?)(%?)$")
+	var m := re.search(text)
+	if m == null:
+		return text
+	var v := float(m.get_string(2)) * mult
+	if m.get_string(3) == "%":
+		return "%s%.1f%%" % [m.get_string(1), v]
+	return "%s%d" % [m.get_string(1), int(v)]
+
+
+static func compute_gear_power() -> float:
+	var mults: Dictionary = Balance.value("power.gear_rarity_mult", {})
+	var ilvl_w := Balance.num("power.gear_ilvl_w", 110.0)
+	var power := 0.0
+	for g in GameContent.GEAR_L + GameContent.GEAR_R:
+		power += float(g["ilvl"]) / 80.0 * ilvl_w * float(mults.get(String(g["r"]), 1.0))
+	var base_level := Balance.inum("forge.base_level", 7)
+	power += float(GameState.forge_level - base_level) * Balance.num("power.forge_power_per_level", 900.0)
+	return power
+
+
+## "4.82M"-style label.
+static func format_dps(dps: float) -> String:
+	if dps >= 1_000_000_000.0:
+		return "%.2fB" % (dps / 1_000_000_000.0)
+	if dps >= 1_000_000.0:
+		return "%.2fM" % (dps / 1_000_000.0)
+	if dps >= 1_000.0:
+		return "%.1fK" % (dps / 1_000.0)
+	return str(int(dps))
+
+
+static var _tree_cache: Dictionary = {}
+
+static func _tree() -> Dictionary:
+	if _tree_cache.is_empty():
+		_tree_cache = GameContent.build_tree()
+	return _tree_cache

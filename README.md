@@ -41,8 +41,33 @@ the Global Rankings each open in their own window, all usable simultaneously.
 **Hotkeys:** `1` Camp · `2` focus Fight · `3` Hero · `L` Rankings · `Q/E/R/F` camp buildings ·
 `Q/W/E/R` hero tabs & ranking categories · `Z/X` auto-toggles · `Esc` retreat / close.
 
-**Next milestones** (see [CLAUDE.md §8](CLAUDE.md)): real combat data driving the sim (enemy HP
-pools, per-hero DPS from the StatBlock), gear/affix model, unit tests (GUT), balance pass.
+**The math is real** (CLAUDE.md §3/§7):
+- **`StatBlock`** stacks flat + increased% mods from every source — gear (incl. forge upgrades),
+  allocated talents, the active pet, equipped relics, timed food buffs, Team Aura, and
+  gacha-roster support — via an effect-string parser, so all content is mechanically live.
+- **CombatSim** fights real per-stage enemy HP pools (geometric growth); gold/XP apply your
+  gold-find / XP-gain bonuses and the daily-dungeon gold rush; offline progress runs the same
+  per-wave math (12 h cap) and advances actual stages while you're away.
+- **Economy loops close:** forge upgrades persist (success rolls, growing costs, real stat
+  growth), meals buff the party on a timer, the daily dungeon costs energy (3 attempts/day),
+  daily quests track real sim events and pay parsed rewards, and every summon adds support DPS.
+- **All tuning lives in [`data/balance.json`](data/balance.json)** — rebalancing needs no code.
+
+**Tests:** [GUT](https://github.com/bitwes/Gut) (MIT, dev-only — see
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)) with 47 unit tests across the parser, balance
+curves, player stats, sim determinism + offline cap, gacha pity, economy, and save round-trip:
+
+```
+godot --headless --path . -s res://addons/gut/gut_cmdln.gd -gdir=res://test/unit -gexit
+```
+
+**Backend:** everything that needs a server (cloud saves, server-authoritative gacha,
+leaderboards, seasons, quest claims, live-ops config) is specified in
+[docs/backend-spec.md](docs/backend-spec.md) — a REST + Firestore + Cloud Run design intended
+for a separate repository deployed to GCP.
+
+**Next milestones** (see [CLAUDE.md §8](CLAUDE.md)): per-hero gear/affix rolls, roster/party
+management UI, backend client integration, balance pass, Steam polish.
 
 ---
 

@@ -1,9 +1,12 @@
 extends Control
 ## PROFILE · EQUIPMENT tab (profile.jsx EquipmentTab).
 ## 3-zone grid: 332px character sheet | 568px paperdoll | rest inventory.
+## All combat/attribute/derived numbers are live from PlayerStats.compute(),
+## refreshed on EventBus.sim_stats_changed while the tab is visible.
 
 var _show_all := false
 var _inv_tab: String = "equipment"
+var _stats_dirty := false
 
 var _det_list: VBoxContainer
 var _det_toggle: Button
@@ -13,6 +16,9 @@ var _cap_num: Label
 var _gold_val: Label
 var _soul_val: Label
 var _dust_val: Label
+var _combat_vals: Array[Label] = []
+var _attr_vals: Array[Label] = []
+var _plate_num: Label
 
 var _pd_area: Control
 var _pd_figure: Control
@@ -31,7 +37,40 @@ func _ready() -> void:
 	row.add_child(_build_paperdoll())
 	row.add_child(_build_inventory())
 	EventBus.currencies_changed.connect(_refresh_currencies)
+	EventBus.sim_stats_changed.connect(_on_stats_changed)
+	visibility_changed.connect(_on_visibility_changed)
 	_refresh_currencies()
+	_refresh_stats()
+
+
+func _on_stats_changed() -> void:
+	if is_visible_in_tree():
+		_refresh_stats()
+	else:
+		_stats_dirty = true
+
+
+func _on_visibility_changed() -> void:
+	if _stats_dirty and is_visible_in_tree():
+		_refresh_stats()
+
+
+## Pull the computed profile into every live readout.
+func _refresh_stats() -> void:
+	_stats_dirty = false
+	var p := PlayerStats.compute()
+	var derived: Dictionary = p["derived"]
+	if _combat_vals.size() == 3:
+		_combat_vals[0].text = String(p["dps_label"])
+		_combat_vals[1].text = Style.group_int(int(derived["armour"]))
+		_combat_vals[2].text = Style.group_int(int(derived["maximum_life"]))
+	var attrs: Dictionary = p["attrs"]
+	var keys: Array[String] = ["strength", "dexterity", "intelligence", "vitality", "luck"]
+	for i in _attr_vals.size():
+		_attr_vals[i].text = str(int(attrs[keys[i]]))
+	if _plate_num != null:
+		_plate_num.text = Style.group_int(int(p["gear_power"]))
+	_rebuild_det()
 
 
 # =========================================================================
@@ -196,6 +235,7 @@ func _combat_row(entry: Dictionary) -> Control:
 	var val := Style.pixel_label(String(entry["val"]), 14, c)
 	val.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	h.add_child(val)
+	_combat_vals.append(val)
 	row.add_child(h)
 	row.mouse_entered.connect(func() -> void: row.add_theme_stylebox_override("panel", _combat_box(true)))
 	row.mouse_exited.connect(func() -> void: row.add_theme_stylebox_override("panel", _combat_box(false)))
@@ -244,6 +284,7 @@ func _attr_row(s: Dictionary) -> Control:
 	var val := Style.display_label(str(int(s["v"])), 19, c)
 	val.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	h.add_child(val)
+	_attr_vals.append(val)
 	row.add_child(h)
 	row.mouse_entered.connect(func() -> void: row.add_theme_stylebox_override("panel", _attr_box(true)))
 	row.mouse_exited.connect(func() -> void: row.add_theme_stylebox_override("panel", _attr_box(false)))
@@ -322,7 +363,8 @@ func _rebuild_det() -> void:
 	for child in _det_list.get_children():
 		_det_list.remove_child(child)
 		child.queue_free()
-	var rows: Array = GameContent.DETAILED if _show_all else GameContent.DETAILED.slice(0, 8)
+	var all_rows := _detailed_rows()
+	var rows: Array = all_rows if _show_all else all_rows.slice(0, 8)
 	for d in rows:
 		var row := PanelContainer.new()
 		var sb := StyleBoxFlat.new()
@@ -340,7 +382,69 @@ func _rebuild_det() -> void:
 		h.add_child(Style.body_label(String(d[1]), 12, Palette.HP if neg else Palette.CYAN_BRIGHT))
 		row.add_child(h)
 		_det_list.add_child(row)
-	_det_toggle.text = "▲ Show less" if _show_all else "▼ Show all (%d)" % GameContent.DETAILED.size()
+	_det_toggle.text = "▲ Show less" if _show_all else "▼ Show all (%d)" % all_rows.size()
+
+
+## GameContent.DETAILED order, but values computed from PlayerStats where
+## modeled. "Spell DPS" / "Cast Speed" keep their design statics (unmodeled).
+func _detailed_rows() -> Array:
+	var p := PlayerStats.compute()
+	var derived: Dictionary = p["derived"]
+	var out: Array = []
+	for d in GameContent.DETAILED:
+		var label := String(d[0])
+		out.append([label, _detail_value(label, p, derived, String(d[1]))])
+	return out
+
+
+func _detail_value(label: String, p: Dictionary, derived: Dictionary, fallback: String) -> String:
+	match label:
+		"Attack DPS":
+			return String(p["dps_label"])
+		"Crit Chance":
+			return "%.1f%%" % (float(derived["crit_chance"]) * 100.0)
+		"Crit Multiplier":
+			return "%d%%" % roundi(float(derived["crit_multiplier"]) * 100.0)
+		"Attack Speed":
+			return _pct_inc(float(derived["attack_speed"]))
+		"Movement Speed":
+			return _pct_inc(float(derived["movement_speed"]))
+		"Gold Find":
+			return _pct_inc(float(derived["gold_find"]))
+		"Item Rarity":
+			return _pct_inc(float(derived["item_rarity"]))
+		"XP Gain":
+			return _pct_inc(float(derived["xp_gain"]))
+		"Maximum Mana":
+			return Style.group_int(int(derived["maximum_mana"]))
+		"Life Regen":
+			return Style.group_int(int(derived["life_regen"]))
+		"Mana Regen":
+			return Style.group_int(int(derived["mana_regen"]))
+		"Evasion":
+			return Style.group_int(int(derived["evasion"]))
+		"Fire Resist":
+			return _pct_inc(float(derived["fire_resist"]))
+		"Cold Resist":
+			return _pct_inc(float(derived["cold_resist"]))
+		"Lightning Resist":
+			return _pct_inc(float(derived["lightning_resist"]))
+		"Chaos Resist":
+			return _pct_inc(float(derived["chaos_resist"]))
+		"Accuracy":
+			return "%d%%" % roundi(float(derived["accuracy"]) * 100.0)
+		"Block Chance":
+			return "%d%%" % roundi(float(derived["block_chance"]) * 100.0)
+		_:
+			return fallback
+
+
+## "+18%" / "−12%" (U+2212 minus renders red in the detail rows).
+func _pct_inc(v: float) -> String:
+	var n := roundi(v * 100.0)
+	if n < 0:
+		return "−%d%%" % absi(n)
+	return "+%d%%" % n
 
 
 # =========================================================================
@@ -400,9 +504,9 @@ func _build_paperdoll() -> Control:
 	_pd_plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var plate_col := VBoxContainer.new()
 	plate_col.add_theme_constant_override("separation", 3)
-	var pp_num := Style.pixel_label("88,420", 18, Palette.EMBER_BRIGHT)
-	pp_num.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	plate_col.add_child(pp_num)
+	_plate_num = Style.pixel_label("", 18, Palette.EMBER_BRIGHT)
+	_plate_num.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	plate_col.add_child(_plate_num)
 	var pp_lbl := Style.body_label("GEAR POWER", 9, Palette.TX_MUTE)
 	pp_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	plate_col.add_child(pp_lbl)
@@ -473,13 +577,26 @@ func _gear_slot(g: Dictionary) -> Control:
 	il.offset_right = -5
 	il.offset_bottom = -3
 	il.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
-	Tip.attach(cell, {
-		"name": g["name"],
-		"type": "%s · iLvl %d · %s" % [g["slot"], int(g["ilvl"]), rar],
-		"rarity": rar,
-		"stats": g["stats"],
-		"flavor": "Right-click to unequip.",
-	})
+	if String(g["name"]) == "Cindergrip Maul":
+		# Live tooltip: forge-scaled weapon stats + the current forge level.
+		Tip.attach(cell, func() -> Dictionary:
+			var stats: Array = PlayerStats.forged_weapon_stats()
+			stats.append(["Forge", "+%d" % GameState.forge_level])
+			return {
+				"name": g["name"],
+				"type": "%s · iLvl %d · %s" % [g["slot"], int(g["ilvl"]), rar],
+				"rarity": rar,
+				"stats": stats,
+				"flavor": "Right-click to unequip.",
+			})
+	else:
+		Tip.attach(cell, {
+			"name": g["name"],
+			"type": "%s · iLvl %d · %s" % [g["slot"], int(g["ilvl"]), rar],
+			"rarity": rar,
+			"stats": g["stats"],
+			"flavor": "Right-click to unequip.",
+		})
 	return cell
 
 

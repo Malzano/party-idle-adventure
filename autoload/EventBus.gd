@@ -57,6 +57,9 @@ signal sim_toggles_changed(auto_skill: bool, auto_advance: bool)
 ## Pity counter changed (gacha).
 signal pity_changed(pity: int)
 
+## Recomputed player stats (party DPS / powers) after a loadout change.
+signal sim_stats_changed
+
 ## A daily quest's progress/claim state changed.
 signal quests_changed
 

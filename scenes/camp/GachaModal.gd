@@ -307,7 +307,8 @@ func _build_foot() -> Control:
 	pity.add_theme_constant_override("separation", 5)
 	rcol.add_child(pity)
 	pity.add_child(Style.body_label("PITY TO GUARANTEED 5★", 10, Palette.TX_MUTE))
-	_pity_bar = StatBar.new("xp", float(GameState.pity) / float(GameContent.PITY_HARD) * 100.0, 8.0)
+	var hard_pity := Balance.inum("gacha.hard_pity", GameContent.PITY_HARD)
+	_pity_bar = StatBar.new("xp", float(GameState.pity) / float(hard_pity) * 100.0, 8.0)
 	_pity_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	pity.add_child(_pity_bar)
 	var num_row := HBoxContainer.new()
@@ -315,7 +316,7 @@ func _build_foot() -> Control:
 	_pity_num = Style.pixel_label(str(GameState.pity), 11, Palette.EMBER_BRIGHT)
 	_pity_num.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	num_row.add_child(_pity_num)
-	num_row.add_child(Style.body_label(" / %d " % GameContent.PITY_HARD, 11, Palette.TX_DIM))
+	num_row.add_child(Style.body_label(" / %d " % hard_pity, 11, Palette.TX_DIM))
 	_soft_lbl = Style.body_label("· soft pity active", 11, Palette.EMBER_BRIGHT)
 	_soft_lbl.visible = false
 	num_row.add_child(_soft_lbl)
@@ -335,13 +336,18 @@ func _build_foot() -> Control:
 	_x1_btn = Style.make_button("×1 Summon   Q", "stone", 14)
 	_x1_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	_x1_btn.pressed.connect(func() -> void: _do_pull(1))
-	Tip.attach(_x1_btn, {"name": "Single Summon", "type": "Cost: 160 Soulstone", "rarity": "rare"})
+	Tip.attach(_x1_btn, {
+		"name": "Single Summon",
+		"type": "Cost: %s Soulstone" % Style.group_int(Balance.inum("gacha.cost_x1", GameContent.GACHA_COST_X1)),
+		"rarity": "rare"})
 	actions.add_child(_x1_btn)
 	_x10_btn = Style.make_button("×10 Multi-Summon   E", "ember", 14)
 	_x10_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	_x10_btn.pressed.connect(func() -> void: _do_pull(10))
 	Tip.attach(_x10_btn, {
-		"name": "Ten Summon", "type": "Cost: 1,600 Soulstone", "rarity": "legendary",
+		"name": "Ten Summon",
+		"type": "Cost: %s Soulstone" % Style.group_int(Balance.inum("gacha.cost_x10", GameContent.GACHA_COST_X10)),
+		"rarity": "legendary",
 		"flavor": "Guarantees at least one 4★ or higher."})
 	actions.add_child(_x10_btn)
 	foot.add_child(actions)
@@ -371,7 +377,8 @@ func _rate_row(c: Color, label: String, value: String) -> Control:
 func _do_pull(count: int) -> void:
 	if _rolling:
 		return
-	var cost := GameContent.GACHA_COST_X1 if count == 1 else GameContent.GACHA_COST_X10
+	var cost := Balance.inum("gacha.cost_x1", GameContent.GACHA_COST_X1) if count == 1 \
+		else Balance.inum("gacha.cost_x10", GameContent.GACHA_COST_X10)
 	if not GameState.spend_soulstones(cost):
 		return
 	var p := GameState.pity
@@ -402,6 +409,6 @@ func _update_buttons() -> void:
 
 
 func _refresh_pity(p: int) -> void:
-	_pity_bar.pct = float(p) / float(GameContent.PITY_HARD) * 100.0
+	_pity_bar.pct = float(p) / float(Balance.inum("gacha.hard_pity", GameContent.PITY_HARD)) * 100.0
 	_pity_num.text = str(p)
-	_soft_lbl.visible = p >= GameContent.PITY_SOFT
+	_soft_lbl.visible = p >= Balance.inum("gacha.soft_pity", GameContent.PITY_SOFT)

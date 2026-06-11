@@ -1,14 +1,20 @@
 extends "res://scenes/camp/ModalShell.gd"
 ## NOTICE BOARD modal (camp.jsx BoardModal): underline-glow tabs for Daily
-## Quests (claimable via GameState), a mini Leaderboard (links to the full
-## rankings window), and the rotating Daily Dungeon card.
+## Quests (live progress from GameState's daily counters; Claim grants the
+## parsed reward), a mini Leaderboard (links to the full rankings window),
+## and the Daily Dungeon card (live attempts, energy cost, timed Gold Rush).
 
 const _TABS := [["quests", "Daily Quests"], ["leaders", "Leaderboard"], ["dungeon", "Daily Dungeon"]]
 
 var _tab := "quests"
 var _tab_btns: Dictionary = {}     # id -> Button
 var _pages: Dictionary = {}        # id -> Control
-var _claim_holders: Array = []     # quest index -> HBoxContainer
+
+var _quests_list: VBoxContainer
+var _attempts_lbl: Label
+var _enter_btn: Button
+var _rush_panel: PanelContainer
+var _rush_lbl: Label
 
 
 func _init() -> void:
@@ -25,6 +31,21 @@ func _build_body(body: VBoxContainer) -> void:
 	for id in _pages:
 		body.add_child(_pages[id])
 	_set_tab(_tab)
+	# Deferred so a Claim press never frees its own button mid-signal.
+	EventBus.quests_changed.connect(_on_quests_changed, CONNECT_DEFERRED)
+	EventBus.currencies_changed.connect(_refresh_dungeon)
+
+
+func _exit_tree() -> void:
+	if EventBus.quests_changed.is_connected(_on_quests_changed):
+		EventBus.quests_changed.disconnect(_on_quests_changed)
+	if EventBus.currencies_changed.is_connected(_refresh_dungeon):
+		EventBus.currencies_changed.disconnect(_refresh_dungeon)
+
+
+func _on_quests_changed() -> void:
+	_rebuild_quests()
+	_refresh_dungeon()
 
 
 # =========================================================================
@@ -89,22 +110,30 @@ func _set_tab(id: String) -> void:
 
 
 # =========================================================================
-# Daily Quests (.quest-list)
+# Daily Quests (.quest-list) — live progress + claimable rewards
 # =========================================================================
 
 func _build_quests() -> Control:
-	var list := VBoxContainer.new()
-	list.add_theme_constant_override("separation", 8)
+	_quests_list = VBoxContainer.new()
+	_quests_list.add_theme_constant_override("separation", 8)
+	_rebuild_quests()
+	return _quests_list
+
+
+func _rebuild_quests() -> void:
+	for child in _quests_list.get_children():
+		_quests_list.remove_child(child)
+		child.queue_free()
 	for i in GameContent.QUESTS.size():
-		list.add_child(_quest_row(i))
-	return list
+		_quests_list.add_child(_quest_row(i))
 
 
 func _quest_row(i: int) -> Control:
 	var q: Dictionary = GameContent.QUESTS[i]
-	var p := float(q["p"])
 	var g := float(q["g"])
-	var done := p >= g or i == 1
+	var p := GameState.quest_progress(i)
+	var done := p >= g
+	var claimed: bool = GameState.quests_claimed.has(i)
 	var pct := minf(100.0, p / g * 100.0)
 
 	var row := PanelContainer.new()
@@ -114,7 +143,9 @@ func _quest_row(i: int) -> Control:
 	sb.content_margin_top = 12
 	sb.content_margin_bottom = 12
 	row.add_theme_stylebox_override("panel", sb)
-	if done:
+	if claimed:
+		row.modulate = Color(1, 1, 1, 0.55)
+	elif done:
 		row.modulate = Color(1, 1, 1, 0.85)
 
 	var grid := HBoxContainer.new()
@@ -155,7 +186,9 @@ func _quest_row(i: int) -> Control:
 	bar.custom_minimum_size = Vector2(240, 6)
 	bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	bar_row.add_child(bar)
-	var prog := Style.pixel_label("%s/%s" % [str(minf(p, g)), str(g)], 8, Palette.TX_MUTE)
+	var shown := minf(p, g)
+	var prog_text := "%.1f/%d" % [shown, int(g)] if i == 3 else "%d/%d" % [int(shown), int(g)]
+	var prog := Style.pixel_label(prog_text, 8, Palette.TX_MUTE)
 	prog.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	bar_row.add_child(prog)
 	main.add_child(bar_row)
@@ -169,39 +202,45 @@ func _quest_row(i: int) -> Control:
 	reward.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	grid.add_child(reward)
 
-	# Claim button (swapped in place after claiming).
-	var holder := HBoxContainer.new()
-	holder.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	holder.add_child(_make_claim(i, done))
-	_claim_holders.append(holder)
-	grid.add_child(holder)
-	return row
-
-
-func _make_claim(i: int, done: bool) -> Button:
-	var claimed: bool = GameState.quests_claimed.has(i)
+	# Claim button (live state; rows rebuild on quests_changed).
 	var b: Button
 	if done and not claimed:
 		b = Style.make_button("Claim", "ember")
 		b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-		b.pressed.connect(func() -> void:
-			GameState.claim_quest(i)
-			_replace_claim(i))
-	elif claimed:
-		b = Style.make_button("Claimed", "ghost")
-		b.disabled = true
+		b.pressed.connect(_claim.bind(i))
 	else:
-		b = Style.make_button("Claim", "ghost")
+		b = Style.make_button("Claimed" if claimed else "Claim", "ghost")
 		b.disabled = true
-	return b
+	b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	grid.add_child(b)
+	return row
 
 
-func _replace_claim(i: int) -> void:
-	var holder: HBoxContainer = _claim_holders[i]
-	for child in holder.get_children():
-		holder.remove_child(child)
-		child.queue_free()
-	holder.add_child(_make_claim(i, true))
+func _claim(i: int) -> void:
+	if GameState.quests_claimed.has(i):
+		return
+	GameState.claim_quest(i)
+	_grant_reward(String(GameContent.QUESTS[i]["rw"]))
+
+
+## Parse "240 Gold · 40 XP" style reward strings; token-only parts (Hearth
+## Token, Relic Shard, Iron ×3) grant nothing extra.
+func _grant_reward(rw: String) -> void:
+	var re := RegEx.new()
+	re.compile(r"^(\d+)\s+(.+)$")
+	for part in rw.split("·"):
+		var m := re.search(part.strip_edges())
+		if m == null:
+			continue
+		var n := int(m.get_string(1))
+		var what := m.get_string(2).to_lower()
+		if what.begins_with("gold"):
+			GameState.add_gold(n)
+		elif what.begins_with("xp"):
+			GameState.add_xp(n)
+		elif what.begins_with("soulstone"):
+			GameState.premium_currency += n
+			EventBus.currencies_changed.emit()
 
 
 # =========================================================================
@@ -283,7 +322,7 @@ func _leader_row(r: Dictionary) -> Control:
 
 
 # =========================================================================
-# Daily Dungeon (.daily-dgn)
+# Daily Dungeon (.daily-dgn) — live attempts + timed Gold Rush buff
 # =========================================================================
 
 func _build_dungeon() -> Control:
@@ -298,24 +337,96 @@ func _build_dungeon() -> Control:
 	ps.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	page.add_child(art)
 
+	var mult := int(Balance.num("energy.dungeon_gold_mult", 3.0))
+
 	var meta := VBoxContainer.new()
 	meta.add_theme_constant_override("separation", 12)
 	var head := VBoxContainer.new()
 	head.add_theme_constant_override("separation", 2)
 	head.add_child(Style.display_label("The Sunken Reliquary", 24, Palette.GOLD_BRIGHT, true))
-	head.add_child(Style.body_label("Today · Gold Rush — 3× gold drops", 12, Palette.EMBER))
+	head.add_child(Style.body_label("Today · Gold Rush — %d× gold drops" % mult, 12, Palette.EMBER))
 	meta.add_child(head)
 
 	var mods := HBoxContainer.new()
 	mods.add_theme_constant_override("separation", 8)
-	mods.add_child(Style.make_role_tag("tank", "+200% Gold"))
+	mods.add_child(Style.make_role_tag("tank", "+%d%% Gold" % ((mult - 1) * 100)))
 	mods.add_child(Style.make_role_tag("mage", "Frost-warded foes"))
-	mods.add_child(Style.make_role_tag("dps", "3 attempts left"))
+	var att_chip := Style.make_role_tag("dps", "%d attempts left" % GameState.dungeon_attempts)
+	_attempts_lbl = att_chip.get_child(0) as Label
+	mods.add_child(att_chip)
 	meta.add_child(mods)
 
-	var enter := Style.make_button("Enter Dungeon   ↵", "ember")
-	enter.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	enter.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	meta.add_child(enter)
+	# Gold Rush active status (ember, ticking countdown).
+	_rush_panel = PanelContainer.new()
+	var rsb := StyleBoxFlat.new()
+	rsb.bg_color = Palette.with_alpha(Palette.EMBER, 0.1)
+	rsb.set_border_width_all(1)
+	rsb.border_color = Palette.EMBER_DEEP
+	rsb.set_corner_radius_all(3)
+	rsb.content_margin_left = 12
+	rsb.content_margin_right = 12
+	rsb.content_margin_top = 8
+	rsb.content_margin_bottom = 8
+	rsb.shadow_color = Palette.with_alpha(Palette.EMBER, 0.25 * Palette.GLOW)
+	rsb.shadow_size = int(12 * Palette.GLOW)
+	_rush_panel.add_theme_stylebox_override("panel", rsb)
+	_rush_panel.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	_rush_lbl = Style.pixel_label("", 10, Palette.EMBER_BRIGHT)
+	_rush_panel.add_child(_rush_lbl)
+	_rush_panel.visible = false
+	meta.add_child(_rush_panel)
+
+	_enter_btn = Style.make_button("Enter Dungeon   ↵", "ember")
+	_enter_btn.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	_enter_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	_enter_btn.pressed.connect(_on_enter_dungeon)
+	Tip.attach(_enter_btn, func() -> Dictionary:
+		return {
+			"name": "Daily Dungeon",
+			"type": "Gold Rush · %d× gold for %ds" % [mult, Balance.inum("energy.dungeon_buff_seconds", 60)],
+			"rarity": "epic",
+			"stats": [
+				["Energy cost", str(Balance.inum("energy.dungeon_cost", 20))],
+				["Attempts left", str(GameState.dungeon_attempts)],
+			],
+		})
+	meta.add_child(_enter_btn)
 	page.add_child(meta)
+
+	# 1s countdown tick while the modal is open.
+	var tick := Timer.new()
+	tick.wait_time = 1.0
+	tick.autostart = true
+	tick.timeout.connect(_refresh_dungeon)
+	page.add_child(tick)
+
+	_refresh_dungeon()
 	return page
+
+
+func _on_enter_dungeon() -> void:
+	if GameState.enter_daily_dungeon():
+		_refresh_dungeon()
+
+
+func _refresh_dungeon() -> void:
+	if _enter_btn == null:
+		return
+	var cost := Balance.inum("energy.dungeon_cost", 20)
+	_attempts_lbl.text = ("%d attempts left" % GameState.dungeon_attempts).to_upper()
+	var active := GameState.dungeon_buff_active()
+	_rush_panel.visible = active
+	if active:
+		var left := maxi(0, GameState.dungeon_buff_until - GameState.now_utc())
+		_rush_lbl.text = "GOLD RUSH ACTIVE · %d× GOLD · %ds" % [int(Balance.num("energy.dungeon_gold_mult", 3.0)), left]
+		_enter_btn.disabled = true
+		_enter_btn.text = "Enter Dungeon   ↵".to_upper()
+	elif GameState.dungeon_attempts <= 0:
+		_enter_btn.disabled = true
+		_enter_btn.text = "No attempts left".to_upper()
+	elif GameState.energy < cost:
+		_enter_btn.disabled = true
+		_enter_btn.text = ("Need %d Energy" % cost).to_upper()
+	else:
+		_enter_btn.disabled = false
+		_enter_btn.text = "Enter Dungeon   ↵".to_upper()

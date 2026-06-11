@@ -149,7 +149,10 @@ func _build_wave_bar() -> void:
 	dps.add_child(dps_val)
 	head.add_child(dps)
 	prog.add_child(head)
-	_wave_bar = StatBar.new("xp", CombatSim.wave_fill, 9.0)
+	# Live DPS label: re-read whenever the player's stats are recomputed.
+	EventBus.sim_stats_changed.connect(func() -> void:
+		dps_val.text = CombatSim.party_dps_label)
+	_wave_bar = StatBar.new("xp", CombatSim.wave_fill(), 9.0)
 	prog.add_child(_wave_bar)
 	row.add_child(prog)
 

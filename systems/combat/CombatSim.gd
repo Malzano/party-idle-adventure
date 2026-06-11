@@ -3,22 +3,16 @@ extends Node
 ##
 ## Runs at TICK_RATE logical ticks per second; the speed toggle (1×/2×/4×)
 ## only changes how many ticks are processed per real second. All combat
-## outcomes (wave/stage progress, gold, XP, levels, loot, party vitals) are
-## decided here; the Fight screen is a pure presentation layer reading the
-## signals on EventBus. The same step logic powers offline progress, so
-## "away gains" are literally the sim advanced N ticks.
+## outcomes are decided here and all the math is REAL: party DPS comes from
+## PlayerStats (gear + talents + pets + relics + food + aura + roster), each
+## wave is an enemy HP pool that grows per stage (Balance), and gold/XP apply
+## the player's gold_find / xp_gain bonuses. The same per-wave math powers
+## offline progress, so away-gains match what the live sim would have done.
 
 const TICK_RATE := 10.0  # logical ticks per second
-const WAVES_PER_STAGE := 5
 
-## Per-tick tuning (at 10 ticks/sec these reproduce the design's pacing:
-## wave fill ~1.4%/220ms at 2× in the mockup → ~0.32%/tick at 1×).
-const WAVE_FILL_PER_TICK := 0.318
-const GOLD_PER_WAVE := 460
-const XP_PER_WAVE := 140
 const FLOATER_CHANCE_PER_TICK := 0.22
-const LOOT_INTERVAL_TICKS := 21.0  # ≈2.1 s at 1×
-const ENERGY_REGEN_SECONDS := 300.0  # +1 energy / 5 min
+const ENERGY_REGEN_SECONDS := 300.0  # fallback; Balance overrides
 
 var speed: int = 2:
 	set(v):
@@ -36,10 +30,12 @@ var auto_advance: bool = true:
 ## Live battle state (presentation reads these freely).
 var act: int = 4
 var stage: int = 7
-var wave: int = 3
-var wave_fill: float = 38.0
+var wave: int = 1
+var wave_pool: float = 1.0     # total HP of the current wave
+var wave_damage: float = 0.0   # damage dealt into the current wave
 var stage_name: String = "The Sunken Reliquary"
-var party_dps_label: String = "4.82M"
+var party_dps: float = 0.0
+var party_dps_label: String = "0"
 
 ## Party vitals as percentages (index-aligned with GameContent.PARTY).
 var party_hp: Array[float] = []
@@ -49,7 +45,7 @@ var party_mana: Array[float] = []
 var offline_rewards: Dictionary = {}
 
 var _accum: float = 0.0
-var _loot_cooldown: float = LOOT_INTERVAL_TICKS
+var _loot_cooldown: float = 21.0
 var _energy_accum: float = 0.0
 var _vitals_dirty_ticks: int = 0
 var _rng := RandomNumberGenerator.new()
@@ -64,7 +60,32 @@ func _ready() -> void:
 	act = GameState.act
 	stage = GameState.stage
 	stage_name = GameContent.STAGE_NAMES[(stage - 1) % GameContent.STAGE_NAMES.size()]
+	GameState.check_daily_reset()
+	_recompute_stats()
+	_reset_wave()
+	_loot_cooldown = Balance.num("rewards.loot_interval_ticks", 21.0)
+	# Any loadout/talent/roster change re-prices the party.
+	EventBus.talents_changed.connect(_recompute_stats)
+	EventBus.loadout_changed.connect(_recompute_stats)
+	EventBus.game_loaded.connect(_recompute_stats)
 	_compute_offline()
+
+
+func _recompute_stats() -> void:
+	PlayerStats.invalidate()
+	var profile := PlayerStats.compute()
+	party_dps = float(profile["party_dps"])
+	party_dps_label = String(profile["dps_label"])
+	EventBus.sim_stats_changed.emit()
+
+
+func _reset_wave() -> void:
+	wave_pool = Balance.wave_pool(Balance.stage_index(act, stage))
+	wave_damage = 0.0
+
+
+func wave_fill() -> float:
+	return clampf(wave_damage / wave_pool * 100.0, 0.0, 100.0)
 
 
 func _process(delta: float) -> void:
@@ -74,23 +95,26 @@ func _process(delta: float) -> void:
 		_tick()
 	# Energy regen runs on real time, independent of combat speed.
 	_energy_accum += delta
-	if _energy_accum >= ENERGY_REGEN_SECONDS:
-		_energy_accum -= ENERGY_REGEN_SECONDS
+	var regen := Balance.num("energy.regen_seconds", ENERGY_REGEN_SECONDS)
+	if _energy_accum >= regen:
+		_energy_accum -= regen
 		if GameState.energy < GameState.energy_max:
 			GameState.energy += 1
 			EventBus.currencies_changed.emit()
 
 
-## One logical tick: advance the wave, roll floaters/heals, drip loot.
+## One logical tick: deal damage into the wave pool, roll floaters, drip loot.
 func _tick() -> void:
-	# Wave progress.
-	wave_fill += WAVE_FILL_PER_TICK
-	if wave_fill >= 100.0:
-		wave_fill = 0.0
-		_on_wave_cleared()
-	EventBus.sim_wave_progress.emit(wave_fill)
+	GameState.check_daily_reset()
 
-	# Floating combat numbers (damage erupts at the clash zone; heals on party).
+	var dmg := party_dps / TICK_RATE
+	wave_damage += dmg
+	GameState.daily_damage += dmg
+	if wave_damage >= wave_pool:
+		_on_wave_cleared()
+	EventBus.sim_wave_progress.emit(wave_fill())
+
+	# Floating combat numbers, scaled to real DPS so they read believably.
 	if _rng.randf() < FLOATER_CHANCE_PER_TICK:
 		var heal := _rng.randf() < 0.22
 		if heal:
@@ -100,8 +124,10 @@ func _tick() -> void:
 			EventBus.sim_floater.emit("heal", amount, idx)
 		else:
 			var crit := _rng.randf() < 0.28
-			var amount := (4000 + _rng.randi_range(0, 8999)) if crit else (600 + _rng.randi_range(0, 2399))
-			EventBus.sim_floater.emit("crit" if crit else "dmg", amount, -1)
+			var hit := party_dps * _rng.randf_range(0.10, 0.45)
+			if crit:
+				hit *= 3.0
+			EventBus.sim_floater.emit("crit" if crit else "dmg", int(hit), -1)
 
 	# Party vitals drift: chip damage + mana churn, healer keeps up.
 	for i in party_hp.size():
@@ -115,32 +141,57 @@ func _tick() -> void:
 	# Auto-loot drip.
 	_loot_cooldown -= 1.0
 	if _loot_cooldown <= 0.0:
-		_loot_cooldown = LOOT_INTERVAL_TICKS
+		_loot_cooldown = Balance.num("rewards.loot_interval_ticks", 21.0)
 		var entry: Array = GameContent.LOOT_FEED[_rng.randi_range(0, GameContent.LOOT_FEED.size() - 1)]
 		EventBus.sim_loot.emit(entry)
 
 
 func _on_wave_cleared() -> void:
-	GameState.add_gold(GOLD_PER_WAVE)
-	GameState.add_xp(XP_PER_WAVE)
-	if wave >= WAVES_PER_STAGE:
+	wave_damage -= wave_pool
+	var s_index := Balance.stage_index(act, stage)
+	GameState.add_gold(wave_gold_reward(s_index))
+	GameState.add_xp(wave_xp_reward(s_index))
+	var waves_per_stage := Balance.inum("enemy.waves_per_stage", 5)
+	if wave >= waves_per_stage:
 		wave = 1
+		GameState.daily_stages += 1
+		EventBus.quests_changed.emit()
 		if auto_advance:
 			_advance_stage()
+		else:
+			_reset_wave()
 	else:
 		wave += 1
+		_reset_wave()
 	EventBus.sim_wave_changed.emit(wave)
 
 
+## Gold for one wave clear, including gold_find and the dungeon gold rush.
+func wave_gold_reward(s_index: int) -> int:
+	var profile := PlayerStats.compute()
+	var gold := Balance.wave_gold(s_index) * (1.0 + float(profile["derived"]["gold_find"]))
+	if GameState.dungeon_buff_active():
+		gold *= Balance.num("energy.dungeon_gold_mult", 3.0)
+	return int(gold)
+
+
+## XP for one wave clear, including xp_gain.
+func wave_xp_reward(s_index: int) -> int:
+	var profile := PlayerStats.compute()
+	return int(Balance.wave_xp(s_index) * (1.0 + float(profile["derived"]["xp_gain"])))
+
+
 func _advance_stage() -> void:
+	var per_act := Balance.inum("enemy.stages_per_act", 50)
 	stage += 1
-	if stage > 50:
+	if stage > per_act:
 		stage = 1
 		act += 1
 	GameState.act = act
 	GameState.stage = stage
 	GameState.max_stage = maxi(GameState.max_stage, act * 100 + stage)
 	stage_name = GameContent.STAGE_NAMES[(stage - 1) % GameContent.STAGE_NAMES.size()]
+	_reset_wave()
 	EventBus.sim_stage_changed.emit(stage_label(), stage_name)
 
 
@@ -154,29 +205,18 @@ func retreat() -> void:
 	stage = maxi(1, stage - 1)
 	GameState.stage = stage
 	wave = 1
-	wave_fill = 0.0
 	stage_name = GameContent.STAGE_NAMES[(stage - 1) % GameContent.STAGE_NAMES.size()]
+	_reset_wave()
 	EventBus.sim_stage_changed.emit(stage_label(), stage_name)
 	EventBus.sim_wave_changed.emit(wave)
 
 
-## Team Aura: optimal = exactly 1 tank + 1 healer + 2 DPS of different classes.
+## Team Aura passthrough (the real check lives with the stats).
 func team_aura_optimal() -> bool:
-	var tanks := 0
-	var healers := 0
-	var dps_classes := {}
-	for h in GameContent.PARTY:
-		match String(h["role"]):
-			"tank":
-				tanks += 1
-			"healer":
-				healers += 1
-			_:
-				dps_classes[h["cls"]] = true
-	return tanks == 1 and healers == 1 and dps_classes.size() == 2
+	return PlayerStats.team_aura_optimal()
 
 # ---------------------------------------------------------------------------
-# Offline progress (CLAUDE.md §3): elapsed → ticks → same per-tick rewards.
+# Offline progress (CLAUDE.md §3): elapsed time → the same per-wave math.
 # ---------------------------------------------------------------------------
 
 func _compute_offline() -> void:
@@ -187,44 +227,94 @@ func _compute_offline() -> void:
 	offline_rewards = simulate_offline(seconds)
 
 
-## Headless fast-forward of [param seconds] of combat at 1× speed. Pure math
-## over the same per-tick constants, so it matches what the live sim would do.
+## Headless fast-forward: clears waves one by one with the live party DPS and
+## growing per-stage pools (no auto-advance assumption changes — it advances
+## exactly like the live sim with auto_advance on). Returns the reward summary.
 func simulate_offline(seconds: int) -> Dictionary:
-	var ticks := float(seconds) * TICK_RATE
-	var waves := int(ticks * WAVE_FILL_PER_TICK / 100.0)
-	var gold := waves * GOLD_PER_WAVE
-	var xp_total := waves * XP_PER_WAVE
+	var cap := Balance.inum("rewards.offline_cap_hours", 12) * 3600
+	var sim_seconds := mini(seconds, cap)
+	var time_left := float(sim_seconds)
+	var dps := maxf(1.0, party_dps)
+
+	var sim_act := act
+	var sim_stage := stage
+	var sim_wave := wave
+	var waves_per_stage := Balance.inum("enemy.waves_per_stage", 5)
+	var per_act := Balance.inum("enemy.stages_per_act", 50)
+
+	var gold := 0.0
+	var xp_total := 0.0
+	var waves_cleared := 0
+	var profile := PlayerStats.compute()
+	var gold_mult := 1.0 + float(profile["derived"]["gold_find"])
+	var xp_mult := 1.0 + float(profile["derived"]["xp_gain"])
+
+	while time_left > 0.0 and waves_cleared < 200000:
+		var s_index := Balance.stage_index(sim_act, sim_stage)
+		var wave_time := Balance.wave_pool(s_index) / dps
+		if wave_time > time_left:
+			break
+		time_left -= wave_time
+		waves_cleared += 1
+		gold += Balance.wave_gold(s_index) * gold_mult
+		xp_total += Balance.wave_xp(s_index) * xp_mult
+		if sim_wave >= waves_per_stage:
+			sim_wave = 1
+			sim_stage += 1
+			if sim_stage > per_act:
+				sim_stage = 1
+				sim_act += 1
+		else:
+			sim_wave += 1
+
+	# Convert XP to levels against the real curve (without mutating state).
 	var levels := 0
-	# Apply XP curve without mutating state (collect does that).
 	var xp_probe := GameState.xp
 	var need := GameState.xp_to_next
-	while xp_total > 0 and levels < 999:
+	var growth := Balance.num("rewards.xp_to_next_growth", 1.15)
+	var xp_pool := int(xp_total)
+	while xp_pool > 0 and levels < 999:
 		var room := need - xp_probe
-		if xp_total >= room:
-			xp_total -= room
+		if xp_pool >= room:
+			xp_pool -= room
 			xp_probe = 0
-			need = int(float(need) * 1.15)
+			need = int(float(need) * growth)
 			levels += 1
 		else:
-			xp_probe += xp_total
-			xp_total = 0
-	var items := int(ticks / LOOT_INTERVAL_TICKS / 14.0)  # rare-ish keepers only
+			xp_probe += xp_pool
+			xp_pool = 0
+
+	var items := waves_cleared / Balance.inum("rewards.offline_item_waves_per_item", 15)
 	return {
 		"seconds": seconds,
-		"gold": gold,
+		"gold": int(gold),
 		"levels": levels,
 		"items": items,
-		"waves": waves,
+		"waves": waves_cleared,
+		"end_act": sim_act,
+		"end_stage": sim_stage,
+		"end_wave": sim_wave,
 	}
 
 
-## Apply pending offline rewards to the profile (Collect button).
+## Apply pending offline rewards to the profile (Collect button) — including
+## the stage progress the party made while away.
 func collect_offline() -> void:
 	if offline_rewards.is_empty():
 		return
 	GameState.add_gold(int(offline_rewards["gold"]))
 	for i in int(offline_rewards["levels"]):
 		GameState.level_up()
+	act = int(offline_rewards.get("end_act", act))
+	stage = int(offline_rewards.get("end_stage", stage))
+	wave = int(offline_rewards.get("end_wave", wave))
+	GameState.act = act
+	GameState.stage = stage
+	GameState.max_stage = maxi(GameState.max_stage, act * 100 + stage)
+	stage_name = GameContent.STAGE_NAMES[(stage - 1) % GameContent.STAGE_NAMES.size()]
+	_reset_wave()
+	EventBus.sim_stage_changed.emit(stage_label(), stage_name)
+	EventBus.sim_wave_changed.emit(wave)
 	offline_rewards = {}
 	EventBus.rewards_collected.emit({})
 	EventBus.currencies_changed.emit()
