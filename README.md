@@ -84,8 +84,8 @@ godot --headless --path . -s res://addons/gut/gut_cmdln.gd -gdir=res://test/unit
 `BackendClient.gd` and ships in mock mode until the server is deployed.
 
 **Next milestones:** deploy the backend + flip mock off, sprite pass (PixelSlot swap-in),
-friends/guild/mail client UI, balance pass, Steam polish. Full state of the project:
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+friends/guild/mail client UI, balance pass, Steam polish — the maintained list is
+[TODO.md](TODO.md). Full state of the project: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ---
 

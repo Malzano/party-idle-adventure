@@ -202,6 +202,9 @@ Steam packaging/achievements/cloud saves, friends/guild/mail client UI (server e
 exist), realtime co-op combat (parties currently share presence/progress, not a battlefield),
 project LICENSE file.
 
+**The live work list is [TODO.md](../TODO.md)** (the srv repo has its own); keep both checked
+off in the same commits that do the work.
+
 **Deploy day:** follow `README → Deploy` in the srv repo (Firestore + Identity Platform
 anonymous auth + Cloud Run + Scheduler), then flip `BackendClient.mock = false` and fill
 `base_url` + `web_api_key`.
