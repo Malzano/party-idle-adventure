@@ -68,7 +68,7 @@ func _build() -> void:
 
 
 func _build_title() -> void:
-	var title := Style.display_label("GRIMHOLLOW", 46, Palette.GOLD_BRIGHT)
+	var title := Style.display_label(GameContent.GAME_TITLE.to_upper(), 46, Palette.GOLD_BRIGHT)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	add_child(title)
 	title.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)

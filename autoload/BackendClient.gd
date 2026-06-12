@@ -1,5 +1,5 @@
 extends Node
-## BackendClient — the game's single seam to the grimhollow-api backend
+## BackendClient — the game's single seam to the party-idle-api backend
 ## (github.com/Malzano/party-idle-adventure-srv). Every method speaks the
 ## server's EXACT request/response schemas.
 ##
@@ -15,7 +15,7 @@ extends Node
 
 ## Flip to false after deploying. Mock = fully offline, schema-faithful.
 var mock: bool = true
-## e.g. "https://grimhollow-api-xxxx-uc.a.run.app"
+## e.g. "https://party-idle-api-xxxx-uc.a.run.app"
 var base_url: String = ""
 ## Identity Platform web API key (Firebase console → project settings).
 var web_api_key: String = ""

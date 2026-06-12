@@ -1,4 +1,4 @@
-# Grimhollow / "The Delve" — Architecture & Current State
+# Party Idle Adventure (working title) — Architecture & Current State
 
 > **Read this first if you are new to the repo (human or AI session).** It describes what is
 > actually built and how the pieces fit. [CLAUDE.md](../CLAUDE.md) is the original design
@@ -11,7 +11,7 @@ A party of 4 heroes auto-fights 24/7 — including while the game is closed — 
 builds power through gear, talents, pets, relics, food buffs, and gacha summons.
 
 **Sister repo:** [party-idle-adventure-srv](https://github.com/Malzano/party-idle-adventure-srv)
-(`grimhollow-api`) — TypeScript/Express 5/Firestore on Cloud Run. The server owns all mutable
+(`party-idle-api`) — TypeScript/Express 5/Firestore on Cloud Run. The server owns all mutable
 shared state; this client ships with a schema-faithful **mock mode** (see §Backend).
 
 ---

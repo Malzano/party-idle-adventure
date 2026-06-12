@@ -1,10 +1,12 @@
-# The Delve
+# Party Idle Adventure
 
-> Working title. A **party-based idle dungeon crawler** for **PC / Steam**, built in **Godot 4.x** with **typed GDScript**.
+> Working title (final name TBD — it lives in ONE constant, `GameContent.GAME_TITLE`).
+> A **party-based idle dungeon crawler** for **PC / Steam**, built in **Godot 4.x** with **typed GDScript**.
 
 Dark gothic ARPG mood (Diablo / Path of Exile). A party of **4 heroes auto-fights 24/7** and keeps
 progressing while the game is closed; power comes from gear, pets, relics, a talent tree, and
-gacha-summoned heroes. The UI is themed **"Grimhollow"** — carved stone, beveled iron, ember glow.
+gacha-summoned heroes. The UI theme — carved stone, beveled iron, ember glow — comes from a
+design handoff internally codenamed "Grimhollow" (a codename, not the product name).
 
 The full design brief lives in [CLAUDE.md](CLAUDE.md); the **implementation map (read first):
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
@@ -13,7 +15,7 @@ The full design brief lives in [CLAUDE.md](CLAUDE.md); the **implementation map 
 
 ## Status — playable vertical slice, server-integrated (mock mode)
 
-The full **Grimhollow UI** is implemented across **multiple OS windows** — the main window
+The full dark-gothic UI is implemented across **multiple OS windows** — the main window
 permanently hosts the Fight battlefield (the one screen that can never close); Camp, Hero,
 Global Rankings, and the Party Finder each open in their own window, all usable simultaneously.
 
@@ -46,7 +48,7 @@ Global Rankings, and the Party Finder each open in their own window, all usable 
 - **PARTY FINDER:** 4-player groups — browse/forge/join/leave; member presence (online,
   level, stage, power) refreshes with the 45 s combat heartbeat.
 - **Backend client** (`autoload/BackendClient.gd`): every server call in the live schemas of
-  [grimhollow-api](https://github.com/Malzano/party-idle-adventure-srv), with **mock mode
+  [party-idle-api](https://github.com/Malzano/party-idle-adventure-srv), with **mock mode
   on** by default — flip `mock = false` + set the Cloud Run URL after deploying.
 - Gothic tooltips everywhere, hotkey chips, rarity glows; all art sits in labeled **pixel-art
   drop-slots** sized for [pixellab.ai](https://www.pixellab.ai) sprites.

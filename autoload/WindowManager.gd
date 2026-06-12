@@ -12,27 +12,28 @@ const WIN_HERO := "hero"
 const WIN_LEADERBOARD := "leaderboard"
 const WIN_PARTY := "party"
 
+# Titlebars compose as "<title> — GameContent.GAME_TITLE" in _create().
 const _DEFS := {
 	WIN_CAMP: {
-		"title": "Hollowreach Camp — Grimhollow",
+		"title": "Hollowreach Camp",
 		"scene": "res://scenes/camp/Camp.tscn",
 		"size": Vector2i(1600, 900),
 		"strip": true,
 	},
 	WIN_HERO: {
-		"title": "Hero — Grimhollow",
+		"title": "Hero",
 		"scene": "res://scenes/hero/Hero.tscn",
 		"size": Vector2i(1600, 900),
 		"strip": true,
 	},
 	WIN_LEADERBOARD: {
-		"title": "Global Rankings — Grimhollow",
+		"title": "Global Rankings",
 		"scene": "res://scenes/leaderboard/Leaderboard.tscn",
 		"size": Vector2i(1480, 900),
 		"strip": false,
 	},
 	WIN_PARTY: {
-		"title": "Party Finder — Grimhollow",
+		"title": "Party Finder",
 		"scene": "res://scenes/party/PartyFinder.tscn",
 		"size": Vector2i(1480, 900),
 		"strip": false,
@@ -86,7 +87,7 @@ func focus_main() -> void:
 func _create(id: String) -> Window:
 	var def: Dictionary = _DEFS[id]
 	var w := Window.new()
-	w.title = def["title"]
+	w.title = "%s — %s" % [def["title"], GameContent.GAME_TITLE]
 	w.size = def["size"]
 	w.min_size = Vector2i(960, 540)
 	w.initial_position = Window.WINDOW_INITIAL_POSITION_CENTER_MAIN_WINDOW_SCREEN

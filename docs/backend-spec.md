@@ -65,7 +65,7 @@ Design principles:
                     │ HTTPS, Authorization: Bearer <Firebase ID token>
                     │
    ┌────────────────▼──────────────────┐        ┌─────────────────────┐
-   │  Cloud Run: grimhollow-api        │◄───────│  Cloud Scheduler    │
+   │  Cloud Run: party-idle-api        │◄───────│  Cloud Scheduler    │
    │  containerized REST /v1/*         │  OIDC  │  00:00 UTC daily    │
    │  (Go or Node/TypeScript)          │        │  + season rollover  │
    └──┬───────────┬───────────┬────────┘        └─────────────────────┘

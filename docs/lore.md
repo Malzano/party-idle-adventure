@@ -1,4 +1,4 @@
-# Grimhollow — Lore Bible: The World, the Four, and the Factions
+# Party Idle Adventure — Lore Bible: The World, the Four, and the Factions
 
 > Companion to [ARCHITECTURE.md](ARCHITECTURE.md). Everything here is written to fit the
 > names already shipped in the game (Hollowreach Camp, the Bone Warden, the Crown of the

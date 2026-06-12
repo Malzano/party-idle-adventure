@@ -1,8 +1,14 @@
 class_name GameContent
 extends RefCounted
-## Static content/design data for Grimhollow, ported 1:1 from the design
-## handoff (.design_ref/project/*.jsx). Pure data + a few static helpers; no
-## scene-tree dependencies, so the CombatSim can use it headless.
+## Static content/design data, ported 1:1 from the design handoff
+## (.design_ref/project/*.jsx — internal codename "Grimhollow"). Pure data +
+## a few static helpers; no scene-tree dependencies, so the CombatSim can
+## use it headless.
+
+## Working title — the ONE place the product name lives (window titles, login
+## logo, tooltips compose from it). Swap here when the final name lands. The
+## in-world lore names (the Hollow, Hollowreach) are setting, not branding.
+const GAME_TITLE := "Party Idle Adventure"
 
 # =========================================================================
 # FIGHT — party, enemies, props, trail, spawn markers (fight.jsx)

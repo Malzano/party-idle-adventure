@@ -69,7 +69,7 @@ func _make_crest() -> Control:
 	crest.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	crest.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	_set_texture(crest, "res://assets/icons/crest.svg")
-	crest.tooltip_text = "Grimhollow — Idle Crawler"
+	crest.tooltip_text = "%s — Idle Crawler" % GameContent.GAME_TITLE
 	return crest
 
 

@@ -14,8 +14,8 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 
 [application]
 
-config/name="The Delve"
-config/description="Party-based idle dungeon crawler."
+config/name="Party Idle Adventure"
+config/description="Party-based idle dungeon crawler (working title)."
 run/main_scene="res://scenes/login/Login.tscn"
 config/features=PackedStringArray("4.6", "GL Compatibility")
 config/icon="res://icon.svg"
@@ -31,8 +31,6 @@ BackendClient="*res://autoload/BackendClient.gd"
 
 [debug]
 
-; EventBus declares signals that other scripts emit (event-bus architecture) —
-; the per-class "unused signal" warning is noise here.
 gdscript/warnings/unused_signal=0
 
 [display]
