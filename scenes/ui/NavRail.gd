@@ -210,3 +210,5 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			select("hero")
 		KEY_L:
 			WindowManager.open(WindowManager.WIN_LEADERBOARD)
+		KEY_P:
+			WindowManager.open(WindowManager.WIN_PARTY)

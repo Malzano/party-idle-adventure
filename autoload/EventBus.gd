@@ -78,3 +78,6 @@ signal equipment_changed
 
 ## A mythic (SSR) item dropped somewhere in the world — show the ribbon.
 signal mythic_announced(player: String, item: String)
+
+## GameState.party (the server-authoritative party mirror) was replaced.
+signal party_changed

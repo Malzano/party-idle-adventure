@@ -140,6 +140,21 @@ func add_bag_item(item: Dictionary) -> bool:
 # --- Chests -----------------------------------------------------------------------
 var daily_chests: int = 0
 
+# --- Party (server-authoritative; this is only the client mirror) -------------------
+## PartyView from GET /v1/party/mine ({} = solo). NOT part of to_dict — the
+## server owns party membership; BackendClient refreshes the mirror (and
+## persists the mock world in user://netstate.json, not the save blob).
+var party: Dictionary = {}
+
+
+func in_party() -> bool:
+	return not party.is_empty()
+
+
+func set_party(p: Dictionary) -> void:
+	party = p
+	EventBus.party_changed.emit()
+
 # --- Timed buffs -------------------------------------------------------------------
 ## Active food buff: recipe name, parsed effect string, and expiry (unix UTC).
 var food_buff: String = ""
@@ -368,6 +383,7 @@ func reset_to_defaults() -> void:
 	forge_level = 7
 	seed_default_equipment()
 	daily_chests = 0
+	party = {}
 	food_buff = ""
 	food_buff_effect = ""
 	food_buff_until = 0

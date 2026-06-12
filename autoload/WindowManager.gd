@@ -10,6 +10,7 @@ extends Node
 const WIN_CAMP := "camp"
 const WIN_HERO := "hero"
 const WIN_LEADERBOARD := "leaderboard"
+const WIN_PARTY := "party"
 
 const _DEFS := {
 	WIN_CAMP: {
@@ -27,6 +28,12 @@ const _DEFS := {
 	WIN_LEADERBOARD: {
 		"title": "Global Rankings — Grimhollow",
 		"scene": "res://scenes/leaderboard/Leaderboard.tscn",
+		"size": Vector2i(1480, 900),
+		"strip": false,
+	},
+	WIN_PARTY: {
+		"title": "Party Finder — Grimhollow",
+		"scene": "res://scenes/party/PartyFinder.tscn",
 		"size": Vector2i(1480, 900),
 		"strip": false,
 	},
@@ -156,5 +163,7 @@ class _PopupKeys:
 				WindowManager.open(WindowManager.WIN_HERO)
 			KEY_L:
 				WindowManager.open(WindowManager.WIN_LEADERBOARD)
+			KEY_P:
+				WindowManager.open(WindowManager.WIN_PARTY)
 			KEY_ESCAPE:
 				WindowManager.close(window_id)

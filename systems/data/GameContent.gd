@@ -628,6 +628,34 @@ static func class_by_id(id: String) -> Dictionary:
 			return c
 	return {}
 
+
+# =========================================================================
+# PARTY FINDER — mock-world pools (live mode reads /v1/party/* instead)
+# =========================================================================
+
+## Fake delvers populating mock open parties (BackendClient mock mode).
+const MOCK_DELVERS := [
+	{"name": "Maraketh", "class_id": "hunter", "lv": 52},
+	{"name": "Oswin", "class_id": "warrior", "lv": 49},
+	{"name": "Seline", "class_id": "mage", "lv": 55},
+	{"name": "Corvus", "class_id": "rogue", "lv": 44},
+	{"name": "Brennor", "class_id": "warrior", "lv": 58},
+	{"name": "Ysolde", "class_id": "mage", "lv": 41},
+	{"name": "Fenwick", "class_id": "hunter", "lv": 47},
+	{"name": "Mirelle", "class_id": "rogue", "lv": 51},
+	{"name": "Galt", "class_id": "warrior", "lv": 38},
+	{"name": "Nerissa", "class_id": "mage", "lv": 60},
+	{"name": "Padraic", "class_id": "hunter", "lv": 45},
+	{"name": "Vesna", "class_id": "rogue", "lv": 53},
+	{"name": "Aldous", "class_id": "warrior", "lv": 50},
+	{"name": "Tamsin", "class_id": "hunter", "lv": 42},
+]
+
+const MOCK_PARTY_NAMES := [
+	"Gravewalkers", "Ember Pact", "The Hollow Court", "Ashveil Company",
+	"Last Lantern", "Sons of the Sunken", "Marrowguard", "Pale Riders",
+]
+
 # =========================================================================
 # EQUIPMENT — canonical item helpers + slot model
 # =========================================================================

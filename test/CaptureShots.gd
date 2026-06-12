@@ -52,6 +52,22 @@ func _run() -> void:
 	await get_tree().create_timer(1.0).timeout
 	await _snap("05_battlefield_chest_ribbon")
 
+	# --- 3) Party Finder, joined state (mock world) ---
+	var listing: Dictionary = await BackendClient.party_list()
+	var open: Array = listing["data"]["parties"]
+	if not open.is_empty():
+		await BackendClient.party_join(String((open[0] as Dictionary)["id"]))
+	var cover := ColorRect.new()
+	cover.color = Palette.BG_0
+	add_child(cover)
+	cover.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var finder := preload("res://scenes/party/PartyFinder.tscn").instantiate() as Control
+	add_child(finder)
+	finder.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	await get_tree().create_timer(1.2).timeout
+	await _snap("06_party_finder_joined")
+	await BackendClient.party_leave()  # clears the mock party from netstate
+
 	print("CAPTURE_DONE")
 	get_tree().quit()
 

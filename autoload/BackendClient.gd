@@ -54,6 +54,8 @@ func _process(delta: float) -> void:
 		_sync_accum = 0.0
 		sync_combat()
 		poll_announcements()
+		if GameState.in_party():
+			party_mine()  # presence refresh for the Party Finder
 
 
 func _boot_config() -> void:
@@ -407,6 +409,247 @@ func poll_announcements() -> void:
 			EventBus.mythic_announced.emit(String(ann.get("player", "A delver")), String(ann.get("item", "an artifact")))
 
 
+# =========================================================================
+# Party (/v1/party/*) — 4-player groups, presence via the sync heartbeat.
+# GameState.party mirrors the server's PartyView; mock mode simulates the
+# other players (GameContent.MOCK_DELVERS) and persists YOUR party in
+# user://netstate.json (client state — never in the authoritative save).
+# =========================================================================
+
+const PARTY_CAP := 4
+const PRESENCE_TTL := 120  # seconds; mirrors the server's lib/party.ts
+
+var _mock_parties: Array = []        # open parties run by fake delvers
+var _mock_parties_seeded := false
+var _mock_my_party: Dictionary = {}  # raw doc of the party you're in
+
+
+## GET /v1/party/list — newest open public parties.
+func party_list() -> Dictionary:
+	var now := GameState.now_utc()
+	if mock:
+		_ensure_mock_parties()
+		var views: Array = []
+		for doc: Dictionary in _mock_parties:
+			if (doc["members"] as Array).size() < PARTY_CAP:
+				_drift_mock_members(doc["members"], now)
+				views.append(_party_view(doc, now))
+		views.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+			return int(a["avg_stage_key"]) > int(b["avg_stage_key"]))
+		return _wrap(200, {"parties": views, "server_time": now})
+	return await _api("GET", "/v1/party/list", {})
+
+
+## GET /v1/party/mine — refreshes the GameState.party mirror.
+func party_mine() -> Dictionary:
+	var now := GameState.now_utc()
+	if mock:
+		if _mock_my_party.is_empty():
+			return _wrap(200, {"party": null, "server_time": now})
+		_drift_mock_members(_mock_my_party["members"], now)
+		_refresh_self_member(now)
+		var v := _party_view(_mock_my_party, now)
+		GameState.set_party(v)
+		_save_netstate()
+		return _wrap(200, {"party": v, "server_time": now})
+	var res: Dictionary = await _api("GET", "/v1/party/mine", {})
+	if bool(res["ok"]):
+		var pv: Variant = res["data"].get("party")
+		GameState.set_party(pv if pv != null else {})
+	return res
+
+
+## POST /v1/party/create {name, is_public}. One party per player.
+func party_create(party_name: String, is_public: bool = true) -> Dictionary:
+	if mock:
+		if not _mock_my_party.is_empty():
+			return _error(409, "already_partied", "Leave your current party first.")
+		var clean := party_name.strip_edges()
+		while clean.contains("  "):
+			clean = clean.replace("  ", " ")
+		if clean.length() < 3 or clean.length() > 24:
+			return _error(422, "bad_party_name", "Party name must be 3-24 characters.")
+		var now := GameState.now_utc()
+		var me := _self_member(now)
+		_mock_my_party = {
+			"id": "mock-self-%08x" % (_rng.randi() & 0x7fffffff),
+			"name": clean,
+			"leader_uid": me["uid"],
+			"is_public": is_public,
+			"status": "open",
+			"members": [me],
+		}
+		var v := _party_view(_mock_my_party, now)
+		GameState.set_party(v)
+		_save_netstate()
+		return _wrap(200, {"party": v})
+	var res: Dictionary = await _api("POST", "/v1/party/create", {"name": party_name, "is_public": is_public})
+	if bool(res["ok"]):
+		GameState.set_party(res["data"]["party"])
+	return res
+
+
+## POST /v1/party/join {party_id}.
+func party_join(party_id: String) -> Dictionary:
+	if mock:
+		if not _mock_my_party.is_empty():
+			return _error(409, "already_partied", "Leave your current party first.")
+		_ensure_mock_parties()
+		var doc: Dictionary = {}
+		for p: Dictionary in _mock_parties:
+			if String(p["id"]) == party_id:
+				doc = p
+				break
+		if doc.is_empty():
+			return _error(404, "not_found", "That party no longer exists.")
+		var members: Array = doc["members"]
+		if String(doc["status"]) != "open" or members.size() >= PARTY_CAP:
+			return _error(409, "party_full", "That party is already full.")
+		var now := GameState.now_utc()
+		members.append(_self_member(now))
+		doc["status"] = "full" if members.size() >= PARTY_CAP else "open"
+		_mock_parties.erase(doc)
+		_mock_my_party = doc
+		var v := _party_view(doc, now)
+		GameState.set_party(v)
+		_save_netstate()
+		return _wrap(200, {"party": v})
+	var res: Dictionary = await _api("POST", "/v1/party/join", {"party_id": party_id})
+	if bool(res["ok"]):
+		GameState.set_party(res["data"]["party"])
+	return res
+
+
+## POST /v1/party/leave. Leader hand-off; empty parties dissolve.
+func party_leave() -> Dictionary:
+	if mock:
+		if _mock_my_party.is_empty():
+			return _error(404, "not_found", "You are not in a party.")
+		var my_uid := String(_self_member(GameState.now_utc())["uid"])
+		var members: Array = _mock_my_party["members"]
+		var rest: Array = members.filter(func(m: Dictionary) -> bool: return String(m["uid"]) != my_uid)
+		if not rest.is_empty():
+			# The bots keep the party going — it reopens in the finder.
+			_mock_my_party["members"] = rest
+			_mock_my_party["status"] = "open"
+			if String(_mock_my_party["leader_uid"]) == my_uid:
+				_mock_my_party["leader_uid"] = (rest[0] as Dictionary)["uid"]
+			_mock_parties.append(_mock_my_party)
+		_mock_my_party = {}
+		GameState.set_party({})
+		_save_netstate()
+		return _wrap(200, {"left": true})
+	var res: Dictionary = await _api("POST", "/v1/party/leave", {})
+	if bool(res["ok"]):
+		GameState.set_party({})
+	return res
+
+
+## Mirrors the server's PartyView assembly (services/parties.ts view()).
+func _party_view(doc: Dictionary, now: int) -> Dictionary:
+	var members: Array = []
+	var key_sum := 0
+	for m_v in doc["members"]:
+		var m := (m_v as Dictionary).duplicate()
+		var stage: Array = m["stage"]
+		m["online"] = now - int(m["last_seen_at"]) <= PRESENCE_TTL
+		m["leader"] = String(m["uid"]) == String(doc["leader_uid"])
+		key_sum += int(stage[0]) * 100 + int(stage[1])
+		members.append(m)
+	return {
+		"id": doc["id"],
+		"name": doc["name"],
+		"is_public": doc["is_public"],
+		"status": doc["status"],
+		"member_count": members.size(),
+		"avg_stage_key": roundi(float(key_sum) / maxf(1.0, float(members.size()))),
+		"members": members,
+	}
+
+
+func _self_member(now: int) -> Dictionary:
+	var profile: Dictionary = PlayerStats.compute()
+	return {
+		"uid": _uid if _uid != "" else "me",
+		"name": GameState.player_name if GameState.player_name != "" else "Delver",
+		"class_id": GameState.class_id,
+		"level": GameState.player_level,
+		"power": int(profile["total_power"]),
+		"stage": [GameState.act, GameState.stage],
+		"last_seen_at": now,
+		"joined_at": now,
+	}
+
+
+func _refresh_self_member(now: int) -> void:
+	var fresh := _self_member(now)
+	var members: Array = _mock_my_party["members"]
+	for i in members.size():
+		var m: Dictionary = members[i]
+		if String(m["uid"]) == String(fresh["uid"]):
+			fresh["joined_at"] = m["joined_at"]
+			members[i] = fresh
+			return
+
+
+## Seed ~6 open parties from the fake-delver pool, staged near the player.
+func _ensure_mock_parties() -> void:
+	if _mock_parties_seeded:
+		return
+	_mock_parties_seeded = true
+	var now := GameState.now_utc()
+	var pool: Array = GameContent.MOCK_DELVERS.duplicate()
+	var names: Array = GameContent.MOCK_PARTY_NAMES.duplicate()
+	for i in 6:
+		var count := 1 + _rng.randi_range(0, 2)
+		var members: Array = []
+		for _j in count:
+			if pool.is_empty():
+				break
+			var pick := _rng.randi_range(0, pool.size() - 1)
+			members.append(_mock_bot_member(pool.pop_at(pick), now))
+		if members.is_empty():
+			break
+		_mock_parties.append({
+			"id": "mock-p%d" % i,
+			"name": names[i % names.size()],
+			"leader_uid": (members[0] as Dictionary)["uid"],
+			"is_public": true,
+			"status": "open",
+			"members": members,
+		})
+
+
+func _mock_bot_member(d: Dictionary, now: int) -> Dictionary:
+	var act := clampi(GameState.act + _rng.randi_range(-1, 1), 1, 99)
+	return {
+		"uid": "bot-" + String(d["name"]).to_lower(),
+		"name": String(d["name"]),
+		"class_id": String(d["class_id"]),
+		"level": int(d["lv"]),
+		"power": int(d["lv"]) * 2800 + _rng.randi_range(0, 40000),
+		"stage": [act, _rng.randi_range(1, 50)],
+		"last_seen_at": now - _rng.randi_range(0, 170),
+		"joined_at": now - _rng.randi_range(600, 86400),
+	}
+
+
+## Bots keep playing: presence refreshes, stages creep up.
+func _drift_mock_members(members: Array, now: int) -> void:
+	for m_v in members:
+		var m: Dictionary = m_v
+		if not String(m["uid"]).begins_with("bot-"):
+			continue
+		if _rng.randf() < 0.8:
+			m["last_seen_at"] = now - _rng.randi_range(0, 60)
+		if _rng.randf() < 0.12:
+			var stage: Array = m["stage"]
+			stage[1] = int(stage[1]) + 1
+			if int(stage[1]) > 50:
+				stage[1] = 1
+				stage[0] = int(stage[0]) + 1
+
+
 ## GET /v1/config — no auth; safe pre-login.
 func fetch_config() -> Dictionary:
 	if mock:
@@ -583,11 +826,15 @@ func _load_netstate() -> void:
 	f.close()
 	if typeof(parsed) == TYPE_DICTIONARY:
 		_client_seq = int(parsed.get("client_seq", 0))
+		var mp: Variant = (parsed as Dictionary).get("mock_party", {})
+		if mock and typeof(mp) == TYPE_DICTIONARY and not (mp as Dictionary).is_empty():
+			_mock_my_party = mp
+			GameState.set_party(_party_view(_mock_my_party, GameState.now_utc()))
 
 
 func _save_netstate() -> void:
 	var f := FileAccess.open(NETSTATE_PATH, FileAccess.WRITE)
-	f.store_string(JSON.stringify({"client_seq": _client_seq}))
+	f.store_string(JSON.stringify({"client_seq": _client_seq, "mock_party": _mock_my_party}))
 	f.close()
 
 

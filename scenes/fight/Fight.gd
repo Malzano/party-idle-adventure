@@ -299,18 +299,30 @@ func _build_party_finder() -> void:
 	for i in GameContent.PARTY.size():
 		slots.add_child(_pf_slot(GameContent.PARTY[i], i))
 
-	# Leave Team (ghost, full width).
+	# Party Finder window: solo → find one; partied → manage yours (hotkey P).
 	var bpad := MarginContainer.new()
 	bpad.add_theme_constant_override("margin_left", 8)
 	bpad.add_theme_constant_override("margin_right", 8)
 	bpad.add_theme_constant_override("margin_bottom", 8)
-	var leave := Style.make_button("Leave Team", "ghost", 11)
+	var finder := Style.make_button("FIND PARTY", "ghost", 11)
 	for st in ["normal", "hover", "pressed", "disabled"]:
 		var gsb := Style.btn_ghost_box("hover" if st == "hover" else "normal")
 		gsb.content_margin_top = 7
 		gsb.content_margin_bottom = 7
-		leave.add_theme_stylebox_override(st, gsb)
-	bpad.add_child(leave)
+		finder.add_theme_stylebox_override(st, gsb)
+	finder.pressed.connect(func() -> void: WindowManager.open(WindowManager.WIN_PARTY))
+	var relabel := func() -> void:
+		finder.text = ("MANAGE PARTY · %d/4" % int(GameState.party.get("member_count", 1))) \
+			if GameState.in_party() else "FIND PARTY"
+	EventBus.party_changed.connect(relabel)
+	relabel.call()
+	Tip.attach(finder, {
+		"name": "Party Finder",
+		"type": "Hotkey · P",
+		"rarity": "",
+		"flavor": "Group with other delvers; presence syncs while the party fights.",
+	})
+	bpad.add_child(finder)
 	col.add_child(bpad)
 
 	var rivets := _Rivets.new()
