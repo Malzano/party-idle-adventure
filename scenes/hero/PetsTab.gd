@@ -6,6 +6,7 @@ var _sel: int = 0
 var _active_body: VBoxContainer
 var _marks: Array[Control] = []
 var _pc_grid: GridContainer
+var _coll_count: Label
 
 
 func _ready() -> void:
@@ -17,7 +18,14 @@ func _ready() -> void:
 	row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	row.add_child(_build_active_panel())
 	row.add_child(_build_collection())
-	EventBus.loadout_changed.connect(_refresh_active)
+	# Summons can tame new companions (GameContent.pet_owned milestones), so
+	# loadout changes refresh both the grid and the active panel.
+	EventBus.loadout_changed.connect(_on_loadout_changed, CONNECT_DEFERRED)
+	_refresh_active()
+
+
+func _on_loadout_changed() -> void:
+	_rebuild_collection()
 	_refresh_active()
 
 
@@ -50,7 +58,7 @@ func _refresh_active() -> void:
 	var pet: Dictionary = GameContent.PETS[_sel]
 	var rar := String(pet["r"])
 	var rc := Palette.rarity_color(rar)
-	var owned := bool(pet["owned"])
+	var owned := GameContent.pet_owned(_sel)
 	var is_active := _sel == GameState.active_pet and owned
 
 	# .pa-portrait — 190px rarity-bordered pixel slot.
@@ -112,7 +120,11 @@ func _refresh_active() -> void:
 		btn.pressed.connect(_on_set_active)
 		_active_body.add_child(btn)
 	else:
-		var locked := Style.display_label("Not yet tamed", 13, Palette.TX_MUTE, true)
+		var need := GameContent.pet_unlock_need(_sel)
+		var text := "Not yet tamed"
+		if need > 0:
+			text = "Follows after %d summons (%d/%d)" % [need, GameState.roster_extra.size(), need]
+		var locked := Style.display_label(text, 13, Palette.TX_MUTE, true)
 		locked.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		_active_body.add_child(locked)
 
@@ -153,11 +165,21 @@ func _build_collection() -> Control:
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 0)
 	panel.add_child(col)
-	var owned_count := 0
-	for p in GameContent.PETS:
-		if bool(p["owned"]):
-			owned_count += 1
-	col.add_child(_panel_head("Collection", "%d / %d" % [owned_count, GameContent.PETS.size()]))
+	var head := PanelContainer.new()
+	head.add_theme_stylebox_override("panel", Style.head_box())
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 10)
+	h.add_child(_ember_diamond(8.0))
+	h.add_child(Style.display_label("COLLECTION", 14, Palette.GOLD))
+	var sp := Control.new()
+	sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sp.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	h.add_child(sp)
+	_coll_count = Style.pixel_label("", 10, Palette.TX_MUTE)
+	_coll_count.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	h.add_child(_coll_count)
+	head.add_child(h)
+	col.add_child(head)
 
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -172,17 +194,32 @@ func _build_collection() -> Control:
 	_pc_grid.add_theme_constant_override("v_separation", 12)
 	_pc_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_pc_grid.resized.connect(func() -> void: _resize_square_cells(_pc_grid, 4, 12.0))
-	for i in GameContent.PETS.size():
-		_pc_grid.add_child(_pc_cell(i))
+	_rebuild_collection()
 	gm.add_child(_pc_grid)
 	scroll.add_child(gm)
 	col.add_child(scroll)
 	return panel
 
 
+## (Re)fill the grid — ownership is live (design flags + summon milestones).
+func _rebuild_collection() -> void:
+	for child in _pc_grid.get_children():
+		_pc_grid.remove_child(child)
+		child.queue_free()
+	_marks.clear()
+	var owned_count := 0
+	for i in GameContent.PETS.size():
+		if GameContent.pet_owned(i):
+			owned_count += 1
+		_pc_grid.add_child(_pc_cell(i))
+	if _coll_count != null:
+		_coll_count.text = "%d / %d" % [owned_count, GameContent.PETS.size()]
+	_resize_square_cells(_pc_grid, 4, 12.0)
+
+
 func _pc_cell(index: int) -> Control:
 	var p: Dictionary = GameContent.PETS[index]
-	var owned := bool(p["owned"])
+	var owned := GameContent.pet_owned(index)
 	var rar := String(p["r"])
 	var cell := Control.new()
 	cell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -230,7 +267,9 @@ func _pc_cell(index: int) -> Control:
 		"stats": [["Aura", p["eff"]]],
 	}
 	if not owned:
-		tip["flavor"] = "Tame this companion in the wild."
+		var need := GameContent.pet_unlock_need(index)
+		tip["flavor"] = ("Follows after %d summons (%d/%d)." % [need, GameState.roster_extra.size(), need]) \
+			if need > 0 else "Tame this companion in the wild."
 	Tip.attach(cell, tip)
 	return cell
 

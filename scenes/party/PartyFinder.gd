@@ -11,6 +11,10 @@ var _status_lbl: Label
 var _mine_body: VBoxContainer
 var _list_body: VBoxContainer
 var _name_edit: LineEdit
+var _forge_public := true
+var _code_edit: LineEdit
+var _social_body: VBoxContainer
+var _my_code_lbl: Label
 var _refreshing := false
 
 
@@ -33,7 +37,7 @@ func _on_visibility_changed() -> void:
 		_refresh()
 
 
-## Pull fresh truth from the backend (mine + open list).
+## Pull fresh truth from the backend (mine + open list + friends/guild).
 func _refresh() -> void:
 	if _refreshing:
 		return
@@ -41,9 +45,12 @@ func _refresh() -> void:
 	_status("Consulting the notice board…", Palette.TX_MUTE)
 	await BackendClient.party_mine()
 	var res: Dictionary = await BackendClient.party_list()
+	var friends: Dictionary = await BackendClient.friends_get()
+	var guild: Dictionary = await BackendClient.guild_get()
 	_refreshing = false
 	if not is_instance_valid(self):
 		return
+	_rebuild_social(friends, guild)
 	if bool(res["ok"]):
 		_rebuild_list(res["data"]["parties"])
 		_status("", Palette.TX_MUTE)
@@ -122,9 +129,12 @@ func _build_body() -> Control:
 	grid.add_theme_constant_override("separation", 18)
 	pad.add_child(grid)
 
-	# --- Left: your party ---
+	# --- Left: your party stacked over friends & guild ---
+	var left := VBoxContainer.new()
+	left.custom_minimum_size = Vector2(560, 0)
+	left.add_theme_constant_override("separation", 18)
+
 	var mine_panel := PanelContainer.new()
-	mine_panel.custom_minimum_size = Vector2(560, 0)
 	mine_panel.add_theme_stylebox_override("panel", Style.panel_box())
 	var mine_col := VBoxContainer.new()
 	mine_col.add_theme_constant_override("separation", 0)
@@ -147,12 +157,13 @@ func _build_body() -> Control:
 	var mine_pad := MarginContainer.new()
 	for m in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
 		mine_pad.add_theme_constant_override(m, 14)
-	mine_pad.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_mine_body = VBoxContainer.new()
 	_mine_body.add_theme_constant_override("separation", 8)
 	mine_pad.add_child(_mine_body)
 	mine_col.add_child(mine_pad)
-	grid.add_child(mine_panel)
+	left.add_child(mine_panel)
+	left.add_child(_build_social_panel())
+	grid.add_child(left)
 
 	# --- Right: open parties ---
 	var list_panel := PanelContainer.new()
@@ -165,12 +176,22 @@ func _build_body() -> Control:
 	var lh := PanelContainer.new()
 	lh.add_theme_stylebox_override("panel", Style.head_box())
 	var lh_row := HBoxContainer.new()
+	lh_row.add_theme_constant_override("separation", 10)
 	lh_row.add_child(Style.display_label("OPEN PARTIES", 14, Palette.GOLD))
 	var lh_sp := Control.new()
 	lh_sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lh_sp.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	lh_row.add_child(lh_sp)
-	lh_row.add_child(Style.body_label("presence refreshes every 45 s", 11, Palette.TX_FAINT))
+	# Private parties join here, by code.
+	_code_edit = _styled_edit("DELV-XXXX", 10)
+	_code_edit.custom_minimum_size = Vector2(150, 34)
+	_code_edit.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_code_edit.text_submitted.connect(func(_t: String) -> void: _join_by_code())
+	lh_row.add_child(_code_edit)
+	var code_btn := Style.make_button("JOIN BY CODE", "ghost", 10)
+	code_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	code_btn.pressed.connect(_join_by_code)
+	lh_row.add_child(code_btn)
 	lh.add_child(lh_row)
 	list_col.add_child(lh)
 
@@ -215,6 +236,22 @@ func _rebuild_mine() -> void:
 	var vis := Style.pixel_label("PUBLIC" if bool(party["is_public"]) else "PRIVATE", 9, Palette.TX_FAINT)
 	vis.size_flags_vertical = Control.SIZE_SHRINK_END
 	name_row.add_child(vis)
+	var nr_sp := Control.new()
+	nr_sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	nr_sp.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	name_row.add_child(nr_sp)
+	# Invite code (members-only payload) — how friends reach a private party.
+	var code := String(party.get("join_code", ""))
+	if code != "":
+		var code_lbl := Style.pixel_label(code, 10, Palette.EMBER_BRIGHT)
+		code_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		Tip.attach(code_lbl, {
+			"name": "Invite code",
+			"type": "",
+			"rarity": "",
+			"flavor": "Share it — friends join with JOIN BY CODE, even when the party is private.",
+		})
+		name_row.add_child(code_lbl)
 	_mine_body.add_child(name_row)
 	_mine_body.add_child(Style.rune_divider())
 
@@ -223,11 +260,6 @@ func _rebuild_mine() -> void:
 		_mine_body.add_child(_member_row(m_v))
 	for _i in range(members.size(), 4):
 		_mine_body.add_child(_recruiting_row())
-
-	var sp := Control.new()
-	sp.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	sp.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_mine_body.add_child(sp)
 
 	var leave := Style.make_button("LEAVE PARTY", "ghost", 12)
 	leave.pressed.connect(func() -> void:
@@ -249,18 +281,24 @@ func _build_forge_form() -> void:
 	_mine_body.add_child(Style.rune_divider())
 
 	_mine_body.add_child(Style.pixel_label("NAME YOUR PARTY", 9, Palette.TX_MUTE))
-	_name_edit = LineEdit.new()
-	_name_edit.placeholder_text = "e.g. Ember Pact"
+	_name_edit = _styled_edit("e.g. Ember Pact", 15)
 	_name_edit.max_length = 24
 	_name_edit.custom_minimum_size = Vector2(0, 40)
-	_name_edit.add_theme_stylebox_override("normal", Style.inset_box())
-	_name_edit.add_theme_stylebox_override("focus", Style.inset_box())
-	_name_edit.add_theme_color_override("font_color", Palette.TX)
-	_name_edit.add_theme_color_override("font_placeholder_color", Palette.TX_FAINT)
-	_name_edit.add_theme_color_override("caret_color", Palette.EMBER_BRIGHT)
-	_name_edit.add_theme_font_size_override("font_size", 15)
 	_name_edit.text_submitted.connect(func(_t: String) -> void: _forge())
 	_mine_body.add_child(_name_edit)
+
+	# Visibility: PUBLIC lists it on the board; PRIVATE is invite-code only.
+	var vis_btn := Style.make_button("BANNER · PUBLIC", "ghost", 11)
+	vis_btn.pressed.connect(func() -> void:
+		_forge_public = not _forge_public
+		vis_btn.text = "BANNER · PUBLIC" if _forge_public else "BANNER · PRIVATE")
+	Tip.attach(vis_btn, {
+		"name": "Banner visibility",
+		"type": "",
+		"rarity": "",
+		"flavor": "Public parties appear on the board. Private ones are joined only by invite code.",
+	})
+	_mine_body.add_child(vis_btn)
 
 	var forge := Style.make_button("FORGE A PARTY", "ember", 13)
 	forge.custom_minimum_size = Vector2(0, 44)
@@ -277,11 +315,37 @@ func _forge() -> void:
 	if pname.length() < 3:
 		_status("Party name must be 3-24 characters.", Palette.HP)
 		return
-	var res: Dictionary = await BackendClient.party_create(pname, true)
+	var res: Dictionary = await BackendClient.party_create(pname, _forge_public)
 	if not bool(res["ok"]):
 		_status(_err_msg(res), Palette.HP)
 	else:
 		_status("The %s banner is raised." % pname, Palette.R_UNCOMMON)
+
+
+func _join_by_code() -> void:
+	var code := _code_edit.text.strip_edges()
+	if code == "":
+		return
+	var res: Dictionary = await BackendClient.party_join("", code)
+	if not bool(res["ok"]):
+		_status(_err_msg(res), Palette.HP)
+	else:
+		_code_edit.text = ""
+		_status("Joined by invite.", Palette.R_UNCOMMON)
+	_refresh()
+
+
+## The shared dark inset text field.
+func _styled_edit(placeholder: String, font_size: int) -> LineEdit:
+	var e := LineEdit.new()
+	e.placeholder_text = placeholder
+	e.add_theme_stylebox_override("normal", Style.inset_box())
+	e.add_theme_stylebox_override("focus", Style.inset_box())
+	e.add_theme_color_override("font_color", Palette.TX)
+	e.add_theme_color_override("font_placeholder_color", Palette.TX_FAINT)
+	e.add_theme_color_override("caret_color", Palette.EMBER_BRIGHT)
+	e.add_theme_font_size_override("font_size", font_size)
+	return e
 
 
 func _member_row(m: Dictionary) -> Control:
@@ -428,6 +492,161 @@ func _party_row(p: Dictionary) -> Control:
 			_status(_err_msg(res), Palette.HP)
 		_refresh())
 	box.add_child(join)
+	return row
+
+
+# =========================================================================
+# FRIENDS & GUILD (left column, under your party)
+# =========================================================================
+
+func _build_social_panel() -> Control:
+	var panel := PanelContainer.new()
+	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	panel.add_theme_stylebox_override("panel", Style.panel_box())
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 0)
+	panel.add_child(col)
+
+	var head := PanelContainer.new()
+	head.add_theme_stylebox_override("panel", Style.head_box())
+	var hrow := HBoxContainer.new()
+	hrow.add_child(Style.display_label("FRIENDS & GUILD", 14, Palette.GOLD))
+	var sp := Control.new()
+	sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sp.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hrow.add_child(sp)
+	_my_code_lbl = Style.pixel_label("", 9, Palette.TX_MUTE)
+	_my_code_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	Tip.attach(_my_code_lbl, {
+		"name": "Your friend code",
+		"type": "",
+		"rarity": "",
+		"flavor": "Trade codes to add each other — adds are mutual.",
+	})
+	hrow.add_child(_my_code_lbl)
+	head.add_child(hrow)
+	col.add_child(head)
+
+	var pad := MarginContainer.new()
+	for m in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
+		pad.add_theme_constant_override(m, 14)
+	pad.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_social_body = VBoxContainer.new()
+	_social_body.add_theme_constant_override("separation", 8)
+	pad.add_child(_social_body)
+	col.add_child(pad)
+	return panel
+
+
+func _rebuild_social(friends_res: Dictionary, guild_res: Dictionary) -> void:
+	if _social_body == null:
+		return
+	for child in _social_body.get_children():
+		_social_body.remove_child(child)
+		child.queue_free()
+
+	# --- Friends ---
+	if bool(friends_res.get("ok", false)):
+		var data: Dictionary = friends_res["data"]
+		_my_code_lbl.text = "YOUR CODE · %s" % String(data.get("friend_code", ""))
+		var friends: Array = data.get("friends", [])
+		if friends.is_empty():
+			_social_body.add_child(Style.body_label(
+				"No friends yet — trade codes with other delvers.", 12, Palette.TX_MUTE))
+		for f_v in friends:
+			_social_body.add_child(_friend_row(f_v))
+
+	var add_row := HBoxContainer.new()
+	add_row.add_theme_constant_override("separation", 8)
+	var code_edit := _styled_edit("GRIM-XXXX-XX", 12)
+	code_edit.custom_minimum_size = Vector2(0, 36)
+	code_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	add_row.add_child(code_edit)
+	var add_btn := Style.make_button("ADD FRIEND", "ghost", 10)
+	add_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var do_add := func() -> void:
+		if code_edit.text.strip_edges() == "":
+			return
+		var res: Dictionary = await BackendClient.friends_add(code_edit.text)
+		if bool(res["ok"]):
+			_status("%s answers the call." % String(res["data"]["added"]["name"]), Palette.R_UNCOMMON)
+			_refresh()
+		else:
+			_status(_err_msg(res), Palette.HP)
+	code_edit.text_submitted.connect(func(_t: String) -> void: do_add.call())
+	add_btn.pressed.connect(do_add)
+	add_row.add_child(add_btn)
+	_social_body.add_child(add_row)
+
+	_social_body.add_child(Style.rune_divider())
+
+	# --- Guild ---
+	if bool(guild_res.get("ok", false)):
+		var g: Dictionary = guild_res["data"]["guild"]
+		var grow := HBoxContainer.new()
+		grow.add_theme_constant_override("separation", 10)
+		var tag := PanelContainer.new()
+		var tag_sb := StyleBoxFlat.new()
+		tag_sb.bg_color = Palette.EMBER
+		tag_sb.set_border_width_all(1)
+		tag_sb.border_color = Color("3a1d08")
+		tag_sb.set_corner_radius_all(3)
+		tag_sb.content_margin_left = 7
+		tag_sb.content_margin_right = 7
+		tag_sb.content_margin_top = 4
+		tag_sb.content_margin_bottom = 3
+		tag.add_theme_stylebox_override("panel", tag_sb)
+		tag.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		tag.add_child(Style.pixel_label(String(g["tag"]), 9, Color("1c0f04")))
+		grow.add_child(tag)
+		var gmeta := VBoxContainer.new()
+		gmeta.add_theme_constant_override("separation", 1)
+		gmeta.add_child(Style.display_label(String(g["name"]), 15, Palette.GOLD_BRIGHT))
+		gmeta.add_child(Style.body_label(
+			"%d delvers sworn" % (g["members"] as Array).size(), 11, Palette.TX_MUTE))
+		grow.add_child(gmeta)
+		_social_body.add_child(grow)
+	else:
+		_social_body.add_child(Style.body_label(
+			"You are sworn to no guild.", 12, Palette.TX_MUTE))
+		var jrow := HBoxContainer.new()
+		jrow.add_theme_constant_override("separation", 8)
+		var tag_edit := _styled_edit("Guild tag, e.g. ASH", 12)
+		tag_edit.custom_minimum_size = Vector2(0, 36)
+		tag_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		jrow.add_child(tag_edit)
+		var join_btn := Style.make_button("JOIN GUILD", "ghost", 10)
+		join_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		var do_join := func() -> void:
+			if tag_edit.text.strip_edges() == "":
+				return
+			var res: Dictionary = await BackendClient.guild_join(tag_edit.text)
+			if bool(res["ok"]):
+				_status("Sworn to %s." % String(res["data"]["guild"]["name"]), Palette.R_UNCOMMON)
+				_refresh()
+			else:
+				_status(_err_msg(res), Palette.HP)
+		tag_edit.text_submitted.connect(func(_t: String) -> void: do_join.call())
+		join_btn.pressed.connect(do_join)
+		jrow.add_child(join_btn)
+		_social_body.add_child(jrow)
+
+
+func _friend_row(f: Dictionary) -> Control:
+	var row := PanelContainer.new()
+	row.add_theme_stylebox_override("panel", Style.row_box())
+	var box := HBoxContainer.new()
+	box.add_theme_constant_override("separation", 8)
+	row.add_child(box)
+	box.add_child(Style.display_label(String(f["name"]), 13, Palette.TX, true))
+	box.add_child(Style.body_label("LV %d" % int(f["lv"]), 11, Palette.TX_MUTE))
+	if String(f.get("guild", "")) != "":
+		box.add_child(Style.pixel_label(String(f["guild"]), 8, Palette.GOLD_DIM))
+	var sp := Control.new()
+	sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sp.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(sp)
+	box.add_child(Style.body_label(_power_label(int(f["power"])), 11, Palette.TX_DIM))
 	return row
 
 

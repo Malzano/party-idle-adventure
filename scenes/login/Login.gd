@@ -156,12 +156,19 @@ func _figure_card(cls: Dictionary) -> Control:
 	at.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	cap.add_child(at)
 
+	# Mouse, and keyboard/controller: Tab/arrows focus a figure, Enter picks it.
+	card.focus_mode = Control.FOCUS_ALL
 	card.gui_input.connect(func(event: InputEvent) -> void:
 		var mb := event as InputEventMouseButton
 		if mb != null and mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
-			_select(id))
+			_select(id)
+		elif event.is_action_pressed("ui_accept"):
+			_select(id)
+			card.accept_event())
 	card.mouse_entered.connect(func() -> void: _apply_card_state(id, true))
 	card.mouse_exited.connect(func() -> void: _apply_card_state(id))
+	card.focus_entered.connect(func() -> void: _apply_card_state(id, true))
+	card.focus_exited.connect(func() -> void: _apply_card_state(id))
 	return card
 
 

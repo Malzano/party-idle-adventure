@@ -133,5 +133,6 @@ code changes. The deep map (boot flow, conventions, gotchas, backend contract) i
   `*-OFL.txt` files in [assets/fonts/](assets/fonts/).
 - **UI design:** the "Grimhollow" mockup was produced in Claude Design and reimplemented in Godot.
 
-> **Project license:** none yet. A `LICENSE` file should be added before reusing third-party code or
-> accepting contributions — license compatibility (esp. GPL copyleft) matters once code is borrowed.
+> **Project license:** proprietary placeholder — see [LICENSE](LICENSE) (all rights reserved;
+> swap for a real license before accepting contributions). Third-party components keep their
+> own terms (GUT — MIT; fonts — SIL OFL).

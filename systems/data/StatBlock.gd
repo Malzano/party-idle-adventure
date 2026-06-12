@@ -100,8 +100,8 @@ func _apply_fragment(fragment: String) -> void:
 	if m == null:
 		# Try trailing form: "Ignites deal +40% damage" → unsupported prose; skip.
 		return
-	var sign := -1.0 if m.get_string(1) != "+" else 1.0
-	var amount := float(m.get_string(2)) * sign
+	var sgn := -1.0 if m.get_string(1) != "+" else 1.0
+	var amount := float(m.get_string(2)) * sgn
 	var is_pct := m.get_string(3) == "%"
 	var stat := _stat_key(m.get_string(4))
 	_add_parsed(stat, amount, is_pct)

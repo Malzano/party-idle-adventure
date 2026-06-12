@@ -341,11 +341,49 @@ const PETS := [
 	{"n": "Bone Pup", "r": "uncommon", "owned": true, "active": false, "eff": "+5% Gold Find", "role": "Scout"},
 	{"n": "Ash Sprite", "r": "uncommon", "owned": true, "active": false, "eff": "+4% Rarity", "role": "Spirit"},
 	{"n": "Mire Toad", "r": "common", "owned": true, "active": false, "eff": "+10 Max Life", "role": "Croaker"},
-	{"n": "Dread Owl", "r": "legendary", "owned": false, "active": false, "eff": "Reveals rare loot", "role": "Omen"},
-	{"n": "Grave Worm", "r": "epic", "owned": false, "active": false, "eff": "+8% XP gain", "role": "Burrower"},
-	{"n": "Cinder Fox", "r": "rare", "owned": false, "active": false, "eff": "+6% move speed", "role": "Trickster"},
-	{"n": "Hex Imp", "r": "epic", "owned": false, "active": false, "eff": "Curses on hit", "role": "Fiend"},
+	{"n": "Dread Owl", "r": "legendary", "owned": false, "active": false, "eff": "Reveals rare loot", "role": "Omen", "unlock_summons": 12},
+	{"n": "Grave Worm", "r": "epic", "owned": false, "active": false, "eff": "+8% XP gain", "role": "Burrower", "unlock_summons": 6},
+	{"n": "Cinder Fox", "r": "rare", "owned": false, "active": false, "eff": "+6% move speed", "role": "Trickster", "unlock_summons": 3},
+	{"n": "Hex Imp", "r": "epic", "owned": false, "active": false, "eff": "Curses on hit", "role": "Fiend", "unlock_summons": 9},
 ]
+
+
+## ACQUISITION LOOPS — both derive from server-authoritative state, so the
+## mock and live games agree with zero extra save schema:
+##   pets   → unlocked by total gacha summons (roster_extra.size())
+##   relics → the empty slots fill at max_stage milestones
+
+## Pet [param i] is owned when the design says so, or once enough heroes have
+## been summoned (the companion follows a newcomer into camp).
+static func pet_owned(i: int) -> bool:
+	var pet: Dictionary = PETS[clampi(i, 0, PETS.size() - 1)]
+	if bool(pet["owned"]):
+		return true
+	return GameState.roster_extra.size() >= int(pet.get("unlock_summons", 1 << 30))
+
+
+static func pet_unlock_need(i: int) -> int:
+	return int((PETS[clampi(i, 0, PETS.size() - 1)] as Dictionary).get("unlock_summons", 0))
+
+
+## Stage-milestone relics that materialize into the empty equipped slots.
+const RELIC_STAGE_UNLOCKS := [
+	{"idx": 4, "at": 450, "n": "Widow's Lantern", "r": "legendary",
+		"eff": "+10% Gold Find · +6% Item Rarity"},
+	{"idx": 5, "at": 520, "n": "Pale Idol", "r": "epic",
+		"eff": "+9% All Damage"},
+]
+
+
+## RELICS with every earned stage-unlock filled in (max_stage milestones).
+static func live_relics() -> Array:
+	var out: Array = RELICS.duplicate(true)
+	for ru_v in RELIC_STAGE_UNLOCKS:
+		var ru: Dictionary = ru_v
+		if GameState.max_stage >= int(ru["at"]):
+			out[int(ru["idx"])] = {"n": String(ru["n"]), "r": String(ru["r"]),
+				"eff": String(ru["eff"]), "owned": true, "empty": false}
+	return out
 
 const RELICS := [
 	{"n": "Hollow Crown", "r": "legendary", "eff": "+12% All Damage · +60 Max Life", "owned": true, "empty": false},
@@ -630,6 +668,48 @@ static func class_by_id(id: String) -> Dictionary:
 
 
 # =========================================================================
+# FACTIONS — designed in docs/lore.md §3 (mid-game allegiance, NOT yet
+# choosable in-game). Stat effects are StatBlock-parsable so wiring the
+# OATHS tab later is mechanical; "special" keys name the system they hook.
+# =========================================================================
+
+const FACTIONS := [
+	{
+		"id": "EMB", "name": "Emberwatch",
+		"creed": "Keep the fire. The fire keeps you.",
+		"pros": ["+15% Maximum Life", "+12% Armour"],
+		"cons": ["-8% Attack Speed", "-10% Gold Find"],
+		"special": {"offline_cap_bonus_hours": 2},
+		"fit": "warrior", "rival": "HLW",
+	},
+	{
+		"id": "ASH", "name": "Ashen Covenant",
+		"creed": "What burns, purifies.",
+		"pros": ["+14% Fire Damage", "+8% All Damage", "+6% Crit Chance"],
+		"cons": ["-12% Armour"],
+		"special": {"forge_iron_cost_mult": 1.25},
+		"fit": "mage", "rival": "EMB",
+	},
+	{
+		"id": "HLW", "name": "The Hollowed",
+		"creed": "It only keeps what you still want.",
+		"pros": ["+18% Gold Find", "+12% Item Rarity"],
+		"cons": ["-10% Maximum Life"],
+		"special": {"chest_rarity_band_bonus": 1, "enemy_hp_mult": 1.06},
+		"fit": "rogue", "rival": "LNT",
+	},
+	{
+		"id": "LNT", "name": "The Last Lantern",
+		"creed": "Forward is the only door.",
+		"pros": ["+12% Movement Speed", "+10% XP Gain"],
+		"cons": ["-8% Maximum Mana"],
+		"special": {"party_online_all_damage_pct": 2, "daily_chest_cap_delta": -10},
+		"fit": "hunter", "rival": "HLW",
+	},
+]
+
+
+# =========================================================================
 # PARTY FINDER — mock-world pools (live mode reads /v1/party/* instead)
 # =========================================================================
 
@@ -736,7 +816,10 @@ const _ITEM_BASES := {
 }
 const _ITEM_PREFIXES := ["Ashen", "Hollow", "Grave", "Ember", "Marrow", "Cinder", "Pale", "Sunken", "Wyrmhide", "Hexwoven", "Iron", "Gloom"]
 const _MYTHIC_NAMES := ["Worldsplitter", "Crown of the Last Ember", "Heart of the Hollow King", "The Unforgiven Edge", "Veil of Endless Night", "Sovereign's Burden"]
-const _FLAT_AFFIXES := [["Armour", 6.0], ["Maximum Life", 3.2], ["Strength", 0.9], ["Dexterity", 0.9], ["Intelligence", 0.9], ["Vitality", 0.8], ["Luck", 0.5], ["Maximum Mana", 2.0], ["Evasion", 4.0], ["Life Regen", 1.4]]
+# Flat coefficients calibrated against the design gear anchors (epic ilvl
+# 72-75: Armour 248-612, Life 184, attrs 42; legendary 82: STR 72; rare 64:
+# Mana 48): value ≈ coef × ilvl × rarity_power × 0.8-1.2.
+const _FLAT_AFFIXES := [["Armour", 4.0], ["Maximum Life", 2.2], ["Strength", 0.6], ["Dexterity", 0.6], ["Intelligence", 0.6], ["Vitality", 0.6], ["Luck", 0.4], ["Maximum Mana", 0.8], ["Evasion", 3.0], ["Life Regen", 1.4]]
 const _PCT_AFFIXES := [["Attack Speed", 4.0, 14.0], ["Crit Chance", 3.0, 10.0], ["Crit Multi", 8.0, 35.0], ["Fire Damage", 6.0, 26.0], ["Spell Damage", 6.0, 24.0], ["Melee Damage", 6.0, 24.0], ["Gold Find", 6.0, 28.0], ["Item Rarity", 4.0, 18.0], ["Movement Speed", 4.0, 18.0], ["Fire Resist", 8.0, 38.0], ["Cold Resist", 8.0, 38.0], ["Lightning Resist", 8.0, 38.0]]
 const _AFFIX_COUNT := {"common": 1, "uncommon": 2, "rare": 2, "epic": 3, "legendary": 4, "mythic": 5}
 const _RARITY_POWER := {"common": 0.7, "uncommon": 0.85, "rare": 1.0, "epic": 1.25, "legendary": 1.6, "mythic": 2.2}

@@ -448,7 +448,7 @@ func party_mine() -> Dictionary:
 			return _wrap(200, {"party": null, "server_time": now})
 		_drift_mock_members(_mock_my_party["members"], now)
 		_refresh_self_member(now)
-		var v := _party_view(_mock_my_party, now)
+		var v := _party_view(_mock_my_party, now, true)
 		GameState.set_party(v)
 		_save_netstate()
 		return _wrap(200, {"party": v, "server_time": now})
@@ -476,10 +476,11 @@ func party_create(party_name: String, is_public: bool = true) -> Dictionary:
 			"name": clean,
 			"leader_uid": me["uid"],
 			"is_public": is_public,
+			"join_code": _new_party_code(),
 			"status": "open",
 			"members": [me],
 		}
-		var v := _party_view(_mock_my_party, now)
+		var v := _party_view(_mock_my_party, now, true)
 		GameState.set_party(v)
 		_save_netstate()
 		return _wrap(200, {"party": v})
@@ -489,17 +490,28 @@ func party_create(party_name: String, is_public: bool = true) -> Dictionary:
 	return res
 
 
-## POST /v1/party/join {party_id}.
-func party_join(party_id: String) -> Dictionary:
+## POST /v1/party/join {party_id} | {code} — private parties only by code.
+func party_join(party_id: String, code: String = "") -> Dictionary:
 	if mock:
 		if not _mock_my_party.is_empty():
 			return _error(409, "already_partied", "Leave your current party first.")
 		_ensure_mock_parties()
 		var doc: Dictionary = {}
-		for p: Dictionary in _mock_parties:
-			if String(p["id"]) == party_id:
-				doc = p
-				break
+		if party_id == "" and code != "":
+			var norm := code.strip_edges().to_upper()
+			if not _is_party_code(norm):
+				return _error(422, "bad_party_code", "Malformed party code.")
+			for p: Dictionary in _mock_parties:
+				if String(p.get("join_code", "")) == norm:
+					doc = p
+					break
+			if doc.is_empty():
+				return _error(404, "not_found", "No party with that code.")
+		else:
+			for p: Dictionary in _mock_parties:
+				if String(p["id"]) == party_id:
+					doc = p
+					break
 		if doc.is_empty():
 			return _error(404, "not_found", "That party no longer exists.")
 		var members: Array = doc["members"]
@@ -514,7 +526,7 @@ func party_join(party_id: String) -> Dictionary:
 		GameState.set_party(v)
 		_save_netstate()
 		return _wrap(200, {"party": v})
-	var res: Dictionary = await _api("POST", "/v1/party/join", {"party_id": party_id})
+	var res: Dictionary = await _api("POST", "/v1/party/join", {"party_id": party_id, "code": code})
 	if bool(res["ok"]):
 		GameState.set_party(res["data"]["party"])
 	return res
@@ -545,8 +557,9 @@ func party_leave() -> Dictionary:
 	return res
 
 
-## Mirrors the server's PartyView assembly (services/parties.ts view()).
-func _party_view(doc: Dictionary, now: int) -> Dictionary:
+## Mirrors the server's PartyView assembly (services/parties.ts view()):
+## join_code rides only members' payloads (mine/create/join), never the list.
+func _party_view(doc: Dictionary, now: int, include_code: bool = false) -> Dictionary:
 	var members: Array = []
 	var key_sum := 0
 	for m_v in doc["members"]:
@@ -556,7 +569,7 @@ func _party_view(doc: Dictionary, now: int) -> Dictionary:
 		m["leader"] = String(m["uid"]) == String(doc["leader_uid"])
 		key_sum += int(stage[0]) * 100 + int(stage[1])
 		members.append(m)
-	return {
+	var v := {
 		"id": doc["id"],
 		"name": doc["name"],
 		"is_public": doc["is_public"],
@@ -565,6 +578,22 @@ func _party_view(doc: Dictionary, now: int) -> Dictionary:
 		"avg_stage_key": roundi(float(key_sum) / maxf(1.0, float(members.size()))),
 		"members": members,
 	}
+	if include_code:
+		v["join_code"] = String(doc.get("join_code", ""))
+	return v
+
+
+func _new_party_code() -> String:
+	var out := "DELV-"
+	for _i in 4:
+		out += _CODE_ALPHABET[_rng.randi_range(0, _CODE_ALPHABET.length() - 1)]
+	return out
+
+
+func _is_party_code(s: String) -> bool:
+	var re := RegEx.new()
+	re.compile("^DELV-[0-9A-HJKMNP-TV-Z]{4}$")
+	return re.search(s.to_upper()) != null
 
 
 func _self_member(now: int) -> Dictionary:
@@ -615,6 +644,7 @@ func _ensure_mock_parties() -> void:
 			"name": names[i % names.size()],
 			"leader_uid": (members[0] as Dictionary)["uid"],
 			"is_public": true,
+			"join_code": _new_party_code(),
 			"status": "open",
 			"members": members,
 		})
@@ -648,6 +678,207 @@ func _drift_mock_members(members: Array, now: int) -> void:
 			if int(stage[1]) > 50:
 				stage[1] = 1
 				stage[0] = int(stage[0]) + 1
+
+
+# =========================================================================
+# Social (/v1/friends*, /v1/guild*) + Mailbox (/v1/mail*) — schemas mirror
+# srv services/social.ts and services/mail.ts. Mock state (friends, guild,
+# mailbox) persists in netstate.json; bots come from GameContent.MOCK_DELVERS.
+# =========================================================================
+
+const _CODE_ALPHABET := "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+const _MOCK_GUILDS := {
+	"ASH": "Ashen Covenant",
+	"HLW": "The Hollowed",
+	"EMB": "Emberwatch",
+}
+
+var _mock_friends: Array = []      # bot names added as friends
+var _mock_guild := ""              # joined guild tag ("" = none)
+var _mock_mail: Array = []         # MailItem dicts (id/type/season/tier/granted/read/created_at)
+var _mock_mail_seeded := false
+
+
+## GET /v1/friends — {friend_code, friends: [{uid, name, lv, guild, power}]}.
+func friends_get() -> Dictionary:
+	if mock:
+		var friends: Array = []
+		for bot_name in _mock_friends:
+			friends.append(_friend_summary(String(bot_name)))
+		return _wrap(200, {"friend_code": _my_friend_code(), "friends": friends})
+	return await _api("GET", "/v1/friends", {})
+
+
+## POST /v1/friends/add {code} — mutual on add.
+func friends_add(code: String) -> Dictionary:
+	if mock:
+		var norm := code.strip_edges().to_upper()
+		if not _is_friend_code(norm):
+			return _error(422, "invalid_payload", "Malformed friend code.")
+		if norm == _my_friend_code():
+			return _error(422, "invalid_payload", "You cannot add yourself.")
+		for d in GameContent.MOCK_DELVERS:
+			var bot_name := String(d["name"])
+			if _derived_code(bot_name) == norm:
+				if _mock_friends.has(bot_name):
+					return _error(409, "already_friends", "Already friends.")
+				if _mock_friends.size() >= 50:
+					return _error(422, "friend_limit", "Friend list is full.")
+				_mock_friends.append(bot_name)
+				_save_netstate()
+				return _wrap(200, {"added": {"uid": "bot-" + bot_name.to_lower(), "name": bot_name}})
+		return _error(404, "not_found", "No player with that friend code.")
+	var res: Dictionary = await _api("POST", "/v1/friends/add", {"code": code})
+	return res
+
+
+## GET /v1/guild — 404 when guildless.
+func guild_get() -> Dictionary:
+	if mock:
+		if _mock_guild == "":
+			return _error(404, "not_found", "You are not in a guild.")
+		return _wrap(200, {"guild": _guild_view(_mock_guild)})
+	return await _api("GET", "/v1/guild", {})
+
+
+## POST /v1/guild/join {tag} — open join, one guild per player.
+func guild_join(tag: String) -> Dictionary:
+	if mock:
+		var norm := tag.strip_edges().to_upper()
+		if not _MOCK_GUILDS.has(norm):
+			return _error(404, "not_found", "No guild with that tag.")
+		_mock_guild = norm
+		_save_netstate()
+		return _wrap(200, {"guild": _guild_view(norm)})
+	return await _api("POST", "/v1/guild/join", {"tag": tag})
+
+
+## GET /v1/mail — {mail: [{id, type, season, tier, granted, read, created_at}]}.
+func mail_list() -> Dictionary:
+	if mock:
+		_ensure_mock_mail()
+		return _wrap(200, {"mail": _mock_mail.duplicate(true)})
+	return await _api("GET", "/v1/mail", {})
+
+
+## POST /v1/mail/claim {mail_id} — grants ride the save blob server-side;
+## the mock grants straight into GameState.
+func mail_claim(mail_id: String) -> Dictionary:
+	if mock:
+		_ensure_mock_mail()
+		for m_v in _mock_mail:
+			var m: Dictionary = m_v
+			if String(m["id"]) != mail_id:
+				continue
+			if bool(m["read"]):
+				return _error(409, "already_claimed", "Mail already claimed.")
+			m["read"] = true
+			var granted: Dictionary = m["granted"]
+			if int(granted.get("gold", 0)) > 0:
+				GameState.add_gold(int(granted["gold"]))
+			_save_netstate()
+			return _wrap(200, {"ok": true, "granted": {
+				"gold": int(granted.get("gold", 0)),
+				"items": (granted.get("items", []) as Array).duplicate(),
+			}})
+		return _error(404, "not_found", "No such mail.")
+	var res: Dictionary = await _api("POST", "/v1/mail/claim", {"mail_id": mail_id})
+	if bool(res["ok"]):
+		var granted: Dictionary = res["data"].get("granted", {})
+		if int(granted.get("gold", 0)) > 0:
+			GameState.add_gold(int(granted["gold"]))
+	return res
+
+
+func _my_friend_code() -> String:
+	return _derived_code(GameState.player_name if GameState.player_name != "" else "Delver")
+
+
+## Stable Crockford-style code from any name (mock world's identity).
+func _derived_code(seed_text: String) -> String:
+	var h := hash(seed_text)
+	var out := "GRIM-"
+	for i in 4:
+		out += _CODE_ALPHABET[(h >> (i * 5)) & 31]
+	out += "-"
+	for i in 2:
+		out += _CODE_ALPHABET[(h >> (20 + i * 5)) & 31]
+	return out
+
+
+func _is_friend_code(s: String) -> bool:
+	var re := RegEx.new()
+	re.compile("^GRIM-[0-9A-HJKMNP-TV-Z]{4}-[0-9A-HJKMNP-TV-Z]{2}$")
+	return re.search(s.to_upper()) != null
+
+
+func _friend_summary(bot_name: String) -> Dictionary:
+	for d in GameContent.MOCK_DELVERS:
+		if String(d["name"]) == bot_name:
+			return {
+				"uid": "bot-" + bot_name.to_lower(),
+				"name": bot_name,
+				"lv": int(d["lv"]),
+				"guild": _bot_guild(bot_name),
+				"power": int(d["lv"]) * 2800,
+			}
+	return {"uid": "bot-" + bot_name.to_lower(), "name": bot_name, "lv": 1, "guild": "", "power": 0}
+
+
+## Deterministic bot guild assignment (some are guildless).
+func _bot_guild(bot_name: String) -> String:
+	var tags := _MOCK_GUILDS.keys()
+	var idx := hash(bot_name) % (tags.size() + 1)
+	return "" if idx == tags.size() else String(tags[idx])
+
+
+func _guild_view(tag: String) -> Dictionary:
+	var members: Array = []
+	for d in GameContent.MOCK_DELVERS:
+		var bot_name := String(d["name"])
+		if _bot_guild(bot_name) == tag:
+			members.append(_friend_summary(bot_name))
+	members.append({
+		"uid": _uid if _uid != "" else "me",
+		"name": GameState.player_name if GameState.player_name != "" else "Delver",
+		"lv": GameState.player_level,
+		"guild": tag,
+		"power": int(PlayerStats.compute()["total_power"]),
+	})
+	members.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return int(a["power"]) > int(b["power"]))
+	return {"id": tag.to_lower(), "tag": tag, "name": String(_MOCK_GUILDS[tag]), "members": members}
+
+
+## Seed the mock mailbox once: one claimable season reward + one read notice.
+func _ensure_mock_mail() -> void:
+	if _mock_mail_seeded:
+		return
+	_mock_mail_seeded = true
+	if not _mock_mail.is_empty():
+		return
+	var now := GameState.now_utc()
+	_mock_mail = [
+		{
+			"id": "mail-s2-reward",
+			"type": "season_reward",
+			"season": 2,
+			"tier": "Silver III",
+			"granted": {"label": "Season 2 · Silver III", "gold": 25000, "items": ["Emberglass Charm"]},
+			"read": false,
+			"created_at": now - 86400 * 3,
+		},
+		{
+			"id": "mail-welcome",
+			"type": "notice",
+			"season": 3,
+			"tier": "",
+			"granted": {"label": "Welcome to the Hollow", "gold": 0, "items": []},
+			"read": true,
+			"created_at": now - 86400 * 9,
+		},
+	]
+	_save_netstate()
 
 
 ## GET /v1/config — no auth; safe pre-login.
@@ -825,16 +1056,29 @@ func _load_netstate() -> void:
 	var parsed: Variant = JSON.parse_string(f.get_as_text())
 	f.close()
 	if typeof(parsed) == TYPE_DICTIONARY:
-		_client_seq = int(parsed.get("client_seq", 0))
-		var mp: Variant = (parsed as Dictionary).get("mock_party", {})
+		var data := parsed as Dictionary
+		_client_seq = int(data.get("client_seq", 0))
+		var mp: Variant = data.get("mock_party", {})
 		if mock and typeof(mp) == TYPE_DICTIONARY and not (mp as Dictionary).is_empty():
 			_mock_my_party = mp
-			GameState.set_party(_party_view(_mock_my_party, GameState.now_utc()))
+			GameState.set_party(_party_view(_mock_my_party, GameState.now_utc(), true))
+		if mock:
+			_mock_friends = data.get("mock_friends", [])
+			_mock_guild = String(data.get("mock_guild", ""))
+			_mock_mail = data.get("mock_mail", [])
+			_mock_mail_seeded = bool(data.get("mock_mail_seeded", false))
 
 
 func _save_netstate() -> void:
 	var f := FileAccess.open(NETSTATE_PATH, FileAccess.WRITE)
-	f.store_string(JSON.stringify({"client_seq": _client_seq, "mock_party": _mock_my_party}))
+	f.store_string(JSON.stringify({
+		"client_seq": _client_seq,
+		"mock_party": _mock_my_party,
+		"mock_friends": _mock_friends,
+		"mock_guild": _mock_guild,
+		"mock_mail": _mock_mail,
+		"mock_mail_seeded": _mock_mail_seeded,
+	}))
 	f.close()
 
 

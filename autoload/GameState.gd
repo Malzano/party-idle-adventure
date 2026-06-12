@@ -314,6 +314,7 @@ func quest_progress(index: int) -> float:
 
 ## Roll the daily counters when the UTC day changes.
 func check_daily_reset() -> void:
+	@warning_ignore("integer_division")
 	var today := now_utc() / 86400
 	if daily_day == today:
 		return
@@ -329,7 +330,7 @@ func check_daily_reset() -> void:
 	EventBus.quests_changed.emit()
 
 
-static func now_utc() -> int:
+func now_utc() -> int:
 	return int(Time.get_unix_time_from_system())
 
 

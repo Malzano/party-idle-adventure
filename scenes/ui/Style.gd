@@ -169,7 +169,11 @@ static func btn_ghost_box(state: String = "normal") -> StyleBoxFlat:
 static func make_button(text: String, kind: String = "stone", font_size: int = 13) -> Button:
 	var b := Button.new()
 	b.text = text.to_upper()
-	b.focus_mode = Control.FOCUS_NONE
+	# Keyboard/controller reachable (Steam Deck, CLAUDE.md §1): Tab/arrows move
+	# focus, Enter/Space activates. Mouse-only feel is preserved by an ember
+	# focus ring instead of the engine's default grey box.
+	b.focus_mode = Control.FOCUS_ALL
+	b.add_theme_stylebox_override("focus", focus_ring())
 	var f := Fonts.display()
 	if f != null:
 		b.add_theme_font_override("font", f)
@@ -199,6 +203,19 @@ static func make_button(text: String, kind: String = "stone", font_size: int = 1
 			b.add_theme_color_override("font_hover_color", Palette.TX)
 	b.add_theme_color_override("font_disabled_color", Palette.TX_FAINT)
 	return b
+
+
+## Keyboard-focus ring: subtle ember outline drawn over the control's own
+## stylebox (the "focus" theme slot draws on top of normal/hover).
+static func focus_ring() -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.draw_center = false
+	sb.set_border_width_all(1)
+	sb.border_color = Palette.with_alpha(Palette.EMBER_BRIGHT, 0.85)
+	sb.set_corner_radius_all(4)
+	sb.shadow_color = Palette.with_alpha(Palette.EMBER, 0.25 * Palette.GLOW)
+	sb.shadow_size = int(6 * Palette.GLOW)
+	return sb
 
 
 ## Tab button styleboxes (.tab/.ptab/.inv-tab/.cat-tab family).

@@ -67,6 +67,22 @@ func _run() -> void:
 	await get_tree().create_timer(1.2).timeout
 	await _snap("06_party_finder_joined")
 	await BackendClient.party_leave()  # clears the mock party from netstate
+	finder.queue_free()
+
+	# --- 4) Camp + Hero windows' content (the other popup screens) ---
+	var camp := preload("res://scenes/camp/Camp.tscn").instantiate() as Control
+	add_child(camp)
+	camp.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	await get_tree().create_timer(1.2).timeout
+	await _snap("07_camp")
+	camp.queue_free()
+
+	var hero := preload("res://scenes/hero/Hero.tscn").instantiate() as Control
+	add_child(hero)
+	hero.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	await get_tree().create_timer(1.2).timeout
+	await _snap("08_hero_equipment")
+	hero.queue_free()
 
 	print("CAPTURE_DONE")
 	get_tree().quit()

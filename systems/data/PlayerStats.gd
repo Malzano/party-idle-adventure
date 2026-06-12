@@ -51,13 +51,13 @@ static func compute() -> Dictionary:
 		if GameState.talents_allocated.has(int(node["id"])):
 			block.apply_effect(String(node["eff"]))
 
-	# --- Active pet aura ------------------------------------------------------
-	var pet: Dictionary = GameContent.PETS[clampi(GameState.active_pet, 0, GameContent.PETS.size() - 1)]
-	if bool(pet["owned"]):
-		block.apply_effect(String(pet["eff"]))
+	# --- Active pet aura (ownership can be milestone-derived) -----------------
+	var pet_idx := clampi(GameState.active_pet, 0, GameContent.PETS.size() - 1)
+	if GameContent.pet_owned(pet_idx):
+		block.apply_effect(String(GameContent.PETS[pet_idx]["eff"]))
 
-	# --- Equipped relics ------------------------------------------------------
-	for relic in GameContent.RELICS:
+	# --- Equipped relics (incl. stage-milestone unlocks) -----------------------
+	for relic in GameContent.live_relics():
 		if not bool(relic["empty"]):
 			block.apply_effect(String(relic["eff"]))
 

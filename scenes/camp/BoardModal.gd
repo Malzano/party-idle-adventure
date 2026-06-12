@@ -4,7 +4,7 @@ extends "res://scenes/camp/ModalShell.gd"
 ## parsed reward), a mini Leaderboard (links to the full rankings window),
 ## and the Daily Dungeon card (live attempts, energy cost, timed Gold Rush).
 
-const _TABS := [["quests", "Daily Quests"], ["leaders", "Leaderboard"], ["dungeon", "Daily Dungeon"]]
+const _TABS := [["quests", "Daily Quests"], ["leaders", "Leaderboard"], ["dungeon", "Daily Dungeon"], ["mail", "Mail"]]
 
 var _tab := "quests"
 var _tab_btns: Dictionary = {}     # id -> Button
@@ -15,6 +15,7 @@ var _attempts_lbl: Label
 var _enter_btn: Button
 var _rush_panel: PanelContainer
 var _rush_lbl: Label
+var _mail_list: VBoxContainer
 
 
 func _init() -> void:
@@ -28,6 +29,7 @@ func _build_body(body: VBoxContainer) -> void:
 	_pages["quests"] = _build_quests()
 	_pages["leaders"] = _build_leaders()
 	_pages["dungeon"] = _build_dungeon()
+	_pages["mail"] = _build_mail()
 	for id in _pages:
 		body.add_child(_pages[id])
 	_set_tab(_tab)
@@ -92,6 +94,89 @@ func _tab_box(on: bool) -> StyleBoxFlat:
 		sb.border_width_bottom = 2
 		sb.border_color = Palette.EMBER
 	return sb
+
+
+# =========================================================================
+# Mail (season rewards — GET /v1/mail, POST /v1/mail/claim)
+# =========================================================================
+
+func _build_mail() -> Control:
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 10)
+	_mail_list = VBoxContainer.new()
+	_mail_list.add_theme_constant_override("separation", 8)
+	col.add_child(_mail_list)
+	_rebuild_mail()
+	return col
+
+
+func _rebuild_mail() -> void:
+	var res: Dictionary = await BackendClient.mail_list()
+	if not is_instance_valid(self) or _mail_list == null:
+		return
+	for child in _mail_list.get_children():
+		_mail_list.remove_child(child)
+		child.queue_free()
+	if not bool(res["ok"]):
+		_mail_list.add_child(Style.body_label("The courier is lost in the fog.", 12, Palette.TX_MUTE))
+		return
+	var mail: Array = res["data"].get("mail", [])
+	if mail.is_empty():
+		_mail_list.add_child(Style.body_label("No letters. The Hollow keeps its silence.", 12, Palette.TX_MUTE))
+		return
+	for m_v in mail:
+		_mail_list.add_child(_mail_row(m_v))
+
+
+func _mail_row(m: Dictionary) -> Control:
+	var read := bool(m["read"])
+	var row := PanelContainer.new()
+	var sb := Style.row_box()
+	if read:
+		sb.bg_color = Color(0, 0, 0, 0.10)
+	row.add_theme_stylebox_override("panel", sb)
+	var box := HBoxContainer.new()
+	box.add_theme_constant_override("separation", 12)
+	row.add_child(box)
+
+	var meta := VBoxContainer.new()
+	meta.add_theme_constant_override("separation", 2)
+	meta.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	meta.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var granted: Dictionary = m["granted"]
+	var title := String(granted.get("label", "Letter"))
+	meta.add_child(Style.display_label(title, 15, Palette.TX_FAINT if read else Palette.GOLD_BRIGHT))
+	var bits: Array[String] = []
+	if int(m.get("season", 0)) > 0:
+		bits.append("Season %d" % int(m["season"]))
+	if String(m.get("tier", "")) != "":
+		bits.append(String(m["tier"]))
+	var rewards: Array[String] = []
+	if int(granted.get("gold", 0)) > 0:
+		rewards.append("%s gold" % Style.group_int(int(granted["gold"])))
+	for it in granted.get("items", []):
+		rewards.append(String(it))
+	if not rewards.is_empty():
+		bits.append(" · ".join(rewards))
+	meta.add_child(Style.body_label(" — ".join(bits) if not bits.is_empty() else "A notice.", 11, Palette.TX_MUTE))
+	box.add_child(meta)
+
+	if read:
+		var claimed := Style.pixel_label("CLAIMED", 9, Palette.TX_FAINT)
+		claimed.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		box.add_child(claimed)
+	else:
+		var claim := Style.make_button("CLAIM", "ember", 11)
+		claim.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		claim.custom_minimum_size = Vector2(92, 38)
+		var mail_id := String(m["id"])
+		claim.pressed.connect(func() -> void:
+			var res: Dictionary = await BackendClient.mail_claim(mail_id)
+			if bool(res["ok"]):
+				_rebuild_mail()
+			)
+		box.add_child(claim)
+	return row
 
 
 func _set_tab(id: String) -> void:

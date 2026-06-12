@@ -126,8 +126,8 @@ func _build() -> void:
 	_steps_holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_steps_holder)
 	for i in GameContent.TRAIL.size():
-		var tr: Dictionary = GameContent.TRAIL[i]
-		_add_footstep(Vector2(float(tr["x"]), float(tr["y"])), i % 2 == 1, STEP_LIFE * float(tr["o"]))
+		var step_def: Dictionary = GameContent.TRAIL[i]
+		_add_footstep(Vector2(float(step_def["x"]), float(step_def["y"])), i % 2 == 1, STEP_LIFE * float(step_def["o"]))
 
 	# ---- path ahead: ember beam + pulsing chevrons toward the top-right ----
 	var beam := _Beam.new()

@@ -976,6 +976,11 @@ func _gain_card(icon_path: String, value: String, label_text: String) -> Control
 func _animate_popup_in() -> void:
 	if _popup == null:
 		return
+	# Only a real absence (≥60 s away → CombatSim computed rewards) earns the
+	# "Welcome back" — fresh logins and quick restarts skip it.
+	if CombatSim.offline_rewards.is_empty():
+		_popup.visible = false
+		return
 	_popup.pivot_offset = _popup.size * 0.5
 	_popup.position.y = 308.0
 	_popup.scale = Vector2(0.985, 0.985)

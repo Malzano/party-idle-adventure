@@ -29,6 +29,12 @@ CombatSim="*res://systems/combat/CombatSim.gd"
 WindowManager="*res://autoload/WindowManager.gd"
 BackendClient="*res://autoload/BackendClient.gd"
 
+[debug]
+
+; EventBus declares signals that other scripts emit (event-bus architecture) —
+; the per-class "unused signal" warning is noise here.
+gdscript/warnings/unused_signal=0
+
 [display]
 
 window/size/viewport_width=1920

@@ -91,11 +91,13 @@ scenes/
                          sim kills), clickable Battle Caches (chests → BackendClient
                          .chest_open), floaters. RULE: any node freed early must
                          unregister its _bobs/_pulses entries or _process casts freed.
-  camp/                  Camp scene + Board/Gacha/Forge/Kitchen modals (all live systems)
-  hero/                  Hero window tabs; EquipmentTab = 3-zone sheet/paperdoll/inventory
-                         with full drag-and-drop (_DragCell: bag↔slot, swap-aware,
-                         right-click quick equip, drop-target highlights)
-  party/PartyFinder.gd   party window (§6)
+  camp/                  Camp scene + Board (quests/leaderboard/dungeon/MAIL tabs) /
+                         Gacha/Forge/Kitchen modals (all live systems)
+  hero/                  Hero window tabs (Q/W/E/R/T): EquipmentTab = 3-zone sheet/
+                         paperdoll/inventory with full drag-and-drop (_DragCell), Pets
+                         (summon-milestone unlocks), Relics (stage-milestone slots),
+                         Talents, Roster (gacha heroes: support DPS, dismiss-for-dust)
+  party/PartyFinder.gd   party window (§6) + FRIENDS & GUILD panel + join-by-code
   leaderboard/           season header, divisions, categories, ranked table
   ui/                    Palette · Style · Fonts · Tip (multi-window tooltips) · PixelSlot
                          (labeled art drop-slots sized for pixellab.ai sprites) · StatBar ·
@@ -105,6 +107,8 @@ data/balance.json        ALL tuning (enemy curves, rewards, energy, gacha, forge
 test/unit/               GUT suite — 66 tests (§8)
 test/CaptureShots.tscn   windowed screenshot harness (§8)
 docs/backend-spec.md     the original server spec the srv repo implements (+ extensions)
+docs/lore.md             lore bible: world, per-class act storylines, FACTION design
+                         (pros/cons; data stub in GameContent.FACTIONS, not yet choosable)
 ```
 
 ## 4. Core data flow
@@ -134,11 +138,11 @@ docs/backend-spec.md     the original server spec the srv repo implements (+ ext
 - **Heartbeat (45 s):** `POST /v1/sync` (fast-moving fields; server merges + re-validates
   caps) + `GET /v1/announcements` poll + `party_mine()` presence refresh when partied.
   Server-side, a player's sync also refreshes their party member entry.
-- Wired endpoints (20): save (PUT/GET), sync, gacha/pull, forge/upgrade, kitchen/cook,
+- Wired endpoints (26): save (PUT/GET), sync, gacha/pull, forge/upgrade, kitchen/cook,
   dungeon/enter, talents/set, quests/claim, chest/open, announcements, leaderboard
-  (submit/get), season, config, party (list/mine/create/join/leave).
-  **Server-ready but NOT yet wired in the client:** `/v1/friends*`, `/v1/guild*`,
-  `/v1/mail*` (those screens still show design-simulated content).
+  (submit/get), season, config, party (list/mine/create/join — by id or `DELV-XXXX`
+  code — /leave), friends (get/add), guild (get/join), mail (list/claim). Friends &
+  guild live in the Party Finder's left column; mail is the Notice Board's MAIL tab.
 - **Save blob is `.strict()`-validated server-side (39 keys).** Never add keys to
   `GameState.to_dict()` without extending `srv/src/types/save.ts` in the same change
   (defaulted, so old blobs stay valid). Client-only state (e.g. the mock party) goes in
@@ -149,6 +153,8 @@ docs/backend-spec.md     the original server spec the srv repo implements (+ ext
 - Server: `parties/{id}` Firestore doc, members embedded (cap 4 → transactional), one party
   per player (`players/{uid}.party_id`), leader hand-off on leave, empty parties dissolve,
   presence TTL 120 s. List = open public parties, no composite index needed at v1.
+  Every party carries a `DELV-XXXX` join code (members-only payload; never in the list) —
+  private parties are joinable only by it.
 - Client: `GameState.party` is a **read-only mirror** of the server's PartyView
   (`{}` = solo; `EventBus.party_changed` on replace). The Party Finder window renders it;
   all mutations go through `BackendClient.party_*`.
@@ -162,7 +168,9 @@ docs/backend-spec.md     the original server spec the srv repo implements (+ ext
 | Fight camera | Scroll-follow "endless travel": world drifts past, props wrap, party stays bottom-left heading top-right |
 | Clash behavior | Enemies approach to an engage ring, fight, and die on sim kills (both surround *and* steamroll) |
 | 5 main stats | STR / DEX / INT / VIT / LUK, as placeholdered |
-| Hero acquisition | Fixed design party of 4 + gacha roster adds support DPS; **player class** chosen once at first launch (warrior/mage/hunter/rogue) |
+| Hero acquisition | Fixed design party of 4 + gacha roster adds support DPS (managed in the Hero window's ROSTER tab, hotkey T); **player class** chosen once at first launch (warrior/mage/hunter/rogue) |
+| Per-hero equipment | **v1 ships ONE shared paperdoll** (the player-class loadout). Per-hero loadouts would multiply save schema, drag-drop, and stat plumbing ×4 for little idle-game payoff — revisit post-v1 if hero identity matters more |
+| Pet / relic acquisition | Derived from authoritative state, no schema additions: pets unlock at gacha-summon-count milestones (`GameContent.pet_owned`), the two empty relic slots fill at `max_stage` milestones (`GameContent.live_relics`) |
 | Offline cap | 12 h (`SaveManager.OFFLINE_CAP_SECONDS`, also in balance.json) |
 
 ## 8. How to run / validate / test (Windows dev machine)

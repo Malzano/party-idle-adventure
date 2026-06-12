@@ -4,16 +4,42 @@ extends Control
 
 var _re_area: Control
 var _re_cells: Array[Control] = []
+var _live_filled := -1
 
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_PASS
+	# Stage milestones can fill the empty slots (GameContent.live_relics);
+	# CombatSim emits loadout_changed when that set changes.
+	EventBus.loadout_changed.connect(_maybe_rebuild, CONNECT_DEFERRED)
+	_build_all()
+
+
+func _build_all() -> void:
+	for child in get_children():
+		remove_child(child)
+		child.queue_free()
+	_re_cells.clear()
+	_live_filled = _filled_count()
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 18)
 	add_child(row)
 	row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	row.add_child(_build_equipped())
 	row.add_child(_build_side())
+
+
+func _maybe_rebuild() -> void:
+	if _filled_count() != _live_filled:
+		_build_all()
+
+
+func _filled_count() -> int:
+	var n := 0
+	for rl in GameContent.live_relics():
+		if not bool(rl["empty"]):
+			n += 1
+	return n
 
 
 # =========================================================================
@@ -28,10 +54,10 @@ func _build_equipped() -> Control:
 	col.add_theme_constant_override("separation", 0)
 	panel.add_child(col)
 	var filled := 0
-	for rl in GameContent.RELICS:
+	for rl in GameContent.live_relics():
 		if not bool(rl["empty"]):
 			filled += 1
-	col.add_child(_panel_head("Equipped Relics", "%d / %d" % [filled, GameContent.RELICS.size()]))
+	col.add_child(_panel_head("Equipped Relics", "%d / %d" % [filled, GameContent.live_relics().size()]))
 
 	var pad := MarginContainer.new()
 	for m in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
@@ -39,7 +65,7 @@ func _build_equipped() -> Control:
 	pad.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_re_area = Control.new()
 	_re_area.mouse_filter = Control.MOUSE_FILTER_PASS
-	for rl_v in GameContent.RELICS:
+	for rl_v in GameContent.live_relics():
 		var cell := _re_cell(rl_v)
 		_re_area.add_child(cell)
 		_re_cells.append(cell)
@@ -132,7 +158,7 @@ func _build_side() -> Control:
 	list_m.add_theme_constant_override("margin_bottom", 12)
 	var list := VBoxContainer.new()
 	list.add_theme_constant_override("separation", 9)
-	for rl_v in GameContent.RELICS:
+	for rl_v in GameContent.live_relics():
 		var rl: Dictionary = rl_v
 		if bool(rl["empty"]):
 			continue
@@ -160,7 +186,7 @@ func _build_side() -> Control:
 	set_row.add_theme_stylebox_override("panel", set_sb)
 	var set_h := HBoxContainer.new()
 	set_h.add_theme_constant_override("separation", 0)
-	set_h.add_child(Style.body_label("Set Bonus (4/6): ", 12, Palette.TX_DIM))
+	set_h.add_child(Style.body_label("Set Bonus (%d/6): " % _filled_count(), 12, Palette.TX_DIM))
 	set_h.add_child(Style.body_label("+15% Relic Power", 12, Palette.EMBER_BRIGHT))
 	set_row.add_child(set_h)
 	var set_m := MarginContainer.new()

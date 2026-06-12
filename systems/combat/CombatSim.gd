@@ -63,6 +63,7 @@ func _ready() -> void:
 	stage_name = GameContent.STAGE_NAMES[(stage - 1) % GameContent.STAGE_NAMES.size()]
 	GameState.check_daily_reset()
 	_recompute_stats()
+	_maybe_relic_unlock()  # baseline the milestone count (no reprice on first)
 	_reset_wave()
 	_loot_cooldown = Balance.num("rewards.loot_interval_ticks", 21.0)
 	# Any loadout/talent/roster change re-prices the party.
@@ -80,6 +81,24 @@ func _recompute_stats() -> void:
 	EventBus.sim_stats_changed.emit()
 
 
+## Stage-milestone relics (GameContent.RELIC_STAGE_UNLOCKS): when max_stage
+## crosses a threshold the relic set changes, so the party gets repriced.
+var _relic_filled := -1
+
+func _maybe_relic_unlock() -> void:
+	var n := 0
+	for rl in GameContent.live_relics():
+		if not bool(rl["empty"]):
+			n += 1
+	if n == _relic_filled:
+		return
+	var first := _relic_filled < 0
+	_relic_filled = n
+	if not first:
+		_recompute_stats()
+		EventBus.loadout_changed.emit()  # relic tabs/windows rebuild
+
+
 func _reset_wave() -> void:
 	wave_pool = Balance.wave_pool(Balance.stage_index(act, stage))
 	wave_damage = 0.0
@@ -91,6 +110,9 @@ func wave_fill() -> float:
 
 
 func _process(delta: float) -> void:
+	# No profile yet (Login scene) — the delve hasn't started, nothing accrues.
+	if not GameState.has_profile():
+		return
 	_accum += delta * TICK_RATE * float(speed)
 	while _accum >= 1.0:
 		_accum -= 1.0
@@ -202,6 +224,7 @@ func _advance_stage() -> void:
 	stage_name = GameContent.STAGE_NAMES[(stage - 1) % GameContent.STAGE_NAMES.size()]
 	_reset_wave()
 	EventBus.sim_stage_changed.emit(stage_label(), stage_name)
+	_maybe_relic_unlock()
 
 
 ## "4-7"-style stage label.
@@ -293,6 +316,7 @@ func simulate_offline(seconds: int) -> Dictionary:
 			xp_probe += xp_pool
 			xp_pool = 0
 
+	@warning_ignore("integer_division")
 	var items := waves_cleared / Balance.inum("rewards.offline_item_waves_per_item", 15)
 	return {
 		"seconds": seconds,
@@ -324,14 +348,17 @@ func collect_offline() -> void:
 	_reset_wave()
 	EventBus.sim_stage_changed.emit(stage_label(), stage_name)
 	EventBus.sim_wave_changed.emit(wave)
+	_maybe_relic_unlock()
 	offline_rewards = {}
 	EventBus.rewards_collected.emit({})
 	EventBus.currencies_changed.emit()
 
 
 ## Human-readable "2h 14m" for the welcome-back popup.
-static func format_away(seconds: int) -> String:
+func format_away(seconds: int) -> String:
+	@warning_ignore("integer_division")
 	var h := seconds / 3600
+	@warning_ignore("integer_division")
 	var m := (seconds % 3600) / 60
 	if h > 0:
 		return "%dh %02dm" % [h, m]

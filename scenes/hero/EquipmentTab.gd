@@ -755,9 +755,15 @@ func _rebuild_inv() -> void:
 	for child in _inv_grid.get_children():
 		_inv_grid.remove_child(child)
 		child.queue_free()
-	# The equipment tab is the LIVE bag (drag to equip); other tabs stay
-	# static design content.
-	var bag: Array = GameState.bag_equipment if _inv_tab == "equipment" else GameContent.BAG[_inv_tab]
+	# The equipment tab is the LIVE bag (drag to equip) and materials mirror
+	# the live smithing currencies; the remaining tabs stay design content.
+	var bag: Array
+	if _inv_tab == "equipment":
+		bag = GameState.bag_equipment
+	elif _inv_tab == "materials":
+		bag = _live_materials()
+	else:
+		bag = GameContent.BAG[_inv_tab]
 	for i in GameContent.INV_CELLS:
 		if i < bag.size():
 			_inv_grid.add_child(_inv_cell(bag[i], i))
@@ -766,6 +772,26 @@ func _rebuild_inv() -> void:
 	if _cap_num != null:
 		_cap_num.text = "%d / %d" % [bag.size(), GameContent.INV_CELLS]
 	_resize_square_cells(_inv_grid, 6, 9.0)
+
+
+var _mat_iron := -1
+var _mat_dust := -1
+
+
+## Materials tab rows with live iron/dust counts patched over the design data.
+func _live_materials() -> Array:
+	_mat_iron = GameState.iron_ingots
+	_mat_dust = GameState.ember_dust
+	var out: Array = []
+	for it_v in GameContent.BAG["materials"]:
+		var it: Dictionary = (it_v as Dictionary).duplicate()
+		match String(it["n"]):
+			"Iron Ingot":
+				it["q"] = _mat_iron
+			"Ember Dust":
+				it["q"] = _mat_dust
+		out.append(it)
+	return out
 
 
 func _inv_cell(it: Dictionary, bag_idx: int) -> Control:
@@ -925,6 +951,11 @@ func _refresh_currencies() -> void:
 	_gold_val.text = Style.group_int(GameState.gold)
 	_soul_val.text = Style.group_int(GameState.premium_currency)
 	_dust_val.text = str(GameState.ember_dust)
+	# Forge/chest spends move iron/dust — keep the materials grid honest
+	# without rebuilding it on every gold tick.
+	if _inv_tab == "materials" \
+			and (GameState.iron_ingots != _mat_iron or GameState.ember_dust != _mat_dust):
+		_rebuild_inv()
 
 
 func _resize_square_cells(grid: GridContainer, cols: int, gap: float) -> void:
