@@ -7,6 +7,14 @@ through gear, pets, relics, a talent tree, and gacha-summoned heroes.
 > This document is the source of truth for the build. When something here is ambiguous, ask before
 > inventing mechanics. Open questions are tracked at the bottom.
 
+> **Implementation status (2026-06-12): the game below is BUILT** — multi-window Grimhollow UI,
+> real sim + economy, login/class select, equipment drag-and-drop, battle chests, mythic
+> broadcasts, 4-player parties, and a server-authoritative backend client (mock mode on; the
+> server lives in the sister repo `party-idle-adventure-srv`). **New sessions: read
+> [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) first** — it maps the codebase, conventions,
+> gotchas, and validation commands, and records the decisions taken on §10's open questions.
+> Keep that file updated when the architecture changes.
+
 ---
 
 ## 1. Tech stack & targets

@@ -6,15 +6,16 @@ Dark gothic ARPG mood (Diablo / Path of Exile). A party of **4 heroes auto-fight
 progressing while the game is closed; power comes from gear, pets, relics, a talent tree, and
 gacha-summoned heroes. The UI is themed **"Grimhollow"** — carved stone, beveled iron, ember glow.
 
-The full design brief lives in [CLAUDE.md](CLAUDE.md).
+The full design brief lives in [CLAUDE.md](CLAUDE.md); the **implementation map (read first):
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 
 ---
 
-## Status — early skeleton
+## Status — playable vertical slice, server-integrated (mock mode)
 
 The full **Grimhollow UI** is implemented across **multiple OS windows** — the main window
-permanently hosts the Fight battlefield (the one screen that can never close); Camp, Hero, and
-the Global Rankings each open in their own window, all usable simultaneously.
+permanently hosts the Fight battlefield (the one screen that can never close); Camp, Hero,
+Global Rankings, and the Party Finder each open in their own window, all usable simultaneously.
 
 **Done**
 - **Multi-window shell** (`WindowManager`): main window = Fight + nav rail + resource strip;
@@ -35,11 +36,24 @@ the Global Rankings each open in their own window, all usable simultaneously.
   seeded PRNG).
 - **LEADERBOARD:** season header, division ladder, 4 ranking categories (`Q/W/E/R`),
   Global/Friends/Guild scopes, podium, ranked table, pinned YOU bar.
+- **LOGIN:** PoE-style first-launch character creation — four classes (Warrior / Mage /
+  Hunter / Rogue) around a campfire, lore panel per class, real stat bonuses; existing
+  profiles skip straight in.
+- **Equipment is live state:** drag-and-drop between bag and paperdoll (swap-aware,
+  right-click quick equip), canonical rolled items up to **mythic** (SSR) rarity.
+- **Battle caches:** clickable chests spawn along the route; the **backend** decides the
+  contents. Mythic drops broadcast to every player via a crimson ribbon under the wave bar.
+- **PARTY FINDER:** 4-player groups — browse/forge/join/leave; member presence (online,
+  level, stage, power) refreshes with the 45 s combat heartbeat.
+- **Backend client** (`autoload/BackendClient.gd`): every server call in the live schemas of
+  [grimhollow-api](https://github.com/Malzano/party-idle-adventure-srv), with **mock mode
+  on** by default — flip `mock = false` + set the Cloud Run URL after deploying.
 - Gothic tooltips everywhere, hotkey chips, rarity glows; all art sits in labeled **pixel-art
   drop-slots** sized for [pixellab.ai](https://www.pixellab.ai) sprites.
 
-**Hotkeys:** `1` Camp · `2` focus Fight · `3` Hero · `L` Rankings · `Q/E/R/F` camp buildings ·
-`Q/W/E/R` hero tabs & ranking categories · `Z/X` auto-toggles · `Esc` retreat / close.
+**Hotkeys:** `1` Camp · `2` focus Fight · `3` Hero · `L` Rankings · `P` Party Finder ·
+`Q/E/R/F` camp buildings · `Q/W/E/R` hero tabs & ranking categories · `Z/X` auto-toggles ·
+`Esc` retreat / close.
 
 **The math is real** (CLAUDE.md §3/§7):
 - **`StatBlock`** stacks flat + increased% mods from every source — gear (incl. forge upgrades),
@@ -54,20 +68,24 @@ the Global Rankings each open in their own window, all usable simultaneously.
 - **All tuning lives in [`data/balance.json`](data/balance.json)** — rebalancing needs no code.
 
 **Tests:** [GUT](https://github.com/bitwes/Gut) (MIT, dev-only — see
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)) with 47 unit tests across the parser, balance
-curves, player stats, sim determinism + offline cap, gacha pity, economy, and save round-trip:
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)) with **66 unit tests** across the parser,
+balance curves, player stats, sim determinism + offline cap, gacha pity, economy, save
+round-trip (incl. class + equipment), chest/item-gen contract, battlefield lifecycle, and the
+party contract — plus a windowed screenshot harness (`test/CaptureShots.tscn`):
 
 ```
 godot --headless --path . -s res://addons/gut/gut_cmdln.gd -gdir=res://test/unit -gexit
 ```
 
-**Backend:** everything that needs a server (cloud saves, server-authoritative gacha,
-leaderboards, seasons, quest claims, live-ops config) is specified in
-[docs/backend-spec.md](docs/backend-spec.md) — a REST + Firestore + Cloud Run design intended
-for a separate repository deployed to GCP.
+**Backend:** implemented in the sister repo
+[party-idle-adventure-srv](https://github.com/Malzano/party-idle-adventure-srv)
+(TypeScript / Express 5 / Firestore, Cloud Run-ready) from
+[docs/backend-spec.md](docs/backend-spec.md). The client is fully wired through
+`BackendClient.gd` and ships in mock mode until the server is deployed.
 
-**Next milestones** (see [CLAUDE.md §8](CLAUDE.md)): per-hero gear/affix rolls, roster/party
-management UI, backend client integration, balance pass, Steam polish.
+**Next milestones:** deploy the backend + flip mock off, sprite pass (PixelSlot swap-in),
+friends/guild/mail client UI, balance pass, Steam polish. Full state of the project:
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ---
 
@@ -81,24 +99,32 @@ management UI, backend client integration, balance pass, Steam polish.
 
 1. Install Godot **4.4+** (standard edition).
 2. Open this folder in the Godot editor (or `godot project.godot`). First open imports the SVG/font assets.
-3. Press **F5 / Play**. The entry scene is `scenes/main/Main.tscn`. Switch screens with the rail or keys `1`/`2`/`3`.
+   **The 2D canvas is blank by design** — the whole UI is built in code.
+3. Press **F5 / Play**. The entry scene is `scenes/login/Login.tscn` (class selection on a
+   fresh profile, straight into the game otherwise). Switch screens with the rail or hotkeys.
 
 ## Project structure
 
 ```
 res://
-  autoload/      GameState.gd · EventBus.gd · SaveManager.gd   (singletons)
+  autoload/      EventBus · GameState · SaveManager · CombatSim(systems) · WindowManager · BackendClient
+  systems/
+    combat/      CombatSim.gd (10 ticks/s headless sim + offline progress)
+    data/        StatBlock · PlayerStats · GameContent · Balance
   scenes/
-    main/        Main.tscn / Main.gd                            (root shell)
-    camp/  fight/  hero/                                        (the three screens)
-    ui/          Palette · Style · Fonts · NavRail · ResourceStrip · ScreenBase
-  assets/
-    fonts/       Spectral + Silkscreen (SIL OFL)
-    icons/       UI SVG icons (tintable)
-  data/          (planned) JSON / .tres balance + content definitions
+    login/       first-launch class selection
+    main/        Main.tscn (main-window shell: Fight + rail + strip)
+    fight/       Fight HUD + Battlefield (living world, chests, mythic ribbon)
+    camp/  hero/  party/  leaderboard/                  (popup OS windows)
+    ui/          Palette · Style · Fonts · Tip · PixelSlot · StatBar · NavRail · ResourceStrip
+  data/          balance.json — ALL tuning (live-overridable via /v1/config)
+  test/          GUT unit suite + CaptureShots screenshot harness
+  assets/        fonts (Spectral + Silkscreen, OFL) · tintable SVG icons
 ```
 
-Balance numbers are intended to stay **data-driven** under `res://data/` so tuning needs no code changes.
+All tuning is **data-driven** in [data/balance.json](data/balance.json) — rebalancing needs no
+code changes. The deep map (boot flow, conventions, gotchas, backend contract) is in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Credits & licenses
 
