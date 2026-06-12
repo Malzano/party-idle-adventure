@@ -86,7 +86,7 @@
     "life_w": 0.1,
     "armour_w": 0.5,
     "attr_w": 4.0,
-    "gear_rarity_mult": { "common": 0.6, "uncommon": 0.75, "rare": 0.95, "epic": 1.2, "legendary": 1.5 },
+    "gear_rarity_mult": { "common": 0.6, "uncommon": 0.75, "rare": 0.95, "epic": 1.2, "legendary": 1.5, "mythic": 2.0 },
     "gear_ilvl_w": 8600.0,
     "forge_power_per_level": 900.0
   }

@@ -16,7 +16,7 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 
 config/name="The Delve"
 config/description="Party-based idle dungeon crawler."
-run/main_scene="res://scenes/main/Main.tscn"
+run/main_scene="res://scenes/login/Login.tscn"
 config/features=PackedStringArray("4.6", "GL Compatibility")
 config/icon="res://icon.svg"
 

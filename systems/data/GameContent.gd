@@ -37,12 +37,18 @@ const DIST := {
 	"near": {"us": 1.0, "uo": 1.0},
 }
 
-## Environment props (iso dressing). w/h in px.
+## Environment props (iso dressing). w/h in px. Trees and rocks are sprite
+## placeholders the user will replace with pixellab.ai art later.
 const PROPS := [
 	{"id": "p1", "x": 46.0, "y": 44.0, "w": 50.0, "h": 64.0, "kind": "pillar", "label": "pillar"},
 	{"id": "p2", "x": 62.0, "y": 60.0, "w": 48.0, "h": 60.0, "kind": "pillar", "label": "pillar"},
 	{"id": "p3", "x": 78.0, "y": 38.0, "w": 40.0, "h": 48.0, "kind": "brazier", "label": "brazier"},
 	{"id": "p4", "x": 70.0, "y": 70.0, "w": 64.0, "h": 44.0, "kind": "rubble", "label": "tomb"},
+	{"id": "t1", "x": 12.0, "y": 30.0, "w": 58.0, "h": 92.0, "kind": "tree", "label": "tree"},
+	{"id": "t2", "x": 88.0, "y": 78.0, "w": 52.0, "h": 84.0, "kind": "tree", "label": "tree"},
+	{"id": "t3", "x": 34.0, "y": 16.0, "w": 46.0, "h": 74.0, "kind": "tree", "label": "tree"},
+	{"id": "r1", "x": 54.0, "y": 82.0, "w": 44.0, "h": 30.0, "kind": "rock", "label": "rock"},
+	{"id": "r2", "x": 22.0, "y": 52.0, "w": 36.0, "h": 26.0, "kind": "rock", "label": "rock"},
 ]
 
 ## Footstep trail behind the party, fading toward the bottom-left corner.
@@ -182,7 +188,7 @@ const RECIPES := [
 # GACHA — pool + rates (camp.jsx)
 # =========================================================================
 
-const RARITY_RANK := {"common": 0, "uncommon": 1, "rare": 2, "epic": 3, "legendary": 4}
+const RARITY_RANK := {"common": 0, "uncommon": 1, "rare": 2, "epic": 3, "legendary": 4, "mythic": 5}
 
 const HEROES_POOL := [
 	{"n": "Ashling", "r": "legendary", "role": "5★ DPS · Pyromancer"},
@@ -572,6 +578,194 @@ static func build_tree() -> Dictionary:
 		grow.call(center, (float(ai) / float(ARMS.size())) * TAU - PI / 2.0, 5, ai, 0)
 
 	return {"nodes": nodes, "edges": edges}
+
+
+# =========================================================================
+# CLASSES — first-login hero selection (PoE-style character choice)
+# =========================================================================
+
+## The four starting heroes. Descriptions are written for the selection
+## screen's narrator panel (Path of Exile character-select tone).
+const CLASSES := [
+	{
+		"id": "warrior", "name": "Warrior", "title": "the Unbroken",
+		"attrs": "STR · VIT", "sprite": "200×320\nwarrior",
+		"bonus": {"strength": 60, "vitality": 30},
+		"tagline": "An anvil that hits back.",
+		"desc": "Iron was his cradle and war his only tutor. Where others see a wall of howling dead, the Warrior sees a queue. He walks into the dark front-first, daring it to push back — and the dark, eventually, learns better.",
+		"stats": [["Role", "Melee · Bruiser"], ["Favors", "Strength, Vitality"], ["Weapon", "Mauls & Greatblades"]],
+	},
+	{
+		"id": "mage", "name": "Mage", "title": "the Cinderborn",
+		"attrs": "INT", "sprite": "200×320\nmage",
+		"bonus": {"intelligence": 70, "maximum_mana": 800},
+		"tagline": "The flame remembers everything.",
+		"desc": "She traded her name to a dying star and came back speaking in embers. The Mage does not cast spells so much as remind the world how it ought to burn. Keep her fed with mana and stand well behind her.",
+		"stats": [["Role", "Ranged · Burst"], ["Favors", "Intelligence"], ["Weapon", "Staves & Grimoires"]],
+	},
+	{
+		"id": "hunter", "name": "Hunter", "title": "the Far-Eyed",
+		"attrs": "DEX", "sprite": "200×320\nhunter",
+		"bonus": {"dexterity": 60, "attack_speed_flat": 0},
+		"tagline": "Every shadow has a throat.",
+		"desc": "Raised in the tree-line where the lanterns fail, the Hunter learned that patience kills more surely than rage. Her arrows arrive before the question is finished. Nothing in the Hollow outruns her aim — some things just die tired.",
+		"stats": [["Role", "Ranged · Sustained"], ["Favors", "Dexterity"], ["Weapon", "Bows & Spears"]],
+	},
+	{
+		"id": "rogue", "name": "Rogue", "title": "the Twice-Hanged",
+		"attrs": "LCK · DEX", "sprite": "200×320\nrogue",
+		"bonus": {"luck": 50, "dexterity": 30},
+		"tagline": "Fortune favors the felonious.",
+		"desc": "They hanged him twice and the rope apologized both times. The Rogue treats fate like a pocket to be picked — crits land oftener, loot gleams brighter, and doors forget to be locked. Trust him exactly as far as the gold goes.",
+		"stats": [["Role", "Melee · Crit & Greed"], ["Favors", "Luck, Dexterity"], ["Weapon", "Daggers & Knives"]],
+	},
+]
+
+
+static func class_by_id(id: String) -> Dictionary:
+	for c in CLASSES:
+		if String(c["id"]) == id:
+			return c
+	return {}
+
+# =========================================================================
+# EQUIPMENT — canonical item helpers + slot model
+# =========================================================================
+
+## Paperdoll slot names, index-aligned with GameState.equipped.
+## 0–4 = left column, 5–9 = right column (matches the design layout).
+const EQUIP_SLOTS: Array[String] = [
+	"Helm", "Amulet", "Body", "Gloves", "Boots",
+	"Main Hand", "Off Hand", "Ring I", "Ring II", "Belt",
+]
+
+## Maps legacy bag type-prefixes ("Sword · iLvl 71") to equip slot types.
+const _TYPE_TO_SLOT := {
+	"helm": "Helm", "amulet": "Amulet", "chest": "Body", "body": "Body",
+	"gloves": "Gloves", "boots": "Boots", "belt": "Belt", "ring": "Ring",
+	"sword": "Main Hand", "mace": "Main Hand", "maul": "Main Hand",
+	"offhand": "Off Hand", "off hand": "Off Hand",
+}
+
+
+## Can [param item_slot] (the item's type, e.g. "Ring") go into the paperdoll
+## slot at [param slot_index]?
+static func slot_accepts(slot_index: int, item_slot: String) -> bool:
+	if slot_index < 0 or slot_index >= EQUIP_SLOTS.size():
+		return false
+	var slot_name := EQUIP_SLOTS[slot_index]
+	if item_slot == "Ring":
+		return slot_name == "Ring I" or slot_name == "Ring II"
+	return slot_name == item_slot or (item_slot == "Chest" and slot_name == "Body")
+
+
+## Convert a design-era GEAR_L/GEAR_R entry to the canonical item shape.
+static func gear_to_item(g: Dictionary) -> Dictionary:
+	var slot := String(g["slot"])
+	if slot == "Ring I" or slot == "Ring II":
+		slot = "Ring"
+	return {"n": String(g["name"]), "r": String(g["r"]), "slot": slot,
+		"ilvl": int(g["ilvl"]), "s": (g["stats"] as Array).duplicate(true)}
+
+
+## Convert a design-era BAG.equipment entry ({n, r, t, s}) to canonical shape.
+## Returns {} when the type doesn't map to an equip slot (e.g. "Shoulder").
+static func bag_to_item(b: Dictionary) -> Dictionary:
+	var t := String(b.get("t", ""))
+	var head := t.split("·")[0].strip_edges().to_lower()
+	if not _TYPE_TO_SLOT.has(head):
+		return {}
+	var ilvl := 1
+	var re := RegEx.new()
+	re.compile(r"iLvl\s*(\d+)")
+	var m := re.search(t)
+	if m != null:
+		ilvl = int(m.get_string(1))
+	return {"n": String(b["n"]), "r": String(b["r"]), "slot": String(_TYPE_TO_SLOT[head]),
+		"ilvl": ilvl, "s": (b.get("s", []) as Array).duplicate(true)}
+
+
+## Display type line for a canonical item ("Main Hand · iLvl 82 · legendary").
+static func item_type_line(item: Dictionary) -> String:
+	return "%s · iLvl %d · %s" % [String(item["slot"]), int(item["ilvl"]), String(item["r"])]
+
+# =========================================================================
+# CHEST LOOT — mirror of the server's lib/itemGen.ts (mock mode only;
+# the deployed backend is authoritative). Keep in sync.
+# =========================================================================
+
+const _ITEM_SLOTS := ["Helm", "Amulet", "Body", "Gloves", "Boots", "Main Hand", "Off Hand", "Ring", "Belt"]
+const _ITEM_BASES := {
+	"Helm": ["Cowl", "Casque", "Hood", "Visage"],
+	"Amulet": ["Pendant", "Locket", "Sigil", "Torc"],
+	"Body": ["Plate", "Wrap", "Hauberk", "Shroud"],
+	"Gloves": ["Grips", "Gauntlets", "Talons", "Fists"],
+	"Boots": ["Treads", "Greaves", "Striders", "Soles"],
+	"Main Hand": ["Maul", "Blade", "Scourge", "Fang"],
+	"Off Hand": ["Bulwark", "Grimoire", "Effigy", "Ward"],
+	"Ring": ["Band", "Loop", "Coil", "Knot"],
+	"Belt": ["Girdle", "Cord", "Chain", "Sash"],
+}
+const _ITEM_PREFIXES := ["Ashen", "Hollow", "Grave", "Ember", "Marrow", "Cinder", "Pale", "Sunken", "Wyrmhide", "Hexwoven", "Iron", "Gloom"]
+const _MYTHIC_NAMES := ["Worldsplitter", "Crown of the Last Ember", "Heart of the Hollow King", "The Unforgiven Edge", "Veil of Endless Night", "Sovereign's Burden"]
+const _FLAT_AFFIXES := [["Armour", 6.0], ["Maximum Life", 3.2], ["Strength", 0.9], ["Dexterity", 0.9], ["Intelligence", 0.9], ["Vitality", 0.8], ["Luck", 0.5], ["Maximum Mana", 2.0], ["Evasion", 4.0], ["Life Regen", 1.4]]
+const _PCT_AFFIXES := [["Attack Speed", 4.0, 14.0], ["Crit Chance", 3.0, 10.0], ["Crit Multi", 8.0, 35.0], ["Fire Damage", 6.0, 26.0], ["Spell Damage", 6.0, 24.0], ["Melee Damage", 6.0, 24.0], ["Gold Find", 6.0, 28.0], ["Item Rarity", 4.0, 18.0], ["Movement Speed", 4.0, 18.0], ["Fire Resist", 8.0, 38.0], ["Cold Resist", 8.0, 38.0], ["Lightning Resist", 8.0, 38.0]]
+const _AFFIX_COUNT := {"common": 1, "uncommon": 2, "rare": 2, "epic": 3, "legendary": 4, "mythic": 5}
+const _RARITY_POWER := {"common": 0.7, "uncommon": 0.85, "rare": 1.0, "epic": 1.25, "legendary": 1.6, "mythic": 2.2}
+
+
+## Chest item rarity (~0.5% mythic of item rewards) — mirrors the server.
+static func roll_chest_item_rarity(rng: RandomNumberGenerator) -> String:
+	var x := rng.randf()
+	if x < 0.005:
+		return "mythic"
+	if x < 0.005 + 0.035:
+		return "legendary"
+	if x < 0.005 + 0.035 + 0.11:
+		return "epic"
+	if x < 0.005 + 0.035 + 0.11 + 0.25:
+		return "rare"
+	if x < 0.005 + 0.035 + 0.11 + 0.25 + 0.3:
+		return "uncommon"
+	return "common"
+
+
+## Generate one equipment item — mirrors the server's generateItem.
+static func generate_item(ilvl: int, rarity: String, rng: RandomNumberGenerator) -> Dictionary:
+	var slot: String = _ITEM_SLOTS[rng.randi_range(0, _ITEM_SLOTS.size() - 1)]
+	var bases: Array = _ITEM_BASES[slot]
+	var item_name: String
+	if rarity == "mythic":
+		item_name = _MYTHIC_NAMES[rng.randi_range(0, _MYTHIC_NAMES.size() - 1)]
+	else:
+		item_name = "%s %s" % [_ITEM_PREFIXES[rng.randi_range(0, _ITEM_PREFIXES.size() - 1)], bases[rng.randi_range(0, bases.size() - 1)]]
+
+	var power: float = _RARITY_POWER[rarity]
+	var stats: Array = []
+	if slot == "Main Hand":
+		var lo := roundi((20.0 + float(ilvl) * 6.0) * power)
+		var hi := roundi(float(lo) * (1.35 + rng.randf() * 0.2))
+		stats.append(["Physical DMG", "%d–%d" % [lo, hi]])
+
+	var used := {}
+	var want: int = int(_AFFIX_COUNT[rarity]) + (1 if slot == "Main Hand" else 0)
+	while stats.size() < want:
+		if rng.randf() < 0.5:
+			var fa: Array = _FLAT_AFFIXES[rng.randi_range(0, _FLAT_AFFIXES.size() - 1)]
+			if used.has(fa[0]):
+				continue
+			used[fa[0]] = true
+			var v := maxi(1, roundi(float(fa[1]) * float(ilvl) * power * (0.8 + rng.randf() * 0.4)))
+			stats.append([fa[0], "+%d" % v])
+		else:
+			var pa: Array = _PCT_AFFIXES[rng.randi_range(0, _PCT_AFFIXES.size() - 1)]
+			if used.has(pa[0]):
+				continue
+			used[pa[0]] = true
+			var pv := roundi((float(pa[1]) + rng.randf() * (float(pa[2]) - float(pa[1]))) * power)
+			stats.append([pa[0], "+%d%%" % pv])
+
+	return {"n": item_name, "r": rarity, "slot": slot, "ilvl": ilvl, "s": stats}
 
 
 ## Default initial allocation: center + a short path outward (matches design).

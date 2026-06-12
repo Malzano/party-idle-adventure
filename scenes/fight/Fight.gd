@@ -35,6 +35,14 @@ var _tog_adv: Dictionary = {}
 
 var _popup: PanelContainer
 
+# Mythic announcement ribbon (global SSR drops, under the wave bar).
+const _RIBBON_Y := 152.0
+var _ribbon: PanelContainer
+var _rib_player: Label
+var _rib_item: Label
+var _ribbon_queue: Array = []
+var _ribbon_busy := false
+
 var _hud_layouts: Array[Callable] = []
 var _layout_pending: bool = false
 
@@ -54,8 +62,10 @@ func _ready() -> void:
 	_build_loot_ticker()
 	_build_hero_hud()
 	_build_controls()
+	_build_mythic_ribbon()
 	_build_popup()
 
+	EventBus.mythic_announced.connect(_on_mythic_announced)
 	EventBus.sim_wave_progress.connect(_on_wave_progress)
 	EventBus.sim_wave_changed.connect(_on_wave_changed)
 	EventBus.sim_stage_changed.connect(_on_stage_changed)
@@ -172,6 +182,76 @@ func _refresh_pips(wave: int) -> void:
 	for i in _pips.size():
 		var n := i + 1
 		(_pips[i] as _Pip).set_state("done" if n < wave else ("on" if n == wave else ""))
+
+
+# =========================================================================
+# Mythic announcement ribbon (EventBus.mythic_announced → crimson banner
+# sliding in under the wave bar; queued so bursts play one at a time)
+# =========================================================================
+
+func _build_mythic_ribbon() -> void:
+	_ribbon = PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.10, 0.045, 0.05, 0.96)
+	sb.set_border_width_all(1)
+	sb.border_color = Palette.R_MYTHIC
+	sb.set_corner_radius_all(5)
+	sb.shadow_color = Palette.with_alpha(Palette.R_MYTHIC, 0.35 * Palette.GLOW)
+	sb.shadow_size = int(18 * Palette.GLOW)
+	sb.content_margin_left = 20
+	sb.content_margin_right = 20
+	sb.content_margin_top = 9
+	sb.content_margin_bottom = 9
+	_ribbon.add_theme_stylebox_override("panel", sb)
+	_ribbon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_ribbon.visible = false
+	add_child(_ribbon)
+
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 9)
+	_ribbon.add_child(row)
+	row.add_child(Style.pixel_label("✦", 13, Palette.R_MYTHIC))
+	var chip := Style.pixel_label("MYTHIC", 9, Palette.R_MYTHIC)
+	chip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(chip)
+	_rib_player = Style.display_label("", 15, Palette.GOLD_BRIGHT)
+	row.add_child(_rib_player)
+	row.add_child(Style.body_label("has unearthed", 13, Palette.TX_DIM))
+	_rib_item = Style.display_label("", 15, Palette.R_MYTHIC)
+	row.add_child(_rib_item)
+	row.add_child(Style.pixel_label("✦", 13, Palette.R_MYTHIC))
+
+	_ribbon.resized.connect(_request_layout)
+	_hud_layouts.append(func(rs: Vector2) -> void:
+		_ribbon.position.x = (rs.x - _ribbon.size.x) * 0.5)
+
+
+func _on_mythic_announced(player: String, item: String) -> void:
+	_ribbon_queue.append([player, item])
+	_play_next_announcement()
+
+
+func _play_next_announcement() -> void:
+	if _ribbon_busy or _ribbon_queue.is_empty():
+		return
+	_ribbon_busy = true
+	var pair: Array = _ribbon_queue.pop_front()
+	_rib_player.text = String(pair[0])
+	_rib_item.text = String(pair[1])
+	_ribbon.visible = true
+	_ribbon.modulate = Color(1, 1, 1, 0.0)
+	_ribbon.position.x = (size.x - _ribbon.size.x) * 0.5
+	_ribbon.position.y = _RIBBON_Y - 14.0
+	var tw := _ribbon.create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(_ribbon, "position:y", _RIBBON_Y, 0.32).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tw.tween_property(_ribbon, "modulate:a", 1.0, 0.28)
+	tw.chain().tween_interval(6.0)
+	tw.chain().tween_property(_ribbon, "modulate:a", 0.0, 0.6)
+	tw.chain().tween_callback(func() -> void:
+		_ribbon.visible = false
+		_ribbon_busy = false
+		_play_next_announcement())
 
 
 # =========================================================================

@@ -94,3 +94,59 @@ func test_from_dict_missing_keys_keep_defaults() -> void:
 	assert_eq(GameState.iron_ingots, 46, "missing iron_ingots keeps the default")
 	assert_eq(GameState.dungeon_attempts, 3, "missing dungeon_attempts keeps the default")
 	assert_eq(GameState.pity, 47, "missing pity keeps the default")
+	assert_eq(GameState.equipped.size(), GameContent.EQUIP_SLOTS.size(),
+		"pre-equipment saves seed the default paperdoll")
+
+
+func test_class_and_equipment_round_trip() -> void:
+	GameState.choose_class("rogue", "  Nyx  ")
+	assert_eq(GameState.player_name, "Nyx", "chosen name is trimmed")
+	assert_eq(GameState.player_class, "Rogue")
+	assert_eq(GameState.player_title, "the Twice-Hanged")
+	assert_true(GameState.has_profile(), "choosing a class creates the profile")
+
+	var bag_before := GameState.bag_equipment.size()
+	assert_true(GameState.unequip_to_bag(0), "helm unequips into the bag")
+	assert_null(GameState.equipped[0])
+	assert_eq(GameState.bag_equipment.size(), bag_before + 1)
+	GameState.daily_chests = 7
+
+	var parsed: Variant = JSON.parse_string(JSON.stringify(GameState.to_dict()))
+	GameState.reset_to_defaults()
+	assert_false(GameState.has_profile(), "a fresh profile routes to Login")
+	GameState.from_dict(parsed)
+
+	assert_eq(GameState.class_id, "rogue")
+	assert_eq(GameState.player_class, "Rogue")
+	assert_true(GameState.has_profile())
+	assert_eq(GameState.equipped.size(), GameContent.EQUIP_SLOTS.size())
+	assert_null(GameState.equipped[0], "emptied slot survives the round-trip")
+	assert_eq(GameState.bag_equipment.size(), bag_before + 1)
+	assert_eq(GameState.daily_chests, 7)
+
+
+func test_equip_from_bag_respects_slot_rules() -> void:
+	var bag_before := GameState.bag_equipment.size()
+	assert_true(GameState.unequip_to_bag(0))
+	var idx := GameState.bag_equipment.size() - 1
+	var helm: Dictionary = GameState.bag_equipment[idx]
+	assert_true(GameContent.slot_accepts(0, String(helm["slot"])), "the helm fits its own slot")
+	assert_false(GameState.equip_from_bag(idx, 5), "a helm cannot go in the main hand")
+	assert_true(GameState.equip_from_bag(idx, 0), "the helm equips back")
+	assert_eq(GameState.bag_equipment.size(), bag_before, "bag returns to baseline")
+	assert_eq(String((GameState.equipped[0] as Dictionary)["n"]), String(helm["n"]))
+
+
+func test_equip_swap_keeps_bag_position() -> void:
+	# Unequip the helm, then equip it back while ANOTHER helm sits in the
+	# slot: the occupant must swap into the same bag position.
+	assert_true(GameState.unequip_to_bag(0))
+	var idx := GameState.bag_equipment.size() - 1
+	var first: Dictionary = GameState.bag_equipment[idx]
+	var second := GameContent.generate_item(50, "rare", RandomNumberGenerator.new())
+	second["slot"] = "Helm"
+	GameState.equipped[0] = second
+	assert_true(GameState.equip_from_bag(idx, 0), "occupied slot accepts a matching item")
+	assert_eq(String((GameState.equipped[0] as Dictionary)["n"]), String(first["n"]))
+	assert_eq(String((GameState.bag_equipment[idx] as Dictionary)["n"]), String(second["n"]),
+		"the displaced helm lands in the same bag cell")

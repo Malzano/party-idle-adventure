@@ -38,9 +38,16 @@ func _ready() -> void:
 	row.add_child(_build_inventory())
 	EventBus.currencies_changed.connect(_refresh_currencies)
 	EventBus.sim_stats_changed.connect(_on_stats_changed)
+	EventBus.equipment_changed.connect(_on_equipment_changed)
 	visibility_changed.connect(_on_visibility_changed)
 	_refresh_currencies()
 	_refresh_stats()
+
+
+## Equip/unequip/loot changed the arrays: rebuild both drag surfaces.
+func _on_equipment_changed() -> void:
+	_rebuild_gear_slots()
+	_rebuild_inv()
 
 
 func _on_stats_changed() -> void:
@@ -515,16 +522,25 @@ func _build_paperdoll() -> Control:
 	_pd_plate.resized.connect(_position_plate)
 
 	# Slot columns: 5 left + 5 right, overlapping the figure by 26px.
-	for i in 5:
-		var l := _gear_slot(GameContent.GEAR_L[i])
-		_pd_area.add_child(l)
-		_pd_left.append(l)
-		var r := _gear_slot(GameContent.GEAR_R[i])
-		_pd_area.add_child(r)
-		_pd_right.append(r)
-
+	_rebuild_gear_slots()
 	_pd_area.resized.connect(_layout_paperdoll)
 	return panel
+
+
+## (Re)build the 10 paperdoll cells from GameState.equipped (drag targets).
+func _rebuild_gear_slots() -> void:
+	for cell in _pd_left + _pd_right:
+		cell.queue_free()
+	_pd_left.clear()
+	_pd_right.clear()
+	for i in 5:
+		var l := _gear_slot(i)
+		_pd_area.add_child(l)
+		_pd_left.append(l)
+		var r := _gear_slot(5 + i)
+		_pd_area.add_child(r)
+		_pd_right.append(r)
+	_layout_paperdoll()
 
 
 func _layout_paperdoll() -> void:
@@ -549,25 +565,56 @@ func _position_plate() -> void:
 		_pd_figure.size.y - _pd_plate.size.y - 14.0)
 
 
-func _gear_slot(g: Dictionary) -> Control:
-	var cell := Control.new()
+## One paperdoll cell (index into GameContent.EQUIP_SLOTS / GameState.equipped).
+## Filled cells drag out (unequip); every cell accepts matching bag items.
+func _gear_slot(slot_idx: int) -> Control:
+	var item_v: Variant = GameState.equipped[slot_idx]
+	var slot_name := GameContent.EQUIP_SLOTS[slot_idx]
+	var cell := _DragCell.new()
+	cell.kind = "slot"
+	cell.index = slot_idx
+	cell.item = item_v if item_v != null else {}
 	cell.custom_minimum_size = Vector2(84, 84)
 	cell.size = Vector2(84, 84)
 	cell.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	var rar := String(g["r"])
+
+	if item_v == null:
+		# Empty slot: recessed box + slot-name hint.
+		var ebox := Panel.new()
+		ebox.add_theme_stylebox_override("panel", Style.slot_box())
+		ebox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		cell.add_child(ebox)
+		ebox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		var hint := Style.pixel_label(slot_name.to_upper(), 8, Palette.TX_FAINT)
+		hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		cell.add_child(hint)
+		hint.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		Tip.attach(cell, {
+			"name": slot_name,
+			"type": "Empty slot",
+			"rarity": "",
+			"flavor": "Drag a matching item here to equip it.",
+		})
+		cell.highlight_target = ebox
+		return cell
+
+	var item: Dictionary = item_v
+	var rar := String(item["r"])
 	var box := Panel.new()
 	box.add_theme_stylebox_override("panel", Style.slot_box(rar, true))
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	cell.add_child(box)
 	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	var ps := PixelSlot.new(String(g["slot"]), true)
+	var ps := PixelSlot.new(slot_name, true)
 	cell.add_child(ps)
 	ps.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ps.offset_left = 4
 	ps.offset_top = 4
 	ps.offset_right = -4
 	ps.offset_bottom = -4
-	var il := Style.pixel_label(str(int(g["ilvl"])), 8, Palette.GOLD_BRIGHT)
+	var il := Style.pixel_label(str(int(item["ilvl"])), 8, Palette.GOLD_BRIGHT)
 	il.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	il.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	cell.add_child(il)
@@ -577,26 +624,27 @@ func _gear_slot(g: Dictionary) -> Control:
 	il.offset_right = -5
 	il.offset_bottom = -3
 	il.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
-	if String(g["name"]) == "Cindergrip Maul":
+	if String(item["n"]) == "Cindergrip Maul":
 		# Live tooltip: forge-scaled weapon stats + the current forge level.
 		Tip.attach(cell, func() -> Dictionary:
 			var stats: Array = PlayerStats.forged_weapon_stats()
 			stats.append(["Forge", "+%d" % GameState.forge_level])
 			return {
-				"name": g["name"],
-				"type": "%s · iLvl %d · %s" % [g["slot"], int(g["ilvl"]), rar],
+				"name": item["n"],
+				"type": GameContent.item_type_line(item),
 				"rarity": rar,
 				"stats": stats,
-				"flavor": "Right-click to unequip.",
+				"flavor": "Drag to the bag (or right-click) to unequip.",
 			})
 	else:
 		Tip.attach(cell, {
-			"name": g["name"],
-			"type": "%s · iLvl %d · %s" % [g["slot"], int(g["ilvl"]), rar],
+			"name": item["n"],
+			"type": GameContent.item_type_line(item),
 			"rarity": rar,
-			"stats": g["stats"],
-			"flavor": "Right-click to unequip.",
+			"stats": item["s"],
+			"flavor": "Drag to the bag (or right-click) to unequip.",
 		})
+	cell.highlight_target = box
 	return cell
 
 
@@ -707,10 +755,12 @@ func _rebuild_inv() -> void:
 	for child in _inv_grid.get_children():
 		_inv_grid.remove_child(child)
 		child.queue_free()
-	var bag: Array = GameContent.BAG[_inv_tab]
+	# The equipment tab is the LIVE bag (drag to equip); other tabs stay
+	# static design content.
+	var bag: Array = GameState.bag_equipment if _inv_tab == "equipment" else GameContent.BAG[_inv_tab]
 	for i in GameContent.INV_CELLS:
 		if i < bag.size():
-			_inv_grid.add_child(_inv_cell(bag[i]))
+			_inv_grid.add_child(_inv_cell(bag[i], i))
 		else:
 			_inv_grid.add_child(_empty_cell())
 	if _cap_num != null:
@@ -718,8 +768,12 @@ func _rebuild_inv() -> void:
 	_resize_square_cells(_inv_grid, 6, 9.0)
 
 
-func _inv_cell(it: Dictionary) -> Control:
-	var cell := Control.new()
+func _inv_cell(it: Dictionary, bag_idx: int) -> Control:
+	var cell := _DragCell.new()
+	if _inv_tab == "equipment":
+		cell.kind = "bag"
+		cell.index = bag_idx
+		cell.item = it
 	cell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	cell.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	var rar := String(it["r"])
@@ -753,29 +807,40 @@ func _inv_cell(it: Dictionary) -> Control:
 		stats = it["s"]
 	elif it.has("q"):
 		stats = [["Stack", "×%d" % int(it["q"])]]
-	var flavor := "Used in crafting & cooking."
+	var type_line: String
+	var flavor: String
 	if _inv_tab == "equipment":
-		flavor = "Right-click to equip."
-	elif _inv_tab == "quest":
-		flavor = "Cannot be discarded."
+		type_line = GameContent.item_type_line(it)
+		flavor = "Drag to a matching slot (or right-click) to equip." \
+			if String(it.get("slot", "")) != "" else "Cannot be equipped."
+	else:
+		type_line = "%s · %s" % [String(it.get("t", "")), rar]
+		flavor = "Cannot be discarded." if _inv_tab == "quest" else "Used in crafting & cooking."
 	Tip.attach(cell, {
 		"name": it["n"],
-		"type": "%s · %s" % [it["t"], rar],
+		"type": type_line,
 		"rarity": rar,
 		"stats": stats,
 		"flavor": flavor,
 	})
+	if cell is _DragCell:
+		(cell as _DragCell).highlight_target = box
 	return cell
 
 
 func _empty_cell() -> Control:
-	var cell := Control.new()
+	# Empty bag cells accept dragged paperdoll items (unequip drop target).
+	var cell := _DragCell.new()
+	if _inv_tab == "equipment":
+		cell.kind = "bag"
+		cell.index = -1
 	cell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var box := Panel.new()
 	box.add_theme_stylebox_override("panel", Style.inv_cell_box())
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	cell.add_child(box)
 	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	cell.highlight_target = box
 	return cell
 
 
@@ -920,3 +985,117 @@ class RuneRings:
 		for i in n:
 			var a0 := rot + TAU * float(i) / float(n)
 			draw_arc(c, r, a0, a0 + TAU / float(n) * 0.55, 4, col, 1.0, true)
+
+
+## Drag-and-drop cell shared by the paperdoll and the live equipment bag.
+## kind == "slot": index into GameState.equipped; kind == "bag": index into
+## GameState.bag_equipment (-1 = empty filler cell). kind == "" stays inert
+## (materials/food/quest tabs). Drops route through GameState.equip_from_bag /
+## unequip_to_bag, which emit equipment_changed → both surfaces rebuild.
+class _DragCell:
+	extends Control
+
+	var kind := ""
+	var index := -1
+	var item: Dictionary = {}
+	var highlight_target: Control = null
+	var _hl: Panel = null
+
+	func _get_drag_data(_at: Vector2) -> Variant:
+		if kind == "" or item.is_empty():
+			return null
+		if kind == "bag" and String(item.get("slot", "")) == "":
+			return null
+		Tip.hide_now(self)
+		set_drag_preview(_make_preview())
+		return {"kind": kind, "index": index, "item": item}
+
+	func _can_drop_data(_at: Vector2, data: Variant) -> bool:
+		if kind == "" or typeof(data) != TYPE_DICTIONARY:
+			return false
+		var d: Dictionary = data
+		if not (d.has("kind") and d.has("index") and d.has("item")):
+			return false
+		if kind == "slot":
+			return String(d["kind"]) == "bag" \
+				and GameContent.slot_accepts(index, String((d["item"] as Dictionary).get("slot", "")))
+		return String(d["kind"]) == "slot"
+
+	func _drop_data(_at: Vector2, data: Variant) -> void:
+		var d: Dictionary = data
+		if kind == "slot":
+			GameState.equip_from_bag(int(d["index"]), index)
+		else:
+			GameState.unequip_to_bag(int(d["index"]))
+
+	## Right-click: quick equip (prefers an empty matching slot) / unequip.
+	func _gui_input(event: InputEvent) -> void:
+		var mb := event as InputEventMouseButton
+		if mb == null or not mb.pressed or mb.button_index != MOUSE_BUTTON_RIGHT:
+			return
+		if item.is_empty():
+			return
+		if kind == "slot":
+			GameState.unequip_to_bag(index)
+			accept_event()
+		elif kind == "bag" and String(item.get("slot", "")) != "":
+			_quick_equip()
+			accept_event()
+
+	func _quick_equip() -> void:
+		var item_slot := String(item.get("slot", ""))
+		var first := -1
+		for i in GameContent.EQUIP_SLOTS.size():
+			if not GameContent.slot_accepts(i, item_slot):
+				continue
+			if GameState.equipped[i] == null:
+				GameState.equip_from_bag(index, i)
+				return
+			if first < 0:
+				first = i
+		if first >= 0:
+			GameState.equip_from_bag(index, first)
+
+	## Ember-glow eligible targets while a compatible drag is in flight.
+	func _notification(what: int) -> void:
+		if what == NOTIFICATION_DRAG_BEGIN:
+			if _can_drop_data(Vector2.ZERO, get_viewport().gui_get_drag_data()):
+				_set_highlight(true)
+		elif what == NOTIFICATION_DRAG_END:
+			_set_highlight(false)
+
+	func _set_highlight(on: bool) -> void:
+		if highlight_target != null:
+			highlight_target.modulate = Color(1.3, 1.2, 1.0) if on else Color.WHITE
+		if on and _hl == null:
+			_hl = Panel.new()
+			var sb := StyleBoxFlat.new()
+			sb.bg_color = Color(0.91, 0.518, 0.227, 0.10)
+			sb.border_color = Palette.EMBER_BRIGHT
+			for side in ["left", "right", "top", "bottom"]:
+				sb.set("border_width_%s" % side, 2)
+			_hl.add_theme_stylebox_override("panel", sb)
+			_hl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			add_child(_hl)
+			_hl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		elif not on and _hl != null:
+			_hl.queue_free()
+			_hl = null
+
+	## 64px ghost of the dragged item under the cursor.
+	func _make_preview() -> Control:
+		var rar := String(item.get("r", "common"))
+		var p := Panel.new()
+		p.custom_minimum_size = Vector2(64, 64)
+		p.size = Vector2(64, 64)
+		p.add_theme_stylebox_override("panel", Style.slot_box(rar, true))
+		p.modulate = Color(1, 1, 1, 0.85)
+		var nm := Style.pixel_label(String(item.get("n", "")), 8, Palette.rarity_color(rar))
+		nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		nm.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		nm.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		p.add_child(nm)
+		nm.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		nm.offset_left = 3
+		nm.offset_right = -3
+		return p

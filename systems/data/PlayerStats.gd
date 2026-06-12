@@ -26,14 +26,24 @@ static func compute() -> Dictionary:
 
 	var block := StatBlock.new()
 
-	# --- Gear (paperdoll, with forge growth on the upgraded weapon) ---------
-	for g in GameContent.GEAR_L + GameContent.GEAR_R:
-		var pairs: Array = g["stats"]
-		if String(g["name"]) == "Cindergrip Maul":
+	# --- Gear (live paperdoll, with forge growth on the upgraded weapon) ----
+	for item_v in GameState.equipped:
+		if item_v == null:
+			continue
+		var item: Dictionary = item_v
+		var pairs: Array = item["s"]
+		if String(item["n"]) == "Cindergrip Maul":
 			pairs = forged_weapon_stats()
 		var gb := StatBlock.new()
 		gb.apply_stat_pairs(pairs)
 		block.merge(gb)
+
+	# --- Class identity bonus (first-login choice) ---------------------------
+	var cls := GameContent.class_by_id(GameState.class_id)
+	if not cls.is_empty():
+		var bonus: Dictionary = cls["bonus"]
+		for stat in bonus:
+			block.add_flat(String(stat), float(bonus[stat]))
 
 	# --- Talents (allocated node effects) ------------------------------------
 	var tree := _tree()
@@ -143,12 +153,19 @@ static func team_aura_optimal() -> bool:
 	return tanks == 1 and healers == 1 and dps_classes.size() == 2
 
 
-## The forge-upgraded weapon's stat pairs, scaled by stat_growth^(levels above base).
+## The forge-upgraded weapon's stat pairs, scaled by stat_growth^(levels above
+## base). Bound to the Cindergrip Maul by name wherever it currently sits
+## (equipped or bag); falls back to the design baseline if it was discarded.
 static func forged_weapon_stats() -> Array:
 	var base_level := Balance.inum("forge.base_level", 7)
 	var growth := pow(Balance.num("forge.stat_growth", 1.13), float(GameState.forge_level - base_level))
+	var base_pairs: Array = GameContent.GEAR_R[0]["stats"]
+	for item_v in GameState.equipped + GameState.bag_equipment:
+		if item_v != null and String((item_v as Dictionary).get("n", "")) == "Cindergrip Maul":
+			base_pairs = (item_v as Dictionary)["s"]
+			break
 	var out: Array = []
-	for pair in GameContent.GEAR_R[0]["stats"]:  # Cindergrip Maul
+	for pair in base_pairs:
 		out.append([pair[0], _scale_value_text(String(pair[1]), growth)])
 	return out
 
@@ -175,8 +192,11 @@ static func compute_gear_power() -> float:
 	var mults: Dictionary = Balance.value("power.gear_rarity_mult", {})
 	var ilvl_w := Balance.num("power.gear_ilvl_w", 110.0)
 	var power := 0.0
-	for g in GameContent.GEAR_L + GameContent.GEAR_R:
-		power += float(g["ilvl"]) / 80.0 * ilvl_w * float(mults.get(String(g["r"]), 1.0))
+	for item_v in GameState.equipped:
+		if item_v == null:
+			continue
+		var item: Dictionary = item_v
+		power += float(item["ilvl"]) / 80.0 * ilvl_w * float(mults.get(String(item["r"]), 1.0))
 	var base_level := Balance.inum("forge.base_level", 7)
 	power += float(GameState.forge_level - base_level) * Balance.num("power.forge_power_per_level", 900.0)
 	return power

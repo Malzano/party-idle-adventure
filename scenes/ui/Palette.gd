@@ -51,12 +51,13 @@ const TX_DIM := Color("b3a489")
 const TX_MUTE := Color("7d7058")
 const TX_FAINT := Color("564c3b")
 
-# --- Rarity ladder: common → uncommon → rare → epic → legendary ---
+# --- Rarity ladder: common → uncommon → rare → epic → legendary → mythic ---
 const R_COMMON := Color("8c8579")
 const R_UNCOMMON := Color("5fa64e")
 const R_RARE := Color("4a8fd6")
 const R_EPIC := Color("a661d6")
 const R_LEGENDARY := Color("e6a93a")
+const R_MYTHIC := Color("e0455e")  # SSR crimson — broadcast-worthy
 
 # --- Podium metals ---
 const SILVER := Color("aeb4ba")
@@ -88,6 +89,8 @@ static func rarity_color(rarity: String) -> Color:
 			return R_EPIC
 		"legendary":
 			return R_LEGENDARY
+		"mythic":
+			return R_MYTHIC
 		_:
 			return R_COMMON
 

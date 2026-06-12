@@ -31,3 +31,6 @@ desktop.ini
 # Design handoff reference bundle (not part of the buildable game).
 # Remove this line to track the Grimhollow design files in the repo.
 .design_ref/
+
+# Screenshots written by the capture harness (test/CaptureShots.tscn).
+/_shots/

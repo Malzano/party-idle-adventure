@@ -72,3 +72,9 @@ signal talents_changed
 
 ## Pet / relic loadout changed.
 signal loadout_changed
+
+## Paperdoll/bag equipment changed (equip, unequip, chest loot into the bag).
+signal equipment_changed
+
+## A mythic (SSR) item dropped somewhere in the world — show the ribbon.
+signal mythic_announced(player: String, item: String)

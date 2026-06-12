@@ -12,11 +12,34 @@ const SCREEN_FIGHT := "fight"
 const SCREEN_HERO := "hero"
 
 # --- Identity ----------------------------------------------------------------
-var player_name: String = "Vael"
-var player_title: String = "the Forsaken"
-var player_class: String = "Pyromancer"
+## player_class is EMPTY until the first-login class selection (Login scene);
+## an empty class is what routes a fresh profile through character creation.
+var player_name: String = ""
+var player_title: String = ""
+var player_class: String = ""
+## One of GameContent.CLASSES ids ("warrior"/"mage"/"hunter"/"rogue"; "" for
+## legacy profiles created before classes existed).
+var class_id: String = ""
 var prestige: String = "III"
 var global_rank: int = 11
+
+
+## True once a profile exists (class chosen, or a legacy pre-class save).
+func has_profile() -> bool:
+	return player_class != ""
+
+
+## First-login character creation (Login scene): locks in the chosen class.
+func choose_class(id: String, chosen_name: String) -> void:
+	var cls := GameContent.class_by_id(id)
+	if cls.is_empty():
+		return
+	class_id = id
+	player_class = String(cls["name"])
+	player_title = String(cls["title"])
+	player_name = chosen_name.strip_edges() if not chosen_name.strip_edges().is_empty() else "Delver"
+	EventBus.loadout_changed.emit()  # class bonuses reprice the party
+	EventBus.currencies_changed.emit()
 
 # --- Resources ----------------------------------------------------------------
 var player_level: int = 47
@@ -50,6 +73,72 @@ var quests_claimed: Array[int] = []
 var iron_ingots: int = 46
 ## Upgrade level of the main-hand weapon (design base is +7).
 var forge_level: int = 7
+
+# --- Equipment (canonical items: {n, r, slot, ilvl, s}) ---------------------------
+## Paperdoll, index-aligned with GameContent.EQUIP_SLOTS (null = empty slot).
+var equipped: Array = []
+## Equipment bag (drag source/target; cap 30). Non-equipment bag tabs
+## (consumables/materials/quest) remain static design content.
+var bag_equipment: Array = []
+const BAG_CAP := 30
+
+
+## Seed the paperdoll + bag from the design's static content (first run or
+## pre-equipment saves).
+func seed_default_equipment() -> void:
+	equipped = []
+	for g in GameContent.GEAR_L + GameContent.GEAR_R:
+		equipped.append(GameContent.gear_to_item(g))
+	bag_equipment = []
+	for b in GameContent.BAG["equipment"]:
+		var item := GameContent.bag_to_item(b)
+		bag_equipment.append(item if not item.is_empty() else {
+			"n": String(b["n"]), "r": String(b["r"]), "slot": "", "ilvl": 1,
+			"s": (b.get("s", []) as Array).duplicate(true)})
+
+
+## Equip bag[bag_idx] into paperdoll slot_idx (swapping any occupant back to
+## the same bag position). Returns false when the slot doesn't accept it.
+func equip_from_bag(bag_idx: int, slot_idx: int) -> bool:
+	if bag_idx < 0 or bag_idx >= bag_equipment.size():
+		return false
+	var item: Dictionary = bag_equipment[bag_idx]
+	if not GameContent.slot_accepts(slot_idx, String(item.get("slot", ""))):
+		return false
+	var old: Variant = equipped[slot_idx]
+	equipped[slot_idx] = item
+	if old != null:
+		bag_equipment[bag_idx] = old
+	else:
+		bag_equipment.remove_at(bag_idx)
+	EventBus.equipment_changed.emit()
+	EventBus.loadout_changed.emit()
+	return true
+
+
+## Unequip paperdoll slot_idx into the bag. Fails when the bag is full.
+func unequip_to_bag(slot_idx: int) -> bool:
+	if slot_idx < 0 or slot_idx >= equipped.size() or equipped[slot_idx] == null:
+		return false
+	if bag_equipment.size() >= BAG_CAP:
+		return false
+	bag_equipment.append(equipped[slot_idx])
+	equipped[slot_idx] = null
+	EventBus.equipment_changed.emit()
+	EventBus.loadout_changed.emit()
+	return true
+
+
+## Add a looted item to the bag (chest rewards). False when full.
+func add_bag_item(item: Dictionary) -> bool:
+	if bag_equipment.size() >= BAG_CAP:
+		return false
+	bag_equipment.append(item)
+	EventBus.equipment_changed.emit()
+	return true
+
+# --- Chests -----------------------------------------------------------------------
+var daily_chests: int = 0
 
 # --- Timed buffs -------------------------------------------------------------------
 ## Active food buff: recipe name, parsed effect string, and expiry (unix UTC).
@@ -219,6 +308,7 @@ func check_daily_reset() -> void:
 	daily_meals = 0
 	daily_summons = 0
 	daily_forges = 0
+	daily_chests = 0
 	quests_claimed.clear()
 	dungeon_attempts = Balance.inum("energy.dungeon_attempts_per_day", 3)
 	EventBus.quests_changed.emit()
@@ -249,11 +339,13 @@ func talent_toggle(id: int, adjacency: Dictionary) -> void:
 				return
 
 
-## Restore a brand-new profile (first launch or corrupted save).
+## Restore a brand-new profile (first launch or corrupted save). The class
+## is left EMPTY so the Login scene runs character creation.
 func reset_to_defaults() -> void:
-	player_name = "Vael"
-	player_title = "the Forsaken"
-	player_class = "Pyromancer"
+	player_name = ""
+	player_title = ""
+	player_class = ""
+	class_id = ""
 	prestige = "III"
 	global_rank = 11
 	player_level = 47
@@ -274,6 +366,8 @@ func reset_to_defaults() -> void:
 	quests_claimed = []
 	iron_ingots = 46
 	forge_level = 7
+	seed_default_equipment()
+	daily_chests = 0
 	food_buff = ""
 	food_buff_effect = ""
 	food_buff_until = 0
@@ -295,6 +389,7 @@ func to_dict() -> Dictionary:
 		"player_name": player_name,
 		"player_title": player_title,
 		"player_class": player_class,
+		"class_id": class_id,
 		"prestige": prestige,
 		"global_rank": global_rank,
 		"player_level": player_level,
@@ -315,6 +410,9 @@ func to_dict() -> Dictionary:
 		"quests_claimed": quests_claimed,
 		"iron_ingots": iron_ingots,
 		"forge_level": forge_level,
+		"equipped": equipped,
+		"bag_equipment": bag_equipment,
+		"daily_chests": daily_chests,
 		"food_buff": food_buff,
 		"food_buff_effect": food_buff_effect,
 		"food_buff_until": food_buff_until,
@@ -336,6 +434,7 @@ func from_dict(data: Dictionary) -> void:
 	player_name = str(data.get("player_name", player_name))
 	player_title = str(data.get("player_title", player_title))
 	player_class = str(data.get("player_class", player_class))
+	class_id = str(data.get("class_id", class_id))
 	prestige = str(data.get("prestige", prestige))
 	global_rank = int(data.get("global_rank", global_rank))
 	player_level = int(data.get("player_level", player_level))
@@ -360,6 +459,13 @@ func from_dict(data: Dictionary) -> void:
 		quests_claimed.append(int(v))
 	iron_ingots = int(data.get("iron_ingots", iron_ingots))
 	forge_level = int(data.get("forge_level", forge_level))
+	# Equipment arrays: saves from before the equip system seed the defaults.
+	if data.has("equipped") and (data["equipped"] as Array).size() == GameContent.EQUIP_SLOTS.size():
+		equipped = data["equipped"]
+		bag_equipment = data.get("bag_equipment", [])
+	else:
+		seed_default_equipment()
+	daily_chests = int(data.get("daily_chests", 0))
 	food_buff = str(data.get("food_buff", food_buff))
 	food_buff_effect = str(data.get("food_buff_effect", food_buff_effect))
 	food_buff_until = int(data.get("food_buff_until", food_buff_until))

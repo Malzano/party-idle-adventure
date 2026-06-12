@@ -53,6 +53,7 @@ func _process(delta: float) -> void:
 	if _sync_accum >= SYNC_INTERVAL:
 		_sync_accum = 0.0
 		sync_combat()
+		poll_announcements()
 
 
 func _boot_config() -> void:
@@ -328,6 +329,82 @@ func season() -> Dictionary:
 			"you": GameContent.SEASON["you"],
 		})
 	return await _api("GET", "/v1/season", {})
+
+
+## POST /v1/chest/open — battlefield treasure chest. The server (or its mock
+## mirror) rolls the loot; rewards are applied to GameState here, and mythic
+## drops raise EventBus.mythic_announced. Response schema:
+## {ok, reward:{kind, gold, iron, dust, item, banked}, daily_chests, announcement}.
+func chest_open() -> Dictionary:
+	if mock:
+		if GameState.daily_chests >= 40:
+			return _error(422, "chest_cap", "Daily chest limit reached.")
+		var s_index := Balance.stage_index(GameState.act, GameState.stage)
+		var wave_gold := Balance.wave_gold(s_index)
+		var reward := {"kind": "gold", "gold": 0, "iron": 0, "dust": 0, "item": null, "banked": false}
+		var roll := _rng.randf()
+		if roll < 0.5:
+			reward["gold"] = roundi(wave_gold * (6.0 + _rng.randf() * 6.0))
+			GameState.add_gold(int(reward["gold"]))
+		elif roll < 0.7:
+			reward["kind"] = "materials"
+			reward["iron"] = 2 + _rng.randi_range(0, 4)
+			reward["dust"] = (1 + _rng.randi_range(0, 1)) if _rng.randf() < 0.5 else 0
+			GameState.iron_ingots += int(reward["iron"])
+			GameState.ember_dust += int(reward["dust"])
+			EventBus.currencies_changed.emit()
+		else:
+			reward["kind"] = "item"
+			var rarity := GameContent.roll_chest_item_rarity(_rng)
+			var ilvl := maxi(1, roundi(float(s_index) * 0.45 + 5.0))
+			var item := GameContent.generate_item(ilvl, rarity, _rng)
+			reward["item"] = item
+			if GameState.add_bag_item(item):
+				reward["banked"] = true
+			else:
+				reward["gold"] = roundi(wave_gold * 4.0)
+				GameState.add_gold(int(reward["gold"]))
+		GameState.daily_chests += 1
+		var announcement: Variant = null
+		if reward["item"] != null and String((reward["item"] as Dictionary)["r"]) == "mythic":
+			announcement = {"player": GameState.player_name, "item": (reward["item"] as Dictionary)["n"], "rarity": "mythic"}
+			EventBus.mythic_announced.emit(GameState.player_name, String((reward["item"] as Dictionary)["n"]))
+		return _wrap(200, {"ok": true, "reward": reward, "daily_chests": GameState.daily_chests, "announcement": announcement})
+	var res: Dictionary = await _api("POST", "/v1/chest/open", {})
+	if bool(res["ok"]):
+		var d: Dictionary = res["data"]
+		var rw: Dictionary = d.get("reward", {})
+		if int(rw.get("gold", 0)) > 0:
+			GameState.add_gold(int(rw["gold"]))
+		if int(rw.get("iron", 0)) > 0 or int(rw.get("dust", 0)) > 0:
+			GameState.iron_ingots += int(rw.get("iron", 0))
+			GameState.ember_dust += int(rw.get("dust", 0))
+			EventBus.currencies_changed.emit()
+		if rw.get("item") != null and bool(rw.get("banked", false)):
+			GameState.add_bag_item(rw["item"])
+		GameState.daily_chests = int(d.get("daily_chests", GameState.daily_chests))
+		var ann: Variant = d.get("announcement")
+		if ann != null:
+			EventBus.mythic_announced.emit(String((ann as Dictionary).get("player", "")), String((ann as Dictionary).get("item", "")))
+	return res
+
+
+## GET /v1/announcements?since= — global mythic broadcasts, polled with the
+## heartbeat. New entries raise EventBus.mythic_announced for the ribbon.
+var _last_announcement_at: int = 0
+
+func poll_announcements() -> void:
+	if mock:
+		return  # mock: only your own drops announce (no fake other players)
+	var res: Dictionary = await _api("GET", "/v1/announcements?since=%d" % _last_announcement_at, {})
+	if not bool(res["ok"]):
+		return
+	var list: Array = res["data"].get("announcements", [])
+	for a in list:
+		var ann: Dictionary = a
+		_last_announcement_at = maxi(_last_announcement_at, int(ann.get("at", 0)))
+		if String(ann.get("player", "")) != GameState.player_name:
+			EventBus.mythic_announced.emit(String(ann.get("player", "A delver")), String(ann.get("item", "an artifact")))
 
 
 ## GET /v1/config — no auth; safe pre-login.

@@ -20,6 +20,12 @@ const PARTY_CENTER := Vector2(24.5, 65.75)   # cluster centroid (battlefield %)
 const STEP_SPACING := 26.0                   # px walked between footsteps
 const STEP_LIFE := 6.0                       # seconds before a footstep fades out
 
+# Battle caches: clickable chests scattered along the route. The BACKEND
+# decides the contents (BackendClient.chest_open; mock mirrors the server).
+const _CHEST_SIZE := Vector2(56, 46)
+const CHEST_MAX := 2                          # alive at once
+const CHEST_LIFE := 25.0                      # seconds before it sinks away
+
 var _t: float = 0.0
 var _layouts: Array[Callable] = []
 var _bobs: Array[Dictionary] = []
@@ -39,6 +45,8 @@ var _respawn_at: Array[float] = []      # _t deadlines for replacement spawns
 var _step_accum: float = 0.0
 var _step_side: bool = false
 var _resort_accum: float = 0.0
+var _chests: Array[Dictionary] = []     # {node, glow, pct, life, opening}
+var _next_chest_at: float = 8.0         # _t deadline for the next cache
 
 
 func _ready() -> void:
@@ -85,6 +93,11 @@ func _process(delta: float) -> void:
 	while not _respawn_at.is_empty() and _respawn_at[0] <= _t:
 		_respawn_at.pop_front()
 		_spawn_enemy(false)
+	if _t >= _next_chest_at:
+		_next_chest_at = _t + _rng.randf_range(20.0, 40.0)
+		if _chests.size() < CHEST_MAX:
+			_spawn_chest()
+	_update_chests(delta)
 	_resort_accum += delta
 	if _resort_accum >= 0.2:
 		_resort_accum = 0.0
@@ -376,6 +389,19 @@ func _scroll_world(drift_px: Vector2, drift_pct: Vector2, delta: float) -> void:
 		p["pct"] = pct
 		_pos_bottom(p["node"], pct)
 
+	# Chests are ground objects too: they drift past and are missed for good
+	# once they scroll off behind the party.
+	var gone: Array = []
+	for ch in _chests:
+		ch["pct"] = (ch["pct"] as Vector2) - drift_pct
+		_pos_bottom(ch["node"], ch["pct"])
+		var cp: Vector2 = ch["pct"]
+		if not bool(ch["opening"]) and (cp.x < -6.0 or cp.y > 112.0):
+			gone.append(ch)
+	for ch in gone:
+		ch["opening"] = true
+		_despawn_chest(ch, false)
+
 	# Footsteps drift + fade; fresh prints appear under the striding party.
 	var dead: Array = []
 	for f in _footsteps:
@@ -434,6 +460,184 @@ func _update_enemies(delta: float, spd: float) -> void:
 			var bar := e["bar"] as StatBar
 			bar.pct = maxf(5.0, bar.pct - 100.0 / ttk * spd * delta)
 		_pos_bottom(e["node"], e["pct"])
+
+
+# =========================================================================
+# Battle caches (clickable chests; contents decided by the backend)
+# =========================================================================
+
+## Drop a cache somewhere ahead of the party, clear of the clash zone.
+func _spawn_chest() -> void:
+	var pct := Vector2.ZERO
+	for _attempt in 8:
+		pct = Vector2(_rng.randf_range(30.0, 90.0), _rng.randf_range(16.0, 90.0))
+		if pct.distance_to(PARTY_CENTER) > 20.0 \
+				and pct.distance_to(Vector2(float(GameContent.CLASH["x"]), float(GameContent.CLASH["y"]))) > 14.0:
+			break
+	var unit := _make_chest_node()
+	_units_holder.add_child(unit)
+	var entry := {"node": unit, "glow": unit.get_meta("glow"), "pct": pct, "life": CHEST_LIFE, "opening": false}
+	_chests.append(entry)
+	_pos_bottom(unit, pct)
+	# Pop in from the ground.
+	unit.scale = Vector2(0.2, 0.2)
+	unit.modulate = Color(1, 1, 1, 0.0)
+	var tw := unit.create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(unit, "scale", Vector2.ONE, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(unit, "modulate:a", 1.0, 0.25)
+	unit.gui_input.connect(func(event: InputEvent) -> void:
+		var mb := event as InputEventMouseButton
+		if mb != null and mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
+			_open_chest(entry))
+
+
+func _make_chest_node() -> Control:
+	var unit := Control.new()
+	unit.size = _CHEST_SIZE
+	unit.pivot_offset = Vector2(_CHEST_SIZE.x * 0.5, _CHEST_SIZE.y)
+	unit.mouse_filter = Control.MOUSE_FILTER_STOP
+	unit.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	Tip.attach(unit, {
+		"name": "Battle Cache",
+		"type": "Click to open",
+		"rarity": "rare",
+		"flavor": "Left behind on the route. The Hollow decides what's inside.",
+	})
+
+	var shadow := _Shadow.new(0.6)
+	shadow.size = Vector2(46, 13)
+	shadow.position = Vector2(_CHEST_SIZE.x * 0.5 - 23.0, _CHEST_SIZE.y - 8.0)
+	unit.add_child(shadow)
+
+	var sprite := PixelSlot.new("48×40\nchest", true)
+	sprite.size = _CHEST_SIZE
+	sprite.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	unit.add_child(sprite)
+
+	# Gold glint border; brightens on hover, pulses while waiting.
+	var glow := Panel.new()
+	var gsb := StyleBoxFlat.new()
+	gsb.draw_center = false
+	gsb.set_border_width_all(1)
+	gsb.border_color = Palette.GOLD_BRIGHT
+	gsb.set_corner_radius_all(4)
+	gsb.shadow_color = Palette.with_alpha(Palette.GOLD_BRIGHT, 0.35 * Palette.GLOW)
+	gsb.shadow_size = int(14 * Palette.GLOW)
+	glow.add_theme_stylebox_override("panel", gsb)
+	glow.size = _CHEST_SIZE
+	glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	unit.add_child(glow)
+	_pulses.append({"node": glow, "period": 1.6, "delay": 0.0, "min": 0.35, "max": 0.95})
+
+	unit.mouse_entered.connect(func() -> void: unit.scale = Vector2(1.08, 1.08))
+	unit.mouse_exited.connect(func() -> void: unit.scale = Vector2.ONE)
+	unit.set_meta("glow", glow)
+	return unit
+
+
+## Lifetime tick: blink when about to vanish, sink away at 0.
+func _update_chests(delta: float) -> void:
+	var expired: Array = []
+	for ch in _chests:
+		if bool(ch["opening"]):
+			continue
+		ch["life"] = float(ch["life"]) - delta
+		var left := float(ch["life"])
+		if left <= 0.0:
+			expired.append(ch)
+		elif left < 4.0:
+			var node := ch["node"] as Control
+			node.modulate.a = 0.45 + 0.55 * (0.5 + 0.5 * sin(_t * 9.0))
+	for ch in expired:
+		ch["opening"] = true  # block clicks during the sink-out
+		_despawn_chest(ch, false)
+
+
+## The click: the backend rolls the reward (mock mirrors it exactly), then the
+## chest bursts and the result floats up where it stood.
+func _open_chest(entry: Dictionary) -> void:
+	if bool(entry["opening"]):
+		return
+	entry["opening"] = true
+	var at: Vector2 = entry["pct"]
+	var res: Dictionary = await BackendClient.chest_open()
+	if not is_instance_valid(self) or not is_instance_valid(entry["node"]):
+		return
+	var data: Dictionary = res["data"]
+	if not bool(res["ok"]):
+		var msg := String((data.get("error", {}) as Dictionary).get("message", "The cache is sealed."))
+		_chest_floater(at, msg, Palette.TX_MUTE, 13)
+		_despawn_chest(entry, false)
+		return
+	var reward: Dictionary = data["reward"]
+	match String(reward["kind"]):
+		"gold":
+			_chest_floater(at, "+%s gold" % Style.group_int(int(reward["gold"])), Palette.GOLD_BRIGHT, 17)
+		"materials":
+			var txt := "+%d iron ingots" % int(reward["iron"])
+			if int(reward["dust"]) > 0:
+				txt += " · +%d ember dust" % int(reward["dust"])
+			_chest_floater(at, txt, Palette.TX, 15)
+		"item":
+			var item: Dictionary = reward["item"]
+			if bool(reward["banked"]):
+				_chest_floater(at, String(item["n"]), Palette.rarity_color(String(item["r"])), 17)
+			else:
+				_chest_floater(at, "Bag full → +%s gold" % Style.group_int(int(reward["gold"])), Palette.GOLD_BRIGHT, 15)
+	_despawn_chest(entry, true)
+
+
+## Opened: burst (flash + squash). Expired/missed: sink and fade. Idempotent —
+## a chest can only leave _chests once (its glow pulse must be unregistered
+## exactly when the node is freed, or _process casts a freed object).
+func _despawn_chest(entry: Dictionary, opened: bool) -> void:
+	if not _chests.has(entry):
+		return
+	_chests.erase(entry)
+	var unit := entry["node"] as Control
+	var glow := entry["glow"] as CanvasItem
+	_pulses = _pulses.filter(func(p: Dictionary) -> bool: return p["node"] != glow)
+	var tw := unit.create_tween()
+	if opened:
+		unit.modulate = Color(1.6, 1.45, 1.1, 1.0)  # gold flash
+		tw.set_parallel(true)
+		tw.tween_property(unit, "scale", Vector2(1.25, 0.06), 0.34).set_ease(Tween.EASE_IN)
+		tw.tween_property(unit, "modulate:a", 0.0, 0.36)
+	else:
+		tw.set_parallel(true)
+		tw.tween_property(unit, "scale:y", 0.1, 0.5).set_ease(Tween.EASE_IN)
+		tw.tween_property(unit, "modulate:a", 0.0, 0.5)
+	tw.chain().tween_callback(unit.queue_free)
+
+
+## Reward readout that pops where the chest stood (bigger, slower floater).
+func _chest_floater(pct: Vector2, text: String, col: Color, fsize: int) -> void:
+	if _floater_holder == null or size.x < 4.0:
+		return
+	var lbl := Style.pixel_label(text, fsize, col)
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.85))
+	lbl.add_theme_constant_override("shadow_offset_x", 0)
+	lbl.add_theme_constant_override("shadow_offset_y", 2)
+	lbl.add_theme_constant_override("outline_size", 8)
+	lbl.add_theme_color_override("font_outline_color", Palette.with_alpha(col, 0.25 * Palette.GLOW))
+	_floater_holder.add_child(lbl)
+	lbl.reset_size()
+	lbl.pivot_offset = lbl.size * 0.5
+	var px := size.x * pct.x / 100.0
+	var py := size.y * pct.y / 100.0 - _CHEST_SIZE.y
+	lbl.position = Vector2(px - lbl.size.x * 0.5, py)
+	lbl.scale = Vector2(0.6, 0.6)
+	lbl.modulate = Color(1, 1, 1, 0.0)
+	var tw := lbl.create_tween()
+	tw.tween_property(lbl, "scale", Vector2(1.1, 1.1), 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(lbl, "modulate:a", 1.0, 0.2)
+	tw.tween_property(lbl, "scale", Vector2.ONE, 0.18)
+	tw.tween_interval(1.1)
+	tw.tween_property(lbl, "position:y", py - 46.0, 0.8)
+	tw.parallel().tween_property(lbl, "modulate:a", 0.0, 0.8)
+	tw.tween_callback(lbl.queue_free)
 
 
 ## Depth tier from approach progress: far (small/faint) → near (full).

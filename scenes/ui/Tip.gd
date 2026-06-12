@@ -21,6 +21,12 @@ static func attach(ctrl: Control, data: Variant) -> void:
 	ctrl.tree_exiting.connect(func() -> void: _hide(ctrl))
 
 
+## Immediately hide the tip in [param ctrl]'s window (e.g. when a drag begins,
+## so the tooltip doesn't shadow the drag preview).
+static func hide_now(ctrl: Control) -> void:
+	_hide(ctrl)
+
+
 static func _show(ctrl: Control, data: Variant) -> void:
 	var window := ctrl.get_window()
 	if window == null:
