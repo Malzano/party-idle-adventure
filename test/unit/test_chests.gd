@@ -5,6 +5,9 @@ extends GutTest
 
 
 func before_each() -> void:
+	# These tests validate the offline mock contract; force it on regardless of
+	# the production default (which is now live — mock=false).
+	BackendClient.mock = true
 	GameState.reset_to_defaults()
 
 

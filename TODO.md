@@ -12,10 +12,16 @@
 > acquisition, welcome-back fix, focus navigation, LICENSE, affix calibration, warning
 > sweep, live materials tab. What remains of them is folded below.*
 
-## 1. Go live against the backend (blocked on the srv deploy)
+## 1. Go live against the backend
 
-- [ ] Flip `BackendClient.mock = false`, set `base_url` (Cloud Run URL) + `web_api_key`
-      (Identity Platform) after the server is deployed.
+> **Live as of 2026-06-13.** Backend deployed to **party-idle-dev** (Cloud Run,
+> `asia-southeast1`): `https://party-idle-api-909650956354.asia-southeast1.run.app`.
+> Anonymous auth enabled, Firestore seeded, scheduler jobs running. `BackendClient`
+> now ships with `mock = false` + the real `base_url`/`web_api_key`. Auth → an
+> authenticated endpoint round-trip was verified server-side. Set `mock = true` to
+> run fully offline. Remaining go-live polish below.
+
+- [x] ~~Flip `BackendClient.mock = false`, set `base_url` + `web_api_key`.~~ Done 2026-06-13.
 - [ ] **Wire the initial cloud-save pull at boot in live mode.** `get_save()` exists but
       nothing calls it — today only `PUT` on save + 409 adoption sync the blob. Decide the
       boot reconcile rule (server newer → adopt; local newer → push) and implement it in

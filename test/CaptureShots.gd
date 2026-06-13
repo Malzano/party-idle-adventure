@@ -17,6 +17,9 @@ func _ready() -> void:
 
 
 func _run() -> void:
+	# Capture against the offline mock world (deterministic, no live backend
+	# writes) even though the production default is now live (mock=false).
+	BackendClient.mock = true
 	# --- 1) Fresh profile → Login class picker ---
 	GameState.reset_to_defaults()
 	var login := _LoginScene.instantiate() as Control

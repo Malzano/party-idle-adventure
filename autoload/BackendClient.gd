@@ -13,12 +13,15 @@ extends Node
 ## (data is the parsed JSON body — the server result or its error envelope).
 ## Always call with `await`; mock paths complete without suspending.
 
-## Flip to false after deploying. Mock = fully offline, schema-faithful.
-var mock: bool = true
-## e.g. "https://party-idle-api-xxxx-uc.a.run.app"
-var base_url: String = ""
-## Identity Platform web API key (Firebase console → project settings).
-var web_api_key: String = ""
+# Live against party-idle-dev (Cloud Run, asia-southeast1) as of 2026-06-13.
+# Set mock=true to run fully offline (schema-faithful, no network) — every flow
+# still works locally. The save is local-first; network sync is additive, so a
+# down/slow backend never blocks boot or play.
+var mock: bool = false
+## Cloud Run service URL (no trailing slash). party-idle-dev / asia-southeast1.
+var base_url: String = "https://party-idle-api-909650956354.asia-southeast1.run.app"
+## Identity Platform browser API key (party-idle-dev). Anonymous sign-in enabled.
+var web_api_key: String = "AIzaSyB4CGGcEsncE7WSgwmx56lBHH3QPJNiJIg"
 
 ## Combat heartbeat cadence (seconds). The server allows 4/min.
 const SYNC_INTERVAL := 45.0
