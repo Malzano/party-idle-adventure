@@ -11,6 +11,7 @@ const WIN_CAMP := "camp"
 const WIN_HERO := "hero"
 const WIN_LEADERBOARD := "leaderboard"
 const WIN_PARTY := "party"
+const WIN_SETTINGS := "settings"
 
 # Titlebars compose as "<title> — GameContent.GAME_TITLE" in _create().
 const _DEFS := {
@@ -36,6 +37,12 @@ const _DEFS := {
 		"title": "Party Finder",
 		"scene": "res://scenes/party/PartyFinder.tscn",
 		"size": Vector2i(1480, 900),
+		"strip": false,
+	},
+	WIN_SETTINGS: {
+		"title": "Options",
+		"scene": "res://scenes/settings/Settings.tscn",
+		"size": Vector2i(1180, 760),
 		"strip": false,
 	},
 }
@@ -82,6 +89,12 @@ func is_open(id: String) -> bool:
 ## Focus the main (Fight) window.
 func focus_main() -> void:
 	get_tree().root.grab_focus()
+
+
+## Open the Hero window directly on a tab (0 Equipment … 4 Roster).
+func open_hero_tab(tab_idx: int) -> void:
+	open(WIN_HERO)
+	EventBus.hero_tab_requested.emit(tab_idx)
 
 
 func _create(id: String) -> Window:

@@ -177,7 +177,7 @@ static func make_button(text: String, kind: String = "stone", font_size: int = 1
 	var f := Fonts.display()
 	if f != null:
 		b.add_theme_font_override("font", f)
-	b.add_theme_font_size_override("font_size", font_size)
+	b.add_theme_font_size_override("font_size", fs(font_size))
 	match kind:
 		"ember":
 			b.add_theme_stylebox_override("normal", btn_ember_box())
@@ -246,7 +246,7 @@ static func make_tab(text: String, hotkey: String = "") -> Button:
 	var f := Fonts.display()
 	if f != null:
 		b.add_theme_font_override("font", f)
-	b.add_theme_font_size_override("font_size", 13)
+	b.add_theme_font_size_override("font_size", fs(13))
 	set_tab_active(b, false)
 	return b
 
@@ -376,6 +376,14 @@ static func make_role_tag(role: String, label: String) -> Control:
 # Labels & misc
 # =========================================================================
 
+## READABILITY SCALE (design handoff v2, 2026-06: "every text is so small").
+## All factory sizes are quoted at the ORIGINAL design scale; fs() lifts them
+## to the readability scale the v2 handoff applied (~+5px, nothing below 11).
+## Callers keep passing the old numbers — hierarchy is preserved, just larger.
+static func fs(size: int) -> int:
+	return maxi(11, size + 5)
+
+
 ## Display-font label (Spectral). Uppercase/letterspacing left to the caller.
 static func display_label(text: String, size: int, color: Color, italic: bool = false) -> Label:
 	var l := Label.new()
@@ -383,7 +391,7 @@ static func display_label(text: String, size: int, color: Color, italic: bool = 
 	var f := Fonts.display_italic() if italic else Fonts.display()
 	if f != null:
 		l.add_theme_font_override("font", f)
-	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_font_size_override("font_size", fs(size))
 	l.add_theme_color_override("font_color", color)
 	return l
 
@@ -395,7 +403,7 @@ static func pixel_label(text: String, size: int, color: Color) -> Label:
 	var f := Fonts.pixel()
 	if f != null:
 		l.add_theme_font_override("font", f)
-	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_font_size_override("font_size", fs(size))
 	l.add_theme_color_override("font_color", color)
 	return l
 
@@ -404,7 +412,7 @@ static func pixel_label(text: String, size: int, color: Color) -> Label:
 static func body_label(text: String, size: int, color: Color) -> Label:
 	var l := Label.new()
 	l.text = text
-	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_font_size_override("font_size", fs(size))
 	l.add_theme_color_override("font_color", color)
 	return l
 

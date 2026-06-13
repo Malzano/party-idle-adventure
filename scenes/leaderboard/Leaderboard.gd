@@ -157,7 +157,7 @@ func _build_header() -> Control:
 	x.focus_mode = Control.FOCUS_NONE
 	x.custom_minimum_size = Vector2(36, 36)
 	x.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	x.add_theme_font_size_override("font_size", 18)
+	x.add_theme_font_size_override("font_size", Style.fs(18))
 	x.add_theme_color_override("font_color", Palette.TX_DIM)
 	x.add_theme_color_override("font_hover_color", Palette.EMBER_BRIGHT)
 	x.add_theme_color_override("font_pressed_color", Palette.EMBER_BRIGHT)
@@ -324,7 +324,7 @@ func _build_scope_seg() -> Control:
 		var b := Button.new()
 		b.text = String(pair[1])
 		b.focus_mode = Control.FOCUS_NONE
-		b.add_theme_font_size_override("font_size", 12)
+		b.add_theme_font_size_override("font_size", Style.fs(12))
 		b.pressed.connect(func() -> void: _set_scope(key))
 		_scope_btns[key] = b
 		row.add_child(b)

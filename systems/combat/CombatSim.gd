@@ -54,9 +54,11 @@ var _rng := RandomNumberGenerator.new()
 
 func _ready() -> void:
 	_rng.seed = 0x6D2B79F5  # fixed seed: deterministic flavor rolls
-	for h in GameContent.PARTY:
+	for h in GameContent.active_party():
 		party_hp.append(float(h["hp"]))
 		party_mana.append(float(h["mana"]))
+	# Swapping the fighting four re-seeds vitals and reprices the party.
+	EventBus.lineup_changed.connect(_on_lineup_changed)
 	# SaveManager (earlier in autoload order) has loaded the profile by now.
 	act = GameState.act
 	stage = GameState.stage
@@ -79,6 +81,14 @@ func _recompute_stats() -> void:
 	party_dps = float(profile["party_dps"])
 	party_dps_label = String(profile["dps_label"])
 	EventBus.sim_stats_changed.emit()
+
+
+func _on_lineup_changed() -> void:
+	var lineup := GameContent.active_party()
+	for i in mini(lineup.size(), party_hp.size()):
+		party_hp[i] = float((lineup[i] as Dictionary)["hp"])
+		party_mana[i] = float((lineup[i] as Dictionary)["mana"])
+	EventBus.sim_party_vitals.emit(party_hp, party_mana)
 
 
 ## Stage-milestone relics (GameContent.RELIC_STAGE_UNLOCKS): when max_stage

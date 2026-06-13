@@ -81,3 +81,12 @@ signal mythic_announced(player: String, item: String)
 
 ## GameState.party (the server-authoritative party mirror) was replaced.
 signal party_changed
+
+## GameState.party_ids (the fighting four) changed — HUD/battlefield rebuild.
+signal lineup_changed
+
+## Another window asked the Hero window to show a tab (e.g. dock MANAGE → Roster).
+signal hero_tab_requested(tab_idx: int)
+
+## A UserSettings value changed (already persisted + engine-applied).
+signal settings_changed

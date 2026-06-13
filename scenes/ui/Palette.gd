@@ -71,8 +71,8 @@ const ROLE_DPS := Color("e0584a")
 const ROLE_MAGE := Color("46c2d4")
 
 # --- Layout metrics (styles.css :root) ---
-const RAIL_W := 96.0
-const STRIP_H := 56.0
+const RAIL_W := 110.0
+const STRIP_H := 64.0
 
 ## Ember-glow intensity multiplier (the design's --glow tweak, default 1.0).
 const GLOW := 1.0

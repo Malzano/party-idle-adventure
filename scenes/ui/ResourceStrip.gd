@@ -107,7 +107,7 @@ func _make_player_block() -> Control:
 	# Portrait (pixel-art drop-slot for a 48² face sprite).
 	var portrait := PanelContainer.new()
 	portrait.add_theme_stylebox_override("panel", Style.pixel_slot_box(true))
-	portrait.custom_minimum_size = Vector2(44, 44)
+	portrait.custom_minimum_size = Vector2(50, 50)
 	portrait.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	var ps := Style.pixel_label("48²\nface", 7, Palette.TX_MUTE)
 	ps.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -122,7 +122,7 @@ func _make_player_block() -> Control:
 	meta.add_child(_name_label)
 	_level_label = Style.pixel_label("LV 1", 9, Palette.EMBER_BRIGHT)
 	meta.add_child(_level_label)
-	meta.add_child(_make_bar(92, 5, 0.0, Palette.XP))
+	meta.add_child(_make_bar(108, 6, 0.0, Palette.XP))
 	row.add_child(meta)
 	return row
 
@@ -148,7 +148,7 @@ func _make_resource(icon_path: String, value_color: Color, key: String) -> Contr
 	box.add_child(_make_icon(icon_path, 18, Color.WHITE))
 
 	var value := Style.pixel_label("0", 13, value_color)
-	value.custom_minimum_size = Vector2(56, 0)
+	value.custom_minimum_size = Vector2(76, 0)
 	box.add_child(value)
 	match key:
 		"gold": _gold_label = value
@@ -157,12 +157,12 @@ func _make_resource(icon_path: String, value_color: Color, key: String) -> Contr
 
 	var plus := Button.new()
 	plus.text = "+"
-	plus.custom_minimum_size = Vector2(18, 18)
+	plus.custom_minimum_size = Vector2(22, 22)
 	plus.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	plus.focus_mode = Control.FOCUS_NONE
 	plus.tooltip_text = "Shop — coming soon"
 	plus.add_theme_color_override("font_color", Color("1c0f04"))
-	plus.add_theme_font_size_override("font_size", 13)
+	plus.add_theme_font_size_override("font_size", Style.fs(13))
 	for slot in ["normal", "hover", "pressed"]:
 		plus.add_theme_stylebox_override(slot, Style.plus_box())
 	box.add_child(plus)

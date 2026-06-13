@@ -76,7 +76,7 @@ func _make_crest() -> Control:
 func _make_rail_button(entry: Dictionary) -> Button:
 	var id: String = entry["id"]
 	var button := Button.new()
-	button.custom_minimum_size = Vector2(70, 70)
+	button.custom_minimum_size = Vector2(84, 80)
 	button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	button.focus_mode = Control.FOCUS_ALL  # keep keyboard/controller nav alive
 	button.tooltip_text = "%s  (Press %s)" % [entry["label"], entry["hotkey"]]
@@ -135,11 +135,12 @@ func _make_rail_button(entry: Dictionary) -> Button:
 
 func _make_options_button() -> Button:
 	var button := Button.new()
-	button.custom_minimum_size = Vector2(50, 50)
+	button.custom_minimum_size = Vector2(56, 54)
 	button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	button.focus_mode = Control.FOCUS_ALL
 	button.modulate = Color(1, 1, 1, 0.7)
 	button.tooltip_text = "Options"
+	button.pressed.connect(func() -> void: WindowManager.open(WindowManager.WIN_SETTINGS))
 	for slot in ["normal", "hover", "pressed", "focus"]:
 		button.add_theme_stylebox_override(slot, Style.rail_btn_box(false))
 

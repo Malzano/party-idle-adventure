@@ -86,7 +86,7 @@ func _refresh_stats() -> void:
 
 func _build_char_sheet() -> Control:
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(332, 0)
+	panel.custom_minimum_size = Vector2(376, 0)
 	panel.add_theme_stylebox_override("panel", Style.panel_box())
 
 	var col := VBoxContainer.new()
@@ -176,7 +176,7 @@ func _build_level_badge() -> Control:
 	sb.shadow_size = int(14 * Palette.GLOW)
 	diamond.add_theme_stylebox_override("panel", sb)
 	diamond.position = Vector2(6, 6)
-	diamond.size = Vector2(46, 46)
+	diamond.size = Vector2(52, 52)
 	diamond.pivot_offset = Vector2(23, 23)
 	diamond.rotation = deg_to_rad(45.0)
 	diamond.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -277,7 +277,7 @@ func _attr_row(s: Dictionary) -> Control:
 	chip_sb.content_margin_top = 4
 	chip_sb.content_margin_bottom = 4
 	chip.add_theme_stylebox_override("panel", chip_sb)
-	chip.custom_minimum_size = Vector2(36, 0)
+	chip.custom_minimum_size = Vector2(42, 0)
 	chip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var key_lbl := Style.pixel_label(String(s["k"]), 10, c)
@@ -340,7 +340,7 @@ func _build_detail() -> Control:
 	_det_toggle = Button.new()
 	_det_toggle.focus_mode = Control.FOCUS_NONE
 	_det_toggle.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	_det_toggle.add_theme_font_size_override("font_size", 11)
+	_det_toggle.add_theme_font_size_override("font_size", Style.fs(11))
 	_det_toggle.add_theme_color_override("font_color", Palette.GOLD)
 	_det_toggle.add_theme_color_override("font_hover_color", Palette.EMBER_BRIGHT)
 	_det_toggle.add_theme_color_override("font_pressed_color", Palette.GOLD)
@@ -460,7 +460,7 @@ func _pct_inc(v: float) -> String:
 
 func _build_paperdoll() -> Control:
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(568, 0)
+	panel.custom_minimum_size = Vector2(548, 0)
 	panel.add_theme_stylebox_override("panel", Style.panel_box())
 	var pad := MarginContainer.new()
 	pad.add_theme_constant_override("margin_left", 14)
@@ -553,7 +553,7 @@ func _layout_paperdoll() -> void:
 	_pd_figure.position = Vector2(x0 + 68.0, 0.0)
 	_pd_figure.size = Vector2(fig_w, s.y)
 	for i in 5:
-		var slot_y := (s.y - 84.0) * float(i) / 4.0
+		var slot_y := (s.y - 90.0) * float(i) / 4.0
 		_pd_left[i].position = Vector2(x0, slot_y)
 		_pd_right[i].position = Vector2(x0 + fig_w + 52.0, slot_y)
 	_position_plate()
@@ -574,8 +574,8 @@ func _gear_slot(slot_idx: int) -> Control:
 	cell.kind = "slot"
 	cell.index = slot_idx
 	cell.item = item_v if item_v != null else {}
-	cell.custom_minimum_size = Vector2(84, 84)
-	cell.size = Vector2(84, 84)
+	cell.custom_minimum_size = Vector2(90, 90)
+	cell.size = Vector2(90, 90)
 	cell.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 
 	if item_v == null:
@@ -681,7 +681,7 @@ func _build_inventory() -> Control:
 		var f := Fonts.display()
 		if f != null:
 			b.add_theme_font_override("font", f)
-		b.add_theme_font_size_override("font_size", 12)
+		b.add_theme_font_size_override("font_size", Style.fs(12))
 		b.pressed.connect(_set_inv_tab.bind(String(pair[0])))
 		_inv_tab_buttons[String(pair[0])] = b
 		bar_h.add_child(b)

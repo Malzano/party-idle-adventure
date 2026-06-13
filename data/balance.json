@@ -51,8 +51,12 @@
   },
 
   "heroes": {
-    "comment": "Base DPS per party hero before any multipliers.",
-    "base_dps": { "brand": 550000, "ash": 1350000, "hex": 1150000, "wren": 350000 },
+    "comment": "Base DPS per collection hero (GameContent.HEROES ids) before multipliers. Non-default heroes scaled off the design's roster power ratios.",
+    "base_dps": {
+      "brand": 550000, "ash": 1350000, "hex": 1150000, "wren": 350000,
+      "mord": 458000, "sera": 287000, "korr": 612000, "tarn": 413000,
+      "wisp": 154000, "grub": 45000, "veyra": 1240000, "oszric": 980000
+    },
     "team_aura_bonus": 0.18
   },
 

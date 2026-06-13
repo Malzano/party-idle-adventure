@@ -126,7 +126,7 @@ func _build_zoom() -> void:
 			var f := Fonts.pixel()
 			if f != null:
 				b.add_theme_font_override("font", f)
-		b.add_theme_font_size_override("font_size", int(spec[1]))
+		b.add_theme_font_size_override("font_size", Style.fs(int(spec[1])))
 		b.add_theme_color_override("font_color", Palette.TX_DIM)
 		b.add_theme_color_override("font_hover_color", Palette.TX)
 		b.add_theme_color_override("font_pressed_color", Palette.TX_DIM)

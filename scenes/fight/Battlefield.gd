@@ -47,6 +47,7 @@ var _step_side: bool = false
 var _resort_accum: float = 0.0
 var _chests: Array[Dictionary] = []     # {node, glow, pct, life, opening}
 var _next_chest_at: float = 8.0         # _t deadline for the next cache
+var _hero_units: Array[Control] = []    # the fighting four (lineup-rebuilt)
 
 
 func _ready() -> void:
@@ -161,10 +162,15 @@ func _build() -> void:
 		_units_holder.add_child(prop)
 		_props.append({"node": prop, "pct": Vector2(float(p["x"]), float(p["y"]))})
 
-	for i in GameContent.PARTY.size():
-		var hero := _make_hero(GameContent.PARTY[i], i)
-		hero.set_meta("depth_bias", 12.0)
-		_units_holder.add_child(hero)
+	# Heroes come from the LIVE lineup and are rebuilt on roster swaps. One
+	# permanent layout closure reads the current unit list (per-unit closures
+	# would dangle over freed nodes after a rebuild).
+	_layouts.append(func(bs: Vector2) -> void:
+		for u in _hero_units:
+			var pct: Vector2 = u.get_meta("pct")
+			u.position = Vector2(bs.x * pct.x / 100.0 - u.size.x * 0.5, bs.y * pct.y / 100.0 - u.size.y))
+	_spawn_party_heroes()
+	EventBus.lineup_changed.connect(_spawn_party_heroes, CONNECT_DEFERRED)
 
 	# Initial enemy wave: one elite + regulars, staggered along their approach
 	# so the field opens with the design's far/mid/near depth mix.
@@ -715,6 +721,23 @@ func _pos_center(node: Control, pct: Vector2) -> void:
 	node.position = Vector2(size.x * pct.x / 100.0, size.y * pct.y / 100.0) - node.size * 0.5
 
 
+## (Re)spawn the four lineup heroes (design v2: the party is editable).
+## Freed sprites must leave _bobs or _process casts freed objects.
+func _spawn_party_heroes() -> void:
+	for unit in _hero_units:
+		var spr: Variant = unit.get_meta("sprite")
+		_bobs = _bobs.filter(func(b: Dictionary) -> bool: return b["node"] != spr)
+		unit.queue_free()
+	_hero_units.clear()
+	var lineup := GameContent.active_party()
+	for i in lineup.size():
+		var hero := _make_hero(lineup[i], i)
+		hero.set_meta("depth_bias", 12.0)
+		_units_holder.add_child(hero)
+		_hero_units.append(hero)
+	_request_relayout()
+
+
 ## Hero: role-colored ground ring, striding pixel-slot sprite, shadow, tip.
 func _make_hero(h: Dictionary, idx: int) -> Control:
 	var unit := Control.new()
@@ -748,7 +771,8 @@ func _make_hero(h: Dictionary, idx: int) -> Control:
 	unit.add_child(sprite)
 	_bobs.append({"node": sprite, "base": Vector2.ZERO, "kind": "stride", "period": 0.62, "delay": float(idx) * 0.15})
 
-	_place_bottom(unit, float(h["x"]), float(h["y"]))
+	unit.set_meta("sprite", sprite)
+	unit.set_meta("pct", Vector2(float(h["x"]), float(h["y"])))
 	return unit
 
 
@@ -782,6 +806,8 @@ func _make_spawn(s: Dictionary) -> Control:
 
 func _on_floater(kind: String, amount: int, hero_idx: int) -> void:
 	if _floater_holder == null or size.x < 4.0:
+		return
+	if not UserSettings.get_bool("dmg_numbers"):  # Options · Combat
 		return
 	var bs := size
 	var xp: float

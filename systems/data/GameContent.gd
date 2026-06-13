@@ -23,6 +23,105 @@ const PARTY := [
 	{"id": "wren", "name": "Sister Wren", "role": "healer", "role_lbl": "Healer", "cls": "Lightbinder", "hp": 96.0, "mana": 82.0, "x": 24.0, "y": 72.0, "lvl": 45},
 ]
 
+# =========================================================================
+# HERO COLLECTION (design v2 roster.jsx) — the recruitable pool the party
+# lineup (GameState.party_ids) draws from. The first four mirror PARTY;
+# `locked` heroes recruit by being summoned at the altar (gacha → a
+# roster_extra entry with the same name unlocks them).
+# =========================================================================
+
+const HEROES := [
+	{"id": "brand", "name": "Brand", "cls": "Bulwark", "role": "tank", "role_lbl": "Tank", "r": "epic", "lvl": 47, "hp": 100.0, "mana": 60.0, "trait": "Taunts foes and blocks 32% of hits."},
+	{"id": "ash", "name": "Ashling", "cls": "Pyromancer", "role": "dps", "role_lbl": "DPS", "r": "legendary", "lvl": 48, "hp": 74.0, "mana": 50.0, "trait": "Ignites melt armour. Featured banner hero."},
+	{"id": "hex", "name": "Hex", "cls": "Hexcaster", "role": "mage", "role_lbl": "Mage", "r": "epic", "lvl": 44, "hp": 61.0, "mana": 90.0, "trait": "Curses spread to nearby enemies."},
+	{"id": "wren", "name": "Sister Wren", "cls": "Lightbinder", "role": "healer", "role_lbl": "Healer", "r": "epic", "lvl": 45, "hp": 96.0, "mana": 82.0, "trait": "Heals the lowest ally every 4s."},
+	{"id": "mord", "name": "Mordrake", "cls": "Gravewarden", "role": "tank", "role_lbl": "Tank", "r": "epic", "lvl": 41, "hp": 100.0, "mana": 44.0, "trait": "Raises a bone wall at half health."},
+	{"id": "sera", "name": "Seraphine", "cls": "Dawncaller", "role": "healer", "role_lbl": "Healer", "r": "epic", "lvl": 39, "hp": 88.0, "mana": 90.0, "trait": "Revives once per delve."},
+	{"id": "korr", "name": "Korr", "cls": "Reaver", "role": "dps", "role_lbl": "DPS", "r": "rare", "lvl": 36, "hp": 80.0, "mana": 38.0, "trait": "Gains fury per kill, up to +40% speed."},
+	{"id": "tarn", "name": "Tarn", "cls": "Marksman", "role": "dps", "role_lbl": "DPS", "r": "rare", "lvl": 28, "hp": 64.0, "mana": 42.0, "trait": "Always strikes the farthest enemy."},
+	{"id": "wisp", "name": "Wisp", "cls": "Lantern", "role": "healer", "role_lbl": "Healer", "r": "rare", "lvl": 30, "hp": 58.0, "mana": 96.0, "trait": "Mana fountain aura for the party."},
+	{"id": "grub", "name": "Grub", "cls": "Ironshard", "role": "tank", "role_lbl": "Tank", "r": "common", "lvl": 12, "hp": 90.0, "mana": 20.0, "trait": "Cheap, loyal, surprisingly durable."},
+	{"id": "veyra", "name": "Veyra", "cls": "Stormcaller", "role": "mage", "role_lbl": "Mage", "r": "legendary", "lvl": 1, "hp": 60.0, "mana": 100.0, "trait": "Chain lightning arcs to 5 targets.", "locked": true},
+	{"id": "oszric", "name": "Oszric", "cls": "Plaguebinder", "role": "mage", "role_lbl": "Mage", "r": "epic", "lvl": 1, "hp": 58.0, "mana": 92.0, "trait": "Poison stacks never expire.", "locked": true},
+]
+
+const DEFAULT_PARTY_IDS: Array[String] = ["brand", "ash", "hex", "wren"]
+
+
+static func hero_by_id(id: String) -> Dictionary:
+	for h in HEROES:
+		if String(h["id"]) == id:
+			return h
+	return {}
+
+
+## Locked heroes join the collection once the altar gives them back: any
+## gacha summon (roster_extra) carrying the same name recruits them.
+static func hero_recruited(id: String) -> bool:
+	var hero := hero_by_id(id)
+	if hero.is_empty():
+		return false
+	if not bool(hero.get("locked", false)):
+		return true
+	for summoned in GameState.roster_extra:
+		if String((summoned as Dictionary).get("n", "")) == String(hero["name"]):
+			return true
+	return false
+
+
+## The live fighting four: lineup heroes wearing PARTY's battlefield anchors
+## (cluster x/y per slot) — mirrors the design's `{...PARTY[i], ...h, x, y}`.
+static func active_party() -> Array:
+	var out: Array = []
+	for i in PARTY.size():
+		var slot: Dictionary = PARTY[i]
+		var hero := hero_by_id(GameState.party_ids[i] if i < GameState.party_ids.size() else "")
+		var merged: Dictionary = slot.duplicate()
+		for key in hero:
+			merged[key] = hero[key]
+		merged["x"] = slot["x"]
+		merged["y"] = slot["y"]
+		out.append(merged)
+	return out
+
+
+## Team Aura diagnostics (design v2 PartyStore.aura): exactly 1 tank +
+## 1 healer + 2 damage dealers of DIFFERENT classes. msg explains the gap.
+static func aura_check(ids: Array) -> Dictionary:
+	var tanks := 0
+	var heals := 0
+	var dps_classes := {}
+	var dps_count := 0
+	for id in ids:
+		var h := hero_by_id(String(id))
+		if h.is_empty():
+			continue
+		match String(h["role"]):
+			"tank":
+				tanks += 1
+			"healer":
+				heals += 1
+			_:
+				dps_count += 1
+				dps_classes[h["cls"]] = true
+	var ok := tanks == 1 and heals == 1 and dps_count == 2 and dps_classes.size() == 2
+	var msg := "+18% all stats"
+	if not ok:
+		if tanks == 0:
+			msg = "Missing a tank"
+		elif tanks > 1:
+			msg = "Too many tanks"
+		elif heals == 0:
+			msg = "Missing a healer"
+		elif heals > 1:
+			msg = "Too many healers"
+		elif dps_classes.size() < 2 and dps_count >= 2:
+			msg = "DPS must differ"
+		else:
+			msg = "Need 2 damage dealers"
+	return {"ok": ok, "msg": msg}
+
+
 ## Enemies converge from multiple edges; dist drives depth (size/fade).
 const ENEMIES := [
 	{"id": "boss", "name": "Bone Warden", "x": 71.0, "y": 15.0, "hp": 100.0, "elite": true, "dist": "mid"},

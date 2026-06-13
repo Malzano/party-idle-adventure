@@ -137,6 +137,42 @@ func test_equip_from_bag_respects_slot_rules() -> void:
 	assert_eq(String((GameState.equipped[0] as Dictionary)["n"]), String(helm["n"]))
 
 
+func test_party_lineup_round_trip_and_rules() -> void:
+	# Swap semantics: putting Mordrake in slot 0 keeps the lineup dupe-free.
+	assert_true(GameState.set_party_slot(0, "mord"), "recruited hero slots in")
+	assert_eq(GameState.party_ids[0], "mord")
+	assert_false(GameState.party_ids.has("brand"), "brand left the lineup")
+	assert_true(GameState.set_party_slot(1, "mord"), "moving an in-party hero swaps")
+	assert_eq(GameState.party_ids[1], "mord")
+	assert_eq(GameState.party_ids[0], "ash", "the displaced hero takes the old slot")
+	assert_false(GameState.set_party_slot(0, "veyra"), "locked heroes cannot slot in")
+	assert_false(GameState.set_party_slot(0, "nope"), "unknown ids are refused")
+
+	var parsed: Variant = JSON.parse_string(JSON.stringify(GameState.to_dict()))
+	GameState.reset_to_defaults()
+	assert_eq(GameState.party_ids, GameContent.DEFAULT_PARTY_IDS, "defaults restore")
+	GameState.from_dict(parsed)
+	assert_eq(GameState.party_ids[1], "mord", "lineup survives the round-trip")
+
+	# Tampered lineups (dupes / unknown ids) are rejected — the loader keeps
+	# the current (default, in the real SaveManager flow) four.
+	GameState.reset_to_defaults()
+	GameState.from_dict({"party_lineup": ["mord", "mord", "hex", "wren"]})
+	assert_eq(GameState.party_ids, GameContent.DEFAULT_PARTY_IDS, "dupes rejected")
+
+
+func test_aura_check_diagnoses_compositions() -> void:
+	assert_true(bool(GameContent.aura_check(["brand", "ash", "hex", "wren"])["ok"]))
+	assert_eq(String(GameContent.aura_check(["brand", "mord", "ash", "wren"])["msg"]),
+		"Too many tanks")
+	assert_eq(String(GameContent.aura_check(["ash", "hex", "korr", "wren"])["msg"]),
+		"Missing a tank")
+	assert_eq(String(GameContent.aura_check(["brand", "ash", "hex", "korr"])["msg"]),
+		"Missing a healer")
+	assert_eq(String(GameContent.aura_check(["brand", "korr", "korr", "wren"])["msg"]),
+		"DPS must differ")
+
+
 func test_equip_swap_keeps_bag_position() -> void:
 	# Unequip the helm, then equip it back while ANOTHER helm sits in the
 	# slot: the occupant must swap into the same bag position.

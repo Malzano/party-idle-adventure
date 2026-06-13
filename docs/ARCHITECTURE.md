@@ -40,7 +40,7 @@ shared state; this client ships with a schema-faithful **mock mode** (see §Back
 ## 2. Boot & scene flow
 
 ```
-autoloads (in order): EventBus → GameState → SaveManager → CombatSim → WindowManager → BackendClient
+autoloads (in order): EventBus → GameState → SaveManager → CombatSim → WindowManager → BackendClient → UserSettings
                                    │ SaveManager._ready loads user://savegame.json (v2 JSON)
 main scene: scenes/login/Login.tscn
    ├─ GameState.has_profile()  → change_scene to scenes/main/Main.tscn
@@ -49,8 +49,12 @@ main scene: scenes/login/Login.tscn
 Main.tscn (the MAIN OS window — closing it autosaves + quits)
    └─ Fight scene (permanent) + NavRail + ResourceStrip
 Popup OS windows (WindowManager, hidden-not-freed on close, all can be open at once):
-   camp (hotkey 1) · hero (3) · leaderboard (L) · party (P)        [2 = focus main]
+   camp (1) · hero (3) · leaderboard (L) · party (P) · settings (rail gear)  [2 = focus main]
 ```
+
+UserSettings (autoload) holds DEVICE prefs (audio/display/combat) in
+`user://settings.cfg` — NOT the save blob — and applies V-Sync/fullscreen/master
+volume to the engine; gameplay readers query it (battlefield damage numbers).
 
 Popup windows render a fixed **1920×1080 "stage" Control, manually scale-to-fit**
 (`WindowManager._create`) — `Window.content_scale_*` is deliberately bypassed (it laid out
@@ -60,14 +64,18 @@ but didn't scale at render).
 
 ```
 autoload/
-  EventBus.gd        all cross-screen signals (sim_*, equipment_changed, party_changed, …)
+  EventBus.gd        all cross-screen signals (sim_*, equipment_changed, party_changed,
+                     lineup_changed, hero_tab_requested, settings_changed, …)
   GameState.gd       the live profile: identity/class, currencies, progression, equipment
-                     arrays, daily counters, party mirror; to_dict/from_dict (save schema v2,
-                     39 keys); equip_from_bag / unequip_to_bag / add_bag_item
+                     arrays, daily counters, party mirror, party_ids (the fighting four);
+                     to_dict/from_dict (save schema v2, 41 keys); equip_from_bag /
+                     unequip_to_bag / add_bag_item / set_party_slot (swap-safe lineup)
   SaveManager.gd     user://savegame.json, last_played_utc, offline elapsed (12 h cap),
                      v1→v2 migration (keeps timestamp, resets profile)
-  WindowManager.gd   popup window registry (_DEFS) + stage scaling + per-window hotkeys
+  WindowManager.gd   popup window registry (_DEFS) + stage scaling + per-window hotkeys;
+                     open_hero_tab(i) routes the Fight dock's MANAGE → Roster tab
   BackendClient.gd   THE network seam (§5)
+  UserSettings.gd    device prefs (settings.cfg) — applies V-Sync/fullscreen/volume
 systems/
   combat/CombatSim.gd    10 t/s sim: wave/stage HP pools (geometric), gold/xp/loot/level,
                          speed 1×/2×/4×, energy regen, offline_rewards
@@ -77,6 +85,7 @@ systems/
                          pet + relics + food + Team Aura + roster → derived stats + power
   data/GameContent.gd    every design table (party, gear, bag, pets, relics, gacha pool,
                          talent web via seeded PRNG, props, spawns, CLASSES, EQUIP_SLOTS,
+                         HEROES (12-hero collection + active_party/aura_check/hero_recruited),
                          chest item-gen MIRROR of srv lib/itemGen.ts — keep in sync!,
                          MOCK_DELVERS / MOCK_PARTY_NAMES for the mock party world)
   data/Balance.gd        balance.json loader + dot-path access + live-ops apply_overrides
@@ -96,7 +105,9 @@ scenes/
   hero/                  Hero window tabs (Q/W/E/R/T): EquipmentTab = 3-zone sheet/
                          paperdoll/inventory with full drag-and-drop (_DragCell), Pets
                          (summon-milestone unlocks), Relics (stage-milestone slots),
-                         Talents, Roster (gacha heroes: support DPS, dismiss-for-dust)
+                         Talents, Roster (design v2 party-selection: pick the fighting
+                         four, live Team Aura diagnostics, lock/recruit, slot-swap)
+  settings/Settings.gd   Options window (audio/display/combat) → UserSettings
   party/PartyFinder.gd   party window (§6) + FRIENDS & GUILD panel + join-by-code
   leaderboard/           season header, divisions, categories, ranked table
   ui/                    Palette · Style · Fonts · Tip (multi-window tooltips) · PixelSlot
@@ -143,10 +154,12 @@ docs/lore.md             lore bible: world, per-class act storylines, FACTION de
   (submit/get), season, config, party (list/mine/create/join — by id or `DELV-XXXX`
   code — /leave), friends (get/add), guild (get/join), mail (list/claim). Friends &
   guild live in the Party Finder's left column; mail is the Notice Board's MAIL tab.
-- **Save blob is `.strict()`-validated server-side (39 keys).** Never add keys to
+- **Save blob is `.strict()`-validated server-side (41 keys).** Never add keys to
   `GameState.to_dict()` without extending `srv/src/types/save.ts` in the same change
-  (defaulted, so old blobs stay valid). Client-only state (e.g. the mock party) goes in
-  `user://netstate.json` instead.
+  (defaulted, so old blobs stay valid). Client-only state (e.g. the mock party, device
+  settings) goes in `user://netstate.json` / `user://settings.cfg` instead. **`from_dict`
+  must emit `lineup_changed` when `party_ids` changes** — runtime adoption (409 conflict)
+  has to refresh the sim/HUD/battlefield, not just the boot path.
 
 ## 6. Party system (the "party game" core)
 

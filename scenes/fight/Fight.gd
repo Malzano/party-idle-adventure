@@ -27,6 +27,10 @@ var _pips: Array = []
 
 var _hp_bars: Array = []
 var _mana_bars: Array = []
+var _hp_nums: Array = []
+var _mana_nums: Array = []
+var _hud_box: HBoxContainer
+var _pf_slots: VBoxContainer
 
 var _loot_list: VBoxContainer
 var _speed_btns: Dictionary = {}
@@ -36,8 +40,9 @@ var _tog_adv: Dictionary = {}
 var _popup: PanelContainer
 
 # Mythic announcement ribbon (global SSR drops, under the wave bar).
-const _RIBBON_Y := 152.0
+const _RIBBON_Y := 188.0
 var _ribbon: PanelContainer
+var _aura_panel: PanelContainer
 var _rib_player: Label
 var _rib_item: Label
 var _ribbon_queue: Array = []
@@ -66,6 +71,7 @@ func _ready() -> void:
 	_build_popup()
 
 	EventBus.mythic_announced.connect(_on_mythic_announced)
+	EventBus.lineup_changed.connect(_on_lineup_changed, CONNECT_DEFERRED)
 	EventBus.sim_wave_progress.connect(_on_wave_progress)
 	EventBus.sim_wave_changed.connect(_on_wave_changed)
 	EventBus.sim_stage_changed.connect(_on_stage_changed)
@@ -112,11 +118,11 @@ func _build_wave_bar() -> void:
 	sb.content_margin_top = 10
 	sb.content_margin_bottom = 10
 	panel.add_theme_stylebox_override("panel", sb)
-	panel.custom_minimum_size = Vector2(560, 0)
+	panel.custom_minimum_size = Vector2(680, 0)
 	add_child(panel)
 	panel.resized.connect(_request_layout)
 	_hud_layouts.append(func(rs: Vector2) -> void:
-		panel.position = Vector2((rs.x - panel.size.x) * 0.5, 78.0))
+		panel.position = Vector2((rs.x - panel.size.x) * 0.5, 100.0))
 
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 16)
@@ -261,8 +267,8 @@ func _play_next_announcement() -> void:
 func _build_party_finder() -> void:
 	var panel := PanelContainer.new()
 	panel.add_theme_stylebox_override("panel", Style.panel_box(true))
-	panel.custom_minimum_size = Vector2(232, 0)
-	panel.position = Vector2(20, 80)
+	panel.custom_minimum_size = Vector2(280, 0)
+	panel.position = Vector2(20, 100)
 	add_child(panel)
 
 	var col := VBoxContainer.new()
@@ -288,23 +294,39 @@ func _build_party_finder() -> void:
 	head.add_child(hrow)
 	col.add_child(head)
 
-	# 4 member rows.
+	# 4 member rows (live lineup; rebuilt when the roster swaps heroes).
 	var pad := MarginContainer.new()
 	for m in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
 		pad.add_theme_constant_override(m, 8)
-	var slots := VBoxContainer.new()
-	slots.add_theme_constant_override("separation", 5)
-	pad.add_child(slots)
+	_pf_slots = VBoxContainer.new()
+	_pf_slots.add_theme_constant_override("separation", 5)
+	pad.add_child(_pf_slots)
 	col.add_child(pad)
-	for i in GameContent.PARTY.size():
-		slots.add_child(_pf_slot(GameContent.PARTY[i], i))
+	_fill_pf_slots()
 
-	# Party Finder window: solo → find one; partied → manage yours (hotkey P).
+	# Design v2 .pf-actions: MANAGE (the hero roster) beside FIND PARTY
+	# (the multiplayer notice board).
 	var bpad := MarginContainer.new()
 	bpad.add_theme_constant_override("margin_left", 8)
 	bpad.add_theme_constant_override("margin_right", 8)
 	bpad.add_theme_constant_override("margin_bottom", 8)
-	var finder := Style.make_button("FIND PARTY", "ghost", 11)
+	var actions := HBoxContainer.new()
+	actions.add_theme_constant_override("separation", 8)
+	bpad.add_child(actions)
+
+	var manage := Style.make_button("MANAGE", "ember", 10)
+	manage.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	manage.pressed.connect(func() -> void: WindowManager.open_hero_tab(4))
+	Tip.attach(manage, {
+		"name": "Hero Roster",
+		"type": "Hero window · T",
+		"rarity": "",
+		"flavor": "Choose which four heroes walk the Hollow.",
+	})
+	actions.add_child(manage)
+
+	var finder := Style.make_button("FIND PARTY", "ghost", 10)
+	finder.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	for st in ["normal", "hover", "pressed", "disabled"]:
 		var gsb := Style.btn_ghost_box("hover" if st == "hover" else "normal")
 		gsb.content_margin_top = 7
@@ -312,7 +334,7 @@ func _build_party_finder() -> void:
 		finder.add_theme_stylebox_override(st, gsb)
 	finder.pressed.connect(func() -> void: WindowManager.open(WindowManager.WIN_PARTY))
 	var relabel := func() -> void:
-		finder.text = ("MANAGE PARTY · %d/4" % int(GameState.party.get("member_count", 1))) \
+		finder.text = ("PARTY · %d/4" % int(GameState.party.get("member_count", 1))) \
 			if GameState.in_party() else "FIND PARTY"
 	EventBus.party_changed.connect(relabel)
 	relabel.call()
@@ -322,12 +344,21 @@ func _build_party_finder() -> void:
 		"rarity": "",
 		"flavor": "Group with other delvers; presence syncs while the party fights.",
 	})
-	bpad.add_child(finder)
+	actions.add_child(finder)
 	col.add_child(bpad)
 
 	var rivets := _Rivets.new()
 	rivets.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(rivets)
+
+
+func _fill_pf_slots() -> void:
+	for child in _pf_slots.get_children():
+		_pf_slots.remove_child(child)
+		child.queue_free()
+	var lineup := GameContent.active_party()
+	for i in lineup.size():
+		_pf_slots.add_child(_pf_slot(lineup[i], i))
 
 
 func _pf_slot(h: Dictionary, idx: int) -> Control:
@@ -396,9 +427,22 @@ func _pf_slot_box(hover: bool) -> StyleBoxFlat:
 # Team Aura badge (top-right, below the floating resource strip)
 # =========================================================================
 
+## The badge is lineup-live (the roster can swap heroes at any time), so it
+## rebuilds via _fill_team_aura; ONE persistent layout closure tracks the
+## current panel (per-rebuild closures would dangle over freed nodes).
 func _build_team_aura() -> void:
+	_hud_layouts.append(func(rs: Vector2) -> void:
+		if is_instance_valid(_aura_panel):
+			_aura_panel.position = Vector2(rs.x - 20.0 - _aura_panel.size.x, 100.0))
+	_fill_team_aura()
+
+
+func _fill_team_aura() -> void:
+	if is_instance_valid(_aura_panel):
+		_aura_panel.queue_free()
 	var optimal: bool = CombatSim.team_aura_optimal()
 	var panel := PanelContainer.new()
+	_aura_panel = panel
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color("161210")
 	sb.set_border_width_all(1)
@@ -415,8 +459,6 @@ func _build_team_aura() -> void:
 	panel.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	add_child(panel)
 	panel.resized.connect(_request_layout)
-	_hud_layouts.append(func(rs: Vector2) -> void:
-		panel.position = Vector2(rs.x - 20.0 - panel.size.x, 80.0))
 
 	var tip := {
 		"name": "Team Aura: Optimal" if optimal else "Team Aura: Unbalanced",
@@ -458,10 +500,10 @@ func _build_team_aura() -> void:
 func _build_loot_ticker() -> void:
 	var panel := PanelContainer.new()
 	panel.add_theme_stylebox_override("panel", Style.panel_box(true))
-	panel.custom_minimum_size = Vector2(232, 0)
+	panel.custom_minimum_size = Vector2(260, 0)
 	add_child(panel)
 	_hud_layouts.append(func(rs: Vector2) -> void:
-		panel.position = Vector2(rs.x - 20.0 - 232.0, 146.0))
+		panel.position = Vector2(rs.x - 20.0 - 260.0, 170.0))
 
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 0)
@@ -503,7 +545,7 @@ func _push_loot(entry: Array, animate: bool) -> void:
 	row.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	for k in ["normal_font_size", "bold_font_size", "italics_font_size", "bold_italics_font_size"]:
-		row.add_theme_font_size_override(k, 11)
+		row.add_theme_font_size_override(k, Style.fs(11))
 	var italic := Fonts.display_italic()
 	if italic != null:
 		row.add_theme_font_override("italics_font", italic)
@@ -539,19 +581,32 @@ func _loot_slide_in(row: Control) -> void:
 # =========================================================================
 
 func _build_hero_hud() -> void:
-	var hud := HBoxContainer.new()
-	hud.add_theme_constant_override("separation", 8)
-	add_child(hud)
-	hud.resized.connect(_request_layout)
+	_hud_box = HBoxContainer.new()
+	_hud_box.add_theme_constant_override("separation", 8)
+	add_child(_hud_box)
+	_hud_box.resized.connect(_request_layout)
 	_hud_layouts.append(func(rs: Vector2) -> void:
-		hud.position = Vector2(16.0, rs.y - 18.0 - hud.size.y))
-	for i in GameContent.PARTY.size():
-		hud.add_child(_hero_frame(GameContent.PARTY[i], i))
+		_hud_box.position = Vector2(16.0, rs.y - 18.0 - _hud_box.size.y))
+	_fill_hero_hud()
+
+
+## (Re)build the four frames from the live lineup (design v2: editable party).
+func _fill_hero_hud() -> void:
+	for child in _hud_box.get_children():
+		_hud_box.remove_child(child)
+		child.queue_free()
+	_hp_bars.clear()
+	_mana_bars.clear()
+	_hp_nums.clear()
+	_mana_nums.clear()
+	var lineup := GameContent.active_party()
+	for i in lineup.size():
+		_hud_box.add_child(_hero_frame(lineup[i], i))
 
 
 func _hero_frame(h: Dictionary, idx: int) -> Control:
 	var frame := Control.new()
-	frame.custom_minimum_size = Vector2(216, 72)
+	frame.custom_minimum_size = Vector2(252, 84)
 	frame.mouse_filter = Control.MOUSE_FILTER_STOP
 	frame.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	Tip.attach(frame, {
@@ -637,12 +692,16 @@ func _hero_frame(h: Dictionary, idx: int) -> Control:
 		hp0 = float(CombatSim.party_hp[idx])
 	if idx < CombatSim.party_mana.size():
 		mana0 = float(CombatSim.party_mana[idx])
-	var hp_bar := StatBar.new("hp", hp0, 8.0)
+	# Readability pass: taller bars carrying their live values (design v2
+	# .bar-num — "184k" HP / "9.2k" mana riding the fill).
+	var hp_bar := StatBar.new("hp", hp0, 13.0)
 	bars.add_child(hp_bar)
 	_hp_bars.append(hp_bar)
-	var mana_bar := StatBar.new("mana", mana0, 6.0)
+	_hp_nums.append(_bar_num(hp_bar, _hp_num_text(hp0)))
+	var mana_bar := StatBar.new("mana", mana0, 11.0)
 	bars.add_child(mana_bar)
 	_mana_bars.append(mana_bar)
+	_mana_nums.append(_bar_num(mana_bar, _mana_num_text(mana0)))
 	row.add_child(bars)
 
 	# 3 skill pips: first ready (ember + glow), others shaded cooldowns.
@@ -654,6 +713,30 @@ func _hero_frame(h: Dictionary, idx: int) -> Control:
 		skills.add_child(_SkillPip.new(s == 0, float(s) * 0.3))
 	row.add_child(skills)
 	return frame
+
+
+## Live value riding the bar fill (design .bar-num), right-aligned.
+func _bar_num(bar: StatBar, text: String) -> Label:
+	var num := Style.pixel_label(text, 7, Color(1, 1, 1, 0.92))
+	num.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	num.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	num.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	num.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+	num.add_theme_constant_override("shadow_offset_x", 0)
+	num.add_theme_constant_override("shadow_offset_y", 1)
+	bar.add_child(num)
+	num.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	num.offset_right = -4
+	return num
+
+
+## Design v2 value mapping: 100% HP reads 184k, 100% mana 9.2k.
+func _hp_num_text(pct: float) -> String:
+	return "%dK" % roundi(pct * 1.84)
+
+
+func _mana_num_text(pct: float) -> String:
+	return "%.1fK" % (pct * 0.092)
 
 
 # =========================================================================
@@ -694,7 +777,7 @@ func _build_controls() -> void:
 		var pf := Fonts.pixel()
 		if pf != null:
 			b.add_theme_font_override("font", pf)
-		b.add_theme_font_size_override("font_size", 10)
+		b.add_theme_font_size_override("font_size", Style.fs(10))
 		b.custom_minimum_size = Vector2(30, 28)
 		b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 		var speed := int(s)
@@ -926,7 +1009,7 @@ func _build_popup() -> void:
 	var x := Button.new()
 	x.text = "✕"
 	x.focus_mode = Control.FOCUS_NONE
-	x.add_theme_font_size_override("font_size", 18)
+	x.add_theme_font_size_override("font_size", Style.fs(18))
 	x.add_theme_color_override("font_color", Palette.TX_DIM)
 	x.add_theme_color_override("font_hover_color", Palette.EMBER_BRIGHT)
 	x.add_theme_color_override("font_pressed_color", Palette.EMBER_BRIGHT)
@@ -1015,6 +1098,14 @@ func _on_stage_changed(label_text: String, stage_name: String) -> void:
 	_on_wave_changed(CombatSim.wave)
 
 
+## The roster swapped a hero in/out: refresh every lineup-bound surface.
+func _on_lineup_changed() -> void:
+	_fill_hero_hud()
+	_fill_pf_slots()
+	_fill_team_aura()
+	_request_layout()
+
+
 func _on_loot(entry: Array) -> void:
 	_push_loot(entry, true)
 
@@ -1022,8 +1113,12 @@ func _on_loot(entry: Array) -> void:
 func _on_party_vitals(hp: Array, mana: Array) -> void:
 	for i in mini(_hp_bars.size(), hp.size()):
 		(_hp_bars[i] as StatBar).pct = float(hp[i])
+		if i < _hp_nums.size():
+			(_hp_nums[i] as Label).text = _hp_num_text(float(hp[i]))
 	for i in mini(_mana_bars.size(), mana.size()):
 		(_mana_bars[i] as StatBar).pct = float(mana[i])
+		if i < _mana_nums.size():
+			(_mana_nums[i] as Label).text = _mana_num_text(float(mana[i]))
 
 
 func _on_speed_changed(speed: int) -> void:

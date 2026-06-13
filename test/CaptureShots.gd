@@ -82,7 +82,19 @@ func _run() -> void:
 	hero.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	await get_tree().create_timer(1.2).timeout
 	await _snap("08_hero_equipment")
+
+	# Roster tab (design v2 party selection) on the same hero window.
+	hero.call("_select_tab", 4)
+	await get_tree().create_timer(0.8).timeout
+	await _snap("09_hero_roster")
 	hero.queue_free()
+
+	var settings := preload("res://scenes/settings/Settings.tscn").instantiate() as Control
+	add_child(settings)
+	settings.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	await get_tree().create_timer(0.8).timeout
+	await _snap("10_settings")
+	settings.queue_free()
 
 	print("CAPTURE_DONE")
 	get_tree().quit()

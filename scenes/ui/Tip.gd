@@ -128,7 +128,7 @@ class TipLayer:
 		if type_text != "":
 			var type_lbl := Label.new()
 			type_lbl.text = type_text.to_upper()
-			type_lbl.add_theme_font_size_override("font_size", 10)
+			type_lbl.add_theme_font_size_override("font_size", Style.fs(10))
 			type_lbl.add_theme_color_override("font_color", Palette.TX_MUTE)
 			head_col.add_child(type_lbl)
 		head.add_child(head_col)
@@ -147,13 +147,13 @@ class TipLayer:
 				row.add_theme_constant_override("separation", 18)
 				var k := Label.new()
 				k.text = String(s[0])
-				k.add_theme_font_size_override("font_size", 12)
+				k.add_theme_font_size_override("font_size", Style.fs(12))
 				k.add_theme_color_override("font_color", Palette.TX_DIM)
 				k.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 				row.add_child(k)
 				var v := Label.new()
 				v.text = String(s[1])
-				v.add_theme_font_size_override("font_size", 12)
+				v.add_theme_font_size_override("font_size", Style.fs(12))
 				v.add_theme_color_override("font_color", Palette.CYAN_BRIGHT)
 				row.add_child(v)
 				body_col.add_child(row)
@@ -168,7 +168,7 @@ class TipLayer:
 			_margins(flav, 12, 12, 7, 10)
 			var f := Style.display_label("“%s”" % flavor, 11, Palette.TX_MUTE, true)
 			f.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			f.custom_minimum_size = Vector2(220, 0)
+			f.custom_minimum_size = Vector2(264, 0)
 			flav.add_child(f)
 			_column.add_child(flav)
 

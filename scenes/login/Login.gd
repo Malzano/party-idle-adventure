@@ -297,7 +297,7 @@ func _build_begin_block() -> void:
 	_name_edit.add_theme_color_override("font_color", Palette.TX)
 	_name_edit.add_theme_color_override("font_placeholder_color", Palette.TX_FAINT)
 	_name_edit.add_theme_color_override("caret_color", Palette.EMBER_BRIGHT)
-	_name_edit.add_theme_font_size_override("font_size", 16)
+	_name_edit.add_theme_font_size_override("font_size", Style.fs(16))
 	_name_edit.text_submitted.connect(func(_t: String) -> void: _begin())
 	col.add_child(_name_edit)
 

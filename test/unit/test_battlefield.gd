@@ -36,6 +36,30 @@ func test_scrolled_off_chest_unregisters_its_pulse() -> void:
 	pass_test("no freed-object cast in _process")
 
 
+func test_lineup_swap_reclaims_hero_bobs() -> void:
+	# Swapping the fighting four frees the old hero sprites; their stride
+	# bobs MUST be unregistered or the next _process casts a freed object.
+	var bf: Control = load("res://scenes/fight/Battlefield.gd").new()
+	add_child_autofree(bf)
+	bf.size = Vector2(1600, 900)
+	await get_tree().process_frame
+
+	assert_eq(bf._hero_units.size(), GameState.party_ids.size(), "four heroes spawned")
+	var old_sprite: Object = bf._hero_units[0].get_meta("sprite")
+
+	GameState.set_party_slot(0, "mord")  # emits lineup_changed
+	await get_tree().process_frame  # deferred connection fires
+	await get_tree().process_frame
+
+	for b in bf._bobs:
+		assert_ne(b["node"], old_sprite, "the freed hero's bob is unregistered")
+	assert_false(is_instance_valid(old_sprite), "old hero sprite was freed")
+
+	# The freed sprites must never be touched by the per-frame bob loop.
+	bf._process(0.016)
+	pass_test("no freed-object cast after lineup swap")
+
+
 func test_despawn_chest_is_idempotent() -> void:
 	var bf: Control = load("res://scenes/fight/Battlefield.gd").new()
 	add_child_autofree(bf)

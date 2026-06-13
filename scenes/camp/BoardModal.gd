@@ -68,7 +68,7 @@ func _build_tabbar() -> Control:
 		var f := Fonts.display()
 		if f != null:
 			b.add_theme_font_override("font", f)
-		b.add_theme_font_size_override("font_size", 13)
+		b.add_theme_font_size_override("font_size", Style.fs(13))
 		b.pressed.connect(_set_tab.bind(id))
 		_tab_btns[id] = b
 		row.add_child(b)

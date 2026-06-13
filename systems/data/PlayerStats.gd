@@ -65,11 +65,11 @@ static func compute() -> Dictionary:
 	if GameState.food_buff_active():
 		block.apply_effect(GameState.food_buff_effect)
 
-	# --- Party DPS ------------------------------------------------------------
+	# --- Party DPS (the live lineup, not the design template) -----------------
 	var base_dps := 0.0
 	var bases: Dictionary = Balance.value("heroes.base_dps", {})
-	for h in GameContent.PARTY:
-		base_dps += float(bases.get(String(h["id"]), 250000.0))
+	for id in GameState.party_ids:
+		base_dps += float(bases.get(String(id), 250000.0))
 
 	var half := Balance.num("dps_model.half_coef", 0.5)
 	var dps_mult := 1.0 + block.get_inc("all_damage") \
@@ -138,19 +138,9 @@ static func compute() -> Dictionary:
 
 
 ## Team Aura: exactly 1 tank + 1 healer + 2 DPS of different classes (§2).
+## Evaluates the LIVE lineup; diagnostics live in GameContent.aura_check.
 static func team_aura_optimal() -> bool:
-	var tanks := 0
-	var healers := 0
-	var dps_classes := {}
-	for h in GameContent.PARTY:
-		match String(h["role"]):
-			"tank":
-				tanks += 1
-			"healer":
-				healers += 1
-			_:
-				dps_classes[h["cls"]] = true
-	return tanks == 1 and healers == 1 and dps_classes.size() == 2
+	return bool(GameContent.aura_check(GameState.party_ids)["ok"])
 
 
 ## The forge-upgraded weapon's stat pairs, scaled by stat_growth^(levels above

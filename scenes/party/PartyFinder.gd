@@ -94,7 +94,7 @@ func _build_head() -> Control:
 	x.focus_mode = Control.FOCUS_NONE
 	x.custom_minimum_size = Vector2(36, 36)
 	x.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	x.add_theme_font_size_override("font_size", 18)
+	x.add_theme_font_size_override("font_size", Style.fs(18))
 	x.add_theme_color_override("font_color", Palette.TX_DIM)
 	x.add_theme_color_override("font_hover_color", Palette.EMBER_BRIGHT)
 	x.add_theme_color_override("font_pressed_color", Palette.EMBER_BRIGHT)
@@ -344,7 +344,7 @@ func _styled_edit(placeholder: String, font_size: int) -> LineEdit:
 	e.add_theme_color_override("font_color", Palette.TX)
 	e.add_theme_color_override("font_placeholder_color", Palette.TX_FAINT)
 	e.add_theme_color_override("caret_color", Palette.EMBER_BRIGHT)
-	e.add_theme_font_size_override("font_size", font_size)
+	e.add_theme_font_size_override("font_size", Style.fs(font_size))
 	return e
 
 

@@ -28,7 +28,7 @@ func _ready() -> void:
 	var pad := MarginContainer.new()
 	pad.add_theme_constant_override("margin_left", 22)
 	pad.add_theme_constant_override("margin_right", 22)
-	pad.add_theme_constant_override("margin_top", 78)
+	pad.add_theme_constant_override("margin_top", 92)
 	pad.add_theme_constant_override("margin_bottom", 18)
 	add_child(pad)
 	pad.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -55,6 +55,7 @@ func _ready() -> void:
 
 	_select_tab(0)
 	EventBus.sim_stats_changed.connect(_refresh_power)
+	EventBus.hero_tab_requested.connect(_select_tab)
 
 
 func _refresh_power() -> void:
