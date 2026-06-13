@@ -1,0 +1,10 @@
+{
+	"id": "buildings.camp",
+	"kind": "building",
+	"sprites": {
+		"altar": "altar.png",
+		"board": "board.png",
+		"forge": "forge.png",
+		"kitchen": "kitchen.png"
+	}
+}

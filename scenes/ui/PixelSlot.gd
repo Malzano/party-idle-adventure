@@ -11,18 +11,37 @@ const _BORDER := Color(0.588, 0.51, 0.353, 0.32)
 
 @export var label_text: String = ""
 @export var lit: bool = false
+## Optional static art: if AssetManager has this bundle's texture it renders
+## here instead of the placeholder checker. Lets non-animated art (login class
+## figures, camp buildings, chest, portraits) drop in with no call-site change.
+@export var bundle_id: String = ""
+@export var sprite_key: String = ""
 
 var _label: Label
 
 
-func _init(p_label: String = "", p_lit: bool = false) -> void:
+func _init(p_label: String = "", p_lit: bool = false, p_bundle: String = "", p_key: String = "") -> void:
 	label_text = p_label
 	lit = p_lit
+	bundle_id = p_bundle
+	sprite_key = p_key
 
 
 func _ready() -> void:
 	clip_contents = true
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Real static art when present → skip the placeholder entirely.
+	if bundle_id != "" and AssetManager.has(bundle_id):
+		var tex := AssetManager.get_texture(bundle_id, sprite_key)
+		if tex != null:
+			var rect := TextureRect.new()
+			rect.texture = tex
+			rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			add_child(rect)
+			rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+			return
 	if label_text != "":
 		_label = Style.pixel_label(label_text.to_upper(), 8, Palette.TX_MUTE)
 		_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

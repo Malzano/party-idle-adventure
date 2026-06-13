@@ -1,0 +1,7 @@
+{
+	"id": "class.hunter",
+	"kind": "hero",
+	"sprites": {
+		"fig": "fig.png"
+	}
+}

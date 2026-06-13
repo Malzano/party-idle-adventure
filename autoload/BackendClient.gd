@@ -54,6 +54,7 @@ func _process(delta: float) -> void:
 		_sync_accum = 0.0
 		sync_combat()
 		poll_announcements()
+		AssetManager.sync_catalog()  # hot content: new skins/items reflect w/o restart
 		if GameState.in_party():
 			party_mine()  # presence refresh for the Party Finder
 
@@ -879,6 +880,53 @@ func _ensure_mock_mail() -> void:
 		},
 	]
 	_save_netstate()
+
+
+# =========================================================================
+# Assets (/v1/assets/manifest) — the thin remote-sprite catalog. Bytes are
+# fetched straight from the CDN by AssetManager, NOT through here. No auth
+# (boot-path, like /v1/config). Mock returns the same schema the server's
+# DEFAULT_CATALOG produces, with bundle urls pointing at res:// core folders
+# so the whole pipeline runs offline.
+# =========================================================================
+
+## GET /v1/assets/manifest?since= — {catalog_version, cdn_base, bundles[]}.
+func assets_manifest(since: int = 0) -> Dictionary:
+	if mock:
+		var cat := _mock_asset_catalog()
+		# Equality gate, matching the server (catalog_version is an opaque
+		# content token, not monotonic).
+		if since == int(cat["catalog_version"]):
+			return _wrap(200, {"catalog_version": cat["catalog_version"], "cdn_base": "",
+				"bundles": [], "unchanged": true})
+		return _wrap(200, cat)
+	return await _api("GET", "/v1/assets/manifest?since=%d" % since, {}, false)
+
+
+## Mirror of the server's DEFAULT_CATALOG (src/types/assets.ts). Core bundles
+## are baked into the build (res://assets/core/<id>/); standard/lazy stream in
+## live mode. In mock, every bundle resolves from res:// if its folder exists,
+## else AssetManager falls back to the labeled placeholder — so missing art
+## never breaks the game.
+func _mock_asset_catalog() -> Dictionary:
+	return {
+		"catalog_version": 1,
+		"cdn_base": "",
+		"bundles": [
+			{"id": "ui.core", "kind": "ui", "version": 1, "hash": "core", "bytes": 0, "url": "", "priority": "core", "deps": []},
+			{"id": "hero.warrior", "kind": "hero", "version": 1, "hash": "core", "bytes": 0, "url": "", "priority": "core", "deps": []},
+			{"id": "hero.mage", "kind": "hero", "version": 1, "hash": "core", "bytes": 0, "url": "", "priority": "core", "deps": []},
+			{"id": "hero.hunter", "kind": "hero", "version": 1, "hash": "core", "bytes": 0, "url": "", "priority": "core", "deps": []},
+			{"id": "hero.rogue", "kind": "hero", "version": 1, "hash": "core", "bytes": 0, "url": "", "priority": "core", "deps": []},
+			{"id": "enemy.ghoul", "kind": "enemy", "version": 1, "hash": "core", "bytes": 0, "url": "", "priority": "core", "deps": []},
+			{"id": "enemy.skeleton", "kind": "enemy", "version": 1, "hash": "core", "bytes": 0, "url": "", "priority": "core", "deps": []},
+			{"id": "enemy.elite", "kind": "enemy", "version": 1, "hash": "s-elite-1", "bytes": 240000, "url": "bundles/enemy.elite.v1.pkg", "priority": "standard", "deps": []},
+			{"id": "props.dungeon", "kind": "prop", "version": 1, "hash": "s-props-1", "bytes": 180000, "url": "bundles/props.dungeon.v1.pkg", "priority": "standard", "deps": []},
+			{"id": "buildings.camp", "kind": "building", "version": 1, "hash": "s-bld-1", "bytes": 320000, "url": "bundles/buildings.camp.v1.pkg", "priority": "standard", "deps": []},
+			{"id": "skin.warrior.ashen", "kind": "skin", "version": 1, "hash": "z-wsk-1", "bytes": 90000, "url": "bundles/skin.warrior.ashen.v1.pkg", "priority": "lazy", "deps": ["hero.warrior"]},
+			{"id": "skin.mage.cinder", "kind": "skin", "version": 1, "hash": "z-msk-1", "bytes": 90000, "url": "bundles/skin.mage.cinder.v1.pkg", "priority": "lazy", "deps": ["hero.mage"]},
+		],
+	}
 
 
 ## GET /v1/config — no auth; safe pre-login.

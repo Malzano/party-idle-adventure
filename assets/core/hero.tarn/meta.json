@@ -1,0 +1,26 @@
+{
+	"anims": {
+		"idle": {
+			"dirs": [
+				"se"
+			],
+			"fps": 3,
+			"frames": 2,
+			"loop": true,
+			"sheet": "idle.png"
+		},
+		"walk": {
+			"dirs": [
+				"se"
+			],
+			"fps": 8,
+			"frames": 4,
+			"loop": true,
+			"sheet": "walk.png"
+		}
+	},
+	"frame_h": 48,
+	"frame_w": 32,
+	"id": "hero.tarn",
+	"kind": "hero"
+}

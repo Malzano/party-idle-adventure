@@ -87,6 +87,11 @@ func _run() -> void:
 	hero.call("_select_tab", 4)
 	await get_tree().create_timer(0.8).timeout
 	await _snap("09_hero_roster")
+
+	# Talents tab (PoE-style unique notables/keystones).
+	hero.call("_select_tab", 3)
+	await get_tree().create_timer(1.0).timeout
+	await _snap("11_hero_talents")
 	hero.queue_free()
 
 	var settings := preload("res://scenes/settings/Settings.tscn").instantiate() as Control

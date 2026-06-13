@@ -29,6 +29,7 @@ CombatSim="*res://systems/combat/CombatSim.gd"
 WindowManager="*res://autoload/WindowManager.gd"
 BackendClient="*res://autoload/BackendClient.gd"
 UserSettings="*res://autoload/UserSettings.gd"
+AssetManager="*res://autoload/AssetManager.gd"
 
 [debug]
 

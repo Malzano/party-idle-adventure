@@ -145,6 +145,21 @@ var daily_chests: int = 0
 ## "party_lineup". Edited in the Hero window's ROSTER tab.
 var party_ids: Array[String] = ["brand", "ash", "hex", "wren"]
 
+## hero_id -> equipped skin bundle id (AssetManager). Empty = base art.
+## Saved as "hero_skins"; cosmetic only (no stat effect).
+var hero_skins: Dictionary = {}
+
+
+## Equip/clear a hero's cosmetic skin. Triggers the lazy bundle download and
+## rebuilds the lineup-bound surfaces (battlefield renders the new art).
+func set_hero_skin(hero_id: String, skin_id: String) -> void:
+	if skin_id == "":
+		hero_skins.erase(hero_id)
+	else:
+		hero_skins[hero_id] = skin_id
+		AssetManager.request(skin_id)  # ensure the lazy skin bundle is present
+	EventBus.lineup_changed.emit()
+
 
 ## Put [param hero_id] into [param slot] (design PartyStore.assign): if the
 ## hero already holds another slot the two swap, so the lineup never dupes.
@@ -410,6 +425,7 @@ func reset_to_defaults() -> void:
 	daily_chests = 0
 	party = {}
 	party_ids = GameContent.DEFAULT_PARTY_IDS.duplicate()
+	hero_skins = {}
 	food_buff = ""
 	food_buff_effect = ""
 	food_buff_until = 0
@@ -456,6 +472,7 @@ func to_dict() -> Dictionary:
 		"bag_equipment": bag_equipment,
 		"daily_chests": daily_chests,
 		"party_lineup": party_ids,
+		"hero_skins": hero_skins,
 		"food_buff": food_buff,
 		"food_buff_effect": food_buff_effect,
 		"food_buff_until": food_buff_until,
@@ -526,9 +543,11 @@ func from_dict(data: Dictionary) -> void:
 		if valid:
 			for i in party_ids.size():
 				party_ids[i] = String((lineup_v as Array)[i])
+	var skins_v: Variant = data.get("hero_skins", {})
+	hero_skins = (skins_v as Dictionary).duplicate() if typeof(skins_v) == TYPE_DICTIONARY else {}
 	# Runtime loads (e.g. adopting the server save on a 409) must refresh the
 	# lineup-bound surfaces; at boot nothing listens yet, so this is free.
-	if party_ids != old_lineup:
+	if party_ids != old_lineup or not hero_skins.is_empty():
 		EventBus.lineup_changed.emit.call_deferred()
 	food_buff = str(data.get("food_buff", food_buff))
 	food_buff_effect = str(data.get("food_buff_effect", food_buff_effect))

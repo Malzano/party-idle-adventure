@@ -1,0 +1,7 @@
+{
+	"id": "class.rogue",
+	"kind": "hero",
+	"sprites": {
+		"fig": "fig.png"
+	}
+}

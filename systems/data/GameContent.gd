@@ -55,6 +55,13 @@ static func hero_by_id(id: String) -> Dictionary:
 	return {}
 
 
+## The asset bundle a hero renders from: its equipped skin if one is set,
+## else the base "hero.<id>" bundle. AssetManager resolves art (or placeholder).
+static func hero_bundle(hero_id: String) -> String:
+	var skin := String(GameState.hero_skins.get(hero_id, ""))
+	return skin if skin != "" else "hero." + hero_id
+
+
 ## Locked heroes join the collection once the altar gives them back: any
 ## gacha summon (roster_extra) carrying the same name recruits them.
 static func hero_recruited(id: String) -> bool:
@@ -615,22 +622,118 @@ const MINOR := {
 	"LUCK": ["+8 Luck", "+4% Item Rarity", "+3% Crit Chance", "+5% Gold Find"],
 }
 
+# Unique NOTABLE talents (PoE-style): named nodes with strong, distinct
+# effects. The first parseable "+X% Y / +X Y" clauses feed StatBlock (real
+# stats); trailing prose is flavor the parser ignores. ~10 per arm so the
+# tree reads as a web of distinct skills (assigned without repetition).
 const NOTABLE := {
-	"Might": [["Reaver's Wrath", "+24% Melee Damage · +30 Strength"], ["Ironhide", "+18% Armour · +40 Max Life"]],
-	"Precision": [["Deadeye", "+12% Crit Multiplier · +20 Accuracy"], ["Fleetfoot", "+10% Attack Speed · +8% Evasion"]],
-	"Arcana": [["Manaweaver", "+30 Max Mana · +12% Spell Damage"], ["Hexbloom", "Curses spread to nearby foes"]],
-	"Endurance": [["Bulwark", "+60 Max Life · +14% Block"], ["Last Stand", "+40% Recovery below 35% Life"]],
-	"Fortune": [["Goldtongue", "+18% Gold Find · +6% Rarity"], ["Fated", "+8% Crit · +12% Rarity"]],
-	"Ruin": [["Cinderbrand", "Ignites deal +40% damage"], ["Scorched Earth", "+25% Burn duration"]],
+	"Might": [
+		["Reaver's Wrath", "+24% Melee Damage · +30 Strength"],
+		["Ironhide", "+18% Armour · +40 Maximum Life"],
+		["Bonecrusher", "+20% Melee Damage · +8% Stun"],
+		["Titan's Grip", "+35 Strength · +12% Physical Damage"],
+		["Bloodhunger", "+15% Melee Damage · Leech 4% of damage as Life"],
+		["Warbringer", "+10% Attack Speed · +18% Melee Damage"],
+		["Crushing Blows", "+25% Crit Multiplier · +6% Melee Damage"],
+		["Unflinching", "+60 Maximum Life · Cannot be knocked back"],
+		["Berserker's Call", "+22% Melee Damage · stronger below half Life"],
+		["Mountainous", "+24% Armour · +20 Strength"],
+	],
+	"Precision": [
+		["Deadeye", "+12% Crit Multiplier · +20 Accuracy"],
+		["Fleetfoot", "+10% Attack Speed · +8% Evasion"],
+		["Hawkeye", "+18% Accuracy · +6% Crit Chance"],
+		["Phantom Step", "+12% Evasion · +6% Movement Speed"],
+		["Lacerate", "+15 Dexterity · +12% Attack Speed · Bleed on hit"],
+		["Twinstrike", "+12% Attack Speed · chance to strike twice"],
+		["Vital Aim", "+8% Crit Chance · +20% damage to full-life foes"],
+		["Windrunner", "+14% Movement Speed · +8% Attack Speed"],
+		["Pinpoint", "+25% Crit Multiplier · +15 Accuracy"],
+		["Evasive Dance", "+16% Evasion · +20 Dexterity"],
+	],
+	"Arcana": [
+		["Manaweaver", "+30 Maximum Mana · +12% Spell Damage"],
+		["Hexbloom", "+20 Intelligence · Curses spread to nearby foes"],
+		["Spellfire", "+18% Spell Damage · +6% Cast Speed"],
+		["Mind Over Matter", "+24 Intelligence · pay 20% of damage from Mana"],
+		["Arcane Surge", "+25% Spell Damage after spending Mana"],
+		["Frostbite", "+18% Cold Damage · +8% Freeze chance"],
+		["Soul Siphon", "+12% Spell Damage · cursed kills restore Mana"],
+		["Runescarred", "+24 Intelligence · +10% Spell Damage"],
+		["Overcharge", "+30% Spell Damage · -10% Cast Speed"],
+		["Whispering Doom", "+15 Intelligence · apply an additional Curse"],
+	],
+	"Endurance": [
+		["Bulwark", "+60 Maximum Life · +14% Block"],
+		["Last Stand", "+40% Life Recovery below 35% Life"],
+		["Stonewall", "+20% Armour · +10% Block"],
+		["Sanguine", "+80 Maximum Life · +6% Life Regen"],
+		["Indomitable", "+12% Block · Cannot be Frozen"],
+		["Wellspring", "+20% Life Regen · +40 Maximum Life"],
+		["Thick Skin", "+24% Armour · +30 Vitality"],
+		["Second Wind", "+50 Maximum Life · recover Life on a killing blow"],
+		["Bastion", "+18% Block · +50 Maximum Life"],
+		["Lifeblood", "+30% Life Recovery · +20 Vitality"],
+	],
+	"Fortune": [
+		["Goldtongue", "+18% Gold Find · +6% Item Rarity"],
+		["Fated", "+8% Crit Chance · +12% Item Rarity"],
+		["Greedy", "+24% Gold Find · +10 Luck"],
+		["Treasurehunter", "+14% Item Rarity · +8% Gold Find"],
+		["Lucky Strike", "+10% Crit Chance · +8 Luck"],
+		["Windfall", "+10% Item Rarity · slain foes drop more"],
+		["Silver Tongue", "+30% Gold Find · -5% Item Rarity"],
+		["Charmed", "+12% Item Rarity · +6% Crit Multiplier"],
+		["Prospector", "+20% Gold Find · +5% XP Gain"],
+		["Cardsharp", "+14% Crit Chance · +10% Item Rarity"],
+	],
+	"Ruin": [
+		["Cinderbrand", "+18% Fire Damage · Ignites deal +40% damage"],
+		["Scorched Earth", "+12% Fire Damage · +25% Burn duration"],
+		["Immolate", "+20% Fire Damage · Ignite on Crit"],
+		["Pyroclasm", "+28% Fire Damage · -8% Maximum Life"],
+		["Wildfire", "+15% Fire Damage · Ignites spread to nearby foes"],
+		["Emberheart", "+15% Fire Damage · recover Life when igniting"],
+		["Conflagration", "+10% Fire Damage · +30% Burn damage"],
+		["Ashbringer", "+22% Fire Damage · +20 Strength"],
+		["Searing Touch", "+18% Fire Damage · +6% Cast Speed"],
+		["Funeral Pyre", "+12% Fire Damage · burning kills heal you"],
+	],
 }
 
+# KEYSTONES: game-changing nodes with a real tradeoff. 2-3 per arm; one is
+# placed at each arm's tip (chosen without repetition).
 const KEYSTONE := {
-	"Might": ["Avatar of Fury", "Cannot be Stunned. +20% damage, but -30% Life."],
-	"Precision": ["Perfect Aim", "Critical strikes never miss and gain +50% multiplier."],
-	"Arcana": ["Eldritch Battery", "Spend Life as Mana when Mana is depleted."],
-	"Endurance": ["Unbreakable", "Armour also applies to elemental damage."],
-	"Fortune": ["Hand of Fate", "Doubles rarity bonuses, halves quantity."],
-	"Ruin": ["Pyre Heart", "Killing a burning enemy spreads the flames."],
+	"Might": [
+		["Avatar of Fury", "Cannot be Stunned. +20% Melee Damage, but -30% Maximum Life."],
+		["Glass Cannon", "+40% Physical Damage, but -25% Armour."],
+		["Endless Onslaught", "+2% Melee Damage per nearby foe (no life on the wall)."],
+	],
+	"Precision": [
+		["Perfect Aim", "Critical strikes never miss and gain +50% Crit Multiplier."],
+		["Resolute Technique", "Your hits can't be evaded — but you can never Crit."],
+		["Far Shot", "+35% damage to distant foes, -20% to adjacent."],
+	],
+	"Arcana": [
+		["Eldritch Battery", "Spend Life as Mana when Mana is depleted."],
+		["Blood Magic", "Skills cost Life instead of Mana. +40 Maximum Life."],
+		["Archmage", "+1% Spell Damage per 10 unreserved Mana."],
+	],
+	"Endurance": [
+		["Unbreakable", "Armour also mitigates elemental damage."],
+		["Pain Attunement", "+35% damage while below half Life."],
+		["Eternal Vigil", "Cannot drop below 1 Life for 4s (60s cooldown)."],
+	],
+	"Fortune": [
+		["Hand of Fate", "Doubles rarity bonuses, halves item quantity."],
+		["Gambler's Ruin", "Crits deal +100%, but non-crits deal -30%."],
+		["Midas Touch", "+60% Gold Find, but you cannot pick up items."],
+	],
+	"Ruin": [
+		["Pyre Heart", "Killing a burning enemy spreads the flames."],
+		["Chaos Incarnate", "All your damage is converted to Fire."],
+		["Rite of Ruin", "+50% Fire Damage, but you also Burn each tick."],
+	],
 }
 
 const TREE_SEED := 20260608
@@ -662,6 +765,16 @@ class Mulberry:
 
 ## Build the talent web: returns {"nodes": Array[Dictionary], "edges": Array}.
 ## Node: {id, x, y, type ("start"/"minor"/"notable"/"keystone"), ai, label, eff}.
+## Fisher-Yates shuffle using the deterministic tree RNG (stable layout).
+static func _shuffled(arr: Array, rng) -> Array:
+	for i in range(arr.size() - 1, 0, -1):
+		var j := int(rng.next() * float(i + 1))
+		var tmp = arr[i]
+		arr[i] = arr[j]
+		arr[j] = tmp
+	return arr
+
+
 static func build_tree() -> Dictionary:
 	var rng := Mulberry.new(TREE_SEED)
 	var nodes: Array = []
@@ -673,6 +786,16 @@ static func build_tree() -> Dictionary:
 		return nid
 
 	var center: int = add.call(0.0, 0.0, "start", -1, "The Hollow Core", "The seat of your power. Allocate outward.")
+
+	# Per-arm shuffled pools so every NOTABLE / KEYSTONE in the tree is UNIQUE
+	# (PoE-style: no two nodes share a name). Pop as we place; if a pool runs
+	# dry the builder falls back to a generic minor.
+	var notable_pools: Dictionary = {}
+	var keystone_pools: Dictionary = {}
+	for arm_def in ARMS:
+		var an := String(arm_def["name"])
+		notable_pools[an] = _shuffled(NOTABLE[an].duplicate(), rng)
+		keystone_pools[an] = _shuffled(KEYSTONE[an].duplicate(), rng)
 
 	# Recursive arm growth (lambda recursion via array holder).
 	var grow_holder: Array = []
@@ -688,18 +811,23 @@ static func build_tree() -> Dictionary:
 			px += cos(a) * dist
 			py += sin(a) * dist
 			var last := s == len_steps
-			var notable := (not last) and (s % 2 == 0)
+			# Denser notable placement (odd steps from the 2nd on) so the tree
+			# is full of distinct skills, drawn without repetition per arm.
+			var arm_name: String = arm["name"]
+			var pool: Array = notable_pools[arm_name]
+			var notable := (not last) and s >= 2 and not pool.is_empty()
 			var type := "minor"
 			var label: String = String(arm["stat"]) + " Node"
 			var eff: String = rng.pick(MINOR[arm["stat"]])
 			if last and depth == 0:
 				type = "keystone"
-				var k: Array = KEYSTONE[arm["name"]]
+				var kpool: Array = keystone_pools[arm_name]
+				var k: Array = kpool.pop_back() if not kpool.is_empty() else KEYSTONE[arm_name][0]
 				label = k[0]
 				eff = k[1]
 			elif notable:
 				type = "notable"
-				var nb: Array = rng.pick(NOTABLE[arm["name"]])
+				var nb: Array = pool.pop_back()
 				label = nb[0]
 				eff = nb[1]
 			var nid: int = add.call(px, py, type, ai, label, eff)

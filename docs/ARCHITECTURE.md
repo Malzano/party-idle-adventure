@@ -40,7 +40,7 @@ shared state; this client ships with a schema-faithful **mock mode** (see §Back
 ## 2. Boot & scene flow
 
 ```
-autoloads (in order): EventBus → GameState → SaveManager → CombatSim → WindowManager → BackendClient → UserSettings
+autoloads (in order): EventBus → GameState → SaveManager → CombatSim → WindowManager → BackendClient → UserSettings → AssetManager
                                    │ SaveManager._ready loads user://savegame.json (v2 JSON)
 main scene: scenes/login/Login.tscn
    ├─ GameState.has_profile()  → change_scene to scenes/main/Main.tscn
@@ -68,7 +68,7 @@ autoload/
                      lineup_changed, hero_tab_requested, settings_changed, …)
   GameState.gd       the live profile: identity/class, currencies, progression, equipment
                      arrays, daily counters, party mirror, party_ids (the fighting four);
-                     to_dict/from_dict (save schema v2, 41 keys); equip_from_bag /
+                     to_dict/from_dict (save schema v2, 42 keys); equip_from_bag /
                      unequip_to_bag / add_bag_item / set_party_slot (swap-safe lineup)
   SaveManager.gd     user://savegame.json, last_played_utc, offline elapsed (12 h cap),
                      v1→v2 migration (keeps timestamp, resets profile)
@@ -76,6 +76,8 @@ autoload/
                      open_hero_tab(i) routes the Fight dock's MANAGE → Roster tab
   BackendClient.gd   THE network seam (§5)
   UserSettings.gd    device prefs (settings.cfg) — applies V-Sync/fullscreen/volume
+  AssetManager.gd    remote sprite/skin/item delivery (§6b): manifest sync, cache,
+                     core/standard/lazy, SpriteFrames build from bundles
 systems/
   combat/CombatSim.gd    10 t/s sim: wave/stage HP pools (geometric), gold/xp/loot/level,
                          speed 1×/2×/4×, energy regen, offline_rewards
@@ -110,12 +112,14 @@ scenes/
   settings/Settings.gd   Options window (audio/display/combat) → UserSettings
   party/PartyFinder.gd   party window (§6) + FRIENDS & GUILD panel + join-by-code
   leaderboard/           season header, divisions, categories, ranked table
-  ui/                    Palette · Style · Fonts · Tip (multi-window tooltips) · PixelSlot
+  ui/                    Palette · Style (Style.fs readability scale) · Fonts · Tip
+                         (multi-window tooltips) · UnitSprite (animated, asset-backed,
+                         placeholder fallback) · PixelSlot
                          (labeled art drop-slots sized for pixellab.ai sprites) · StatBar ·
                          NavRail · ResourceStrip
 data/balance.json        ALL tuning (enemy curves, rewards, energy, gacha, forge, heroes,
                          power weights, gear_rarity_mult incl. mythic)
-test/unit/               GUT suite — 66 tests (§8)
+test/unit/               GUT suite — 76 tests (§8)
 test/CaptureShots.tscn   windowed screenshot harness (§8)
 docs/backend-spec.md     the original server spec the srv repo implements (+ extensions)
 docs/lore.md             lore bible: world, per-class act storylines, FACTION design
@@ -154,7 +158,7 @@ docs/lore.md             lore bible: world, per-class act storylines, FACTION de
   (submit/get), season, config, party (list/mine/create/join — by id or `DELV-XXXX`
   code — /leave), friends (get/add), guild (get/join), mail (list/claim). Friends &
   guild live in the Party Finder's left column; mail is the Notice Board's MAIL tab.
-- **Save blob is `.strict()`-validated server-side (41 keys).** Never add keys to
+- **Save blob is `.strict()`-validated server-side (42 keys).** Never add keys to
   `GameState.to_dict()` without extending `srv/src/types/save.ts` in the same change
   (defaulted, so old blobs stay valid). Client-only state (e.g. the mock party, device
   settings) goes in `user://netstate.json` / `user://settings.cfg` instead. **`from_dict`
@@ -173,6 +177,44 @@ docs/lore.md             lore bible: world, per-class act storylines, FACTION de
   all mutations go through `BackendClient.party_*`.
 - Mock: ~6 bot parties seeded per session from `GameContent.MOCK_DELVERS`; your party
   persists across restarts via netstate.json; leaving hands the banner to the bots.
+
+## 6b. Remote asset delivery (sprites / skins / items)
+
+Live-content pipeline so the binary stays small and skins/items ship without a client
+patch. **Bytes live in Google Cloud Storage behind Cloud CDN — never in Firestore, never
+proxied through Express.** The server serves only a thin manifest.
+
+- **Server** `GET /v1/assets/manifest?since=N` (public, never-500s like /v1/config):
+  `{catalog_version, cdn_base, bundles[]}`. A bundle = `{id, kind, version, hash, bytes,
+  url, priority, deps}`. Stored in `config/asset_catalog` (seeded from
+  `src/types/assets.ts DEFAULT_CATALOG`), CDN origin from `ASSET_CDN_BASE` env. `since`
+  shortcuts to `{unchanged:true}` when the client is current. Pure rules + tests in
+  `src/lib/assets.ts` (validateCatalog / manifestSince / bundlesToDownload).
+- **Priority model** (the chosen "tiny core + rest remote"): `core` = baked into the build
+  at `res://assets/core/<id>/` (opens instantly, offline); `standard` = background-download
+  on first launch; `lazy` = on demand (a skin only when equipped).
+- **Client** `AssetManager` (autoload): boots by registering core + cached bundles, then
+  `sync_catalog()` reconciles standard bundles (diff by per-bundle hash vs
+  `user://assets/index.json`). Live mode downloads `.pkg` from `cdn_base+url` via HTTPRequest
+  → sha-verify → ZIPReader unzip → `user://assets/<id>/`. **Mock mode** serves the same
+  catalog (`BackendClient._mock_asset_catalog`, must stay field-parity with the server's
+  DEFAULT_CATALOG) over `res://` folders. The 45 s heartbeat re-runs `sync_catalog` so new
+  catalog rows (hot content) appear without a restart.
+- **A bundle on disk** = `meta.json` + atlas PNG(s). Animated kinds (hero/enemy) describe
+  `anims: {action: {sheet, frames, fps, dirs, loop}}`; `AssetManager.get_sprite_frames(id)`
+  builds a cached SpriteFrames (grid: cols=frames, rows=dirs). Static kinds expose textures
+  by key.
+- **Rendering** `scenes/ui/UnitSprite.gd` (battlefield heroes+enemies) plays real frames
+  when a bundle has art, else falls back to the labeled `PixelSlot` placeholder — so the
+  game runs at every stage of art production. The code-driven advance/scroll/depth/bob is
+  unchanged; UnitSprite only animates in place. `PixelSlot` gained an optional
+  `bundle_id`/`sprite_key` so static art (login figures, buildings, chest) drops in too.
+- **Skins**: `GameState.hero_skins` (hero_id → skin bundle id; save key `hero_skins`,
+  cosmetic only). `GameContent.hero_bundle(id)` resolves skin-or-base; `set_hero_skin`
+  requests the lazy bundle + emits `lineup_changed` (battlefield rebuilds with the new art).
+- **No real sprites exist yet** — everything falls back to placeholders today. Drop a
+  `<id>/` folder under `res://assets/core/` (or upload to GCS + add a catalog row) and it
+  renders. Test bundles are generated procedurally in `test/unit/test_assets.gd`.
 
 ## 7. Implementation decisions vs the brief (CLAUDE.md §10 answers)
 

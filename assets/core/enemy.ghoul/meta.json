@@ -1,0 +1,26 @@
+{
+	"anims": {
+		"idle": {
+			"dirs": [
+				"se"
+			],
+			"fps": 3,
+			"frames": 2,
+			"loop": true,
+			"sheet": "idle.png"
+		},
+		"walk": {
+			"dirs": [
+				"se"
+			],
+			"fps": 7,
+			"frames": 4,
+			"loop": true,
+			"sheet": "walk.png"
+		}
+	},
+	"frame_h": 44,
+	"frame_w": 32,
+	"id": "enemy.ghoul",
+	"kind": "enemy"
+}

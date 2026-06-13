@@ -190,8 +190,9 @@ func _make_building(b: Dictionary) -> Control:
 	root.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	var base_y := root.position.y
 
-	# Sprite (pixel-art drop slot).
-	var sprite := PixelSlot.new(String(b["sprite"]), true)
+	# Sprite — real building art from buildings.camp when present (id "food"
+	# maps to the kitchen key), placeholder otherwise.
+	var sprite := PixelSlot.new(String(b["sprite"]), true, "buildings.camp", "kitchen" if id == "food" else id)
 	sprite.position = Vector2.ZERO
 	sprite.size = Vector2(w, h)
 	root.add_child(sprite)

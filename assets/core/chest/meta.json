@@ -1,0 +1,7 @@
+{
+	"id": "chest",
+	"kind": "item",
+	"sprites": {
+		"chest": "chest.png"
+	}
+}

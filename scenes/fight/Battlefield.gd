@@ -230,7 +230,8 @@ func _make_prop(p: Dictionary) -> Control:
 	shadow.position = Vector2(w * 0.5 - shadow.size.x * 0.5, h + 5.0 - 13.0)
 	unit.add_child(shadow)
 
-	var sprite := PixelSlot.new(String(p["label"]), false)
+	# Prop art from the props.dungeon bundle (keyed by kind), placeholder else.
+	var sprite := PixelSlot.new(String(p["label"]), false, "props.dungeon", String(p.get("kind", "")))
 	sprite.size = Vector2(w, h)
 	sprite.modulate = Color(1, 1, 1, 0.92)
 	unit.add_child(sprite)
@@ -344,9 +345,13 @@ func _make_enemy_node(enemy_name: String, elite: bool, lunge: bool) -> Control:
 	shadow.position = Vector2(usz.x * 0.5 - shadow.size.x * 0.5, usz.y - 10.0)
 	unit.add_child(shadow)
 
-	var sprite := PixelSlot.new("96×112\nelite" if elite else "64×80\nfoe", true)
+	# UnitSprite: real frames when the enemy's bundle has art, else the labeled
+	# placeholder. The code-driven approach/lunge bob is unchanged.
+	var bundle := "enemy.elite" if elite else ("enemy.ghoul" if enemy_name == "Hollow Ghoul" else "enemy.skeleton")
+	var sprite := UnitSprite.new(bundle, "96×112\nelite" if elite else "64×80\nfoe", true)
 	sprite.size = usz
 	unit.add_child(sprite)
+	sprite.play("walk")
 	if lunge:
 		_bobs.append({"node": sprite, "base": Vector2.ZERO, "kind": "lunge", "period": 0.7, "delay": _rng.randf()})
 	else:
@@ -765,10 +770,13 @@ func _make_hero(h: Dictionary, idx: int) -> Control:
 	shadow.position = Vector2(_HERO_SIZE.x * 0.5 - 32.0, _HERO_SIZE.y - 10.0)
 	unit.add_child(shadow)
 
-	var sprite := PixelSlot.new("64×96\n%s ↗" % String(h["name"]), true)
+	# UnitSprite per lineup hero: animates when "hero.<id>" has art, else the
+	# placeholder. The code stride-bob + advance/scroll stay as-is.
+	var sprite := UnitSprite.new(GameContent.hero_bundle(String(h.get("id", ""))), "64×96\n%s ↗" % String(h["name"]), true)
 	sprite.size = _HERO_SIZE
 	sprite.pivot_offset = _HERO_SIZE * 0.5
 	unit.add_child(sprite)
+	sprite.play("walk")
 	_bobs.append({"node": sprite, "base": Vector2.ZERO, "kind": "stride", "period": 0.62, "delay": float(idx) * 0.15})
 
 	unit.set_meta("sprite", sprite)

@@ -1,0 +1,7 @@
+{
+	"id": "campfire",
+	"kind": "prop",
+	"sprites": {
+		"campfire": "fire.png"
+	}
+}

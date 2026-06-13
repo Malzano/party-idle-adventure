@@ -1,0 +1,7 @@
+{
+	"id": "class.mage",
+	"kind": "hero",
+	"sprites": {
+		"fig": "fig.png"
+	}
+}

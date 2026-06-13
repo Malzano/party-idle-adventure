@@ -43,7 +43,7 @@ func _build() -> void:
 	add_child(fire)
 	fire.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
-	var fire_sprite := PixelSlot.new("120×90\ncampfire", true)
+	var fire_sprite := PixelSlot.new("120×90\ncampfire", true, "campfire")
 	fire_sprite.custom_minimum_size = Vector2(120, 90)
 	add_child(fire_sprite)
 	fire_sprite.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
@@ -127,8 +127,8 @@ func _figure_card(cls: Dictionary) -> Control:
 	card.add_child(ring)
 	ring.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
-	# Placeholder figure art (sprite swapped in later).
-	var ps := PixelSlot.new(String(cls["sprite"]), true)
+	# Placeholder figure art, or real art from the "class.<id>" bundle if present.
+	var ps := PixelSlot.new(String(cls["sprite"]), true, "class." + id)
 	ps.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	card.add_child(ps)
 	ps.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)

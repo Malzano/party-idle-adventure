@@ -1,0 +1,11 @@
+{
+	"id": "props.dungeon",
+	"kind": "prop",
+	"sprites": {
+		"brazier": "brazier.png",
+		"pillar": "pillar.png",
+		"rock": "rock.png",
+		"tomb": "tomb.png",
+		"tree": "tree.png"
+	}
+}
