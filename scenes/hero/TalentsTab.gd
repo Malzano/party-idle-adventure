@@ -11,6 +11,7 @@ var _adj: Dictionary = {}
 var _tree: TreeView
 var _chip: PanelContainer
 var _spent_lbl: Label
+var _power_lbl: Label  # live total-power readout so allocating visibly moves it
 var _zoom_box: VBoxContainer
 var _legend: PanelContainer
 var _hint: PanelContainer
@@ -108,6 +109,17 @@ func _build_chip() -> void:
 	var tail := Style.display_label(" available", 14, Palette.TX_DIM)
 	tail.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	h.add_child(tail)
+	# Live power readout: allocating a node visibly moves the character's power
+	# (the talent tree already feeds combat — this closes the feedback gap).
+	var dot := Style.display_label("   ·   ", 14, Palette.TX_DIM)
+	dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	h.add_child(dot)
+	_power_lbl = Style.pixel_label("0", 14, Palette.GOLD)
+	_power_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	h.add_child(_power_lbl)
+	var pwr := Style.display_label(" Power", 14, Palette.TX_DIM)
+	pwr.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	h.add_child(pwr)
 	_chip.add_child(h)
 	add_child(_chip)
 	_chip.resized.connect(_layout_overlays)
@@ -358,6 +370,9 @@ func _on_talents_changed() -> void:
 
 func _update_points() -> void:
 	_spent_lbl.text = str(maxi(0, GameState.talents_allocated.size() - 1))
+	if _power_lbl != null:
+		PlayerStats.invalidate()
+		_power_lbl.text = Style.group_int(int(PlayerStats.compute()["total_power"]))
 
 
 # =========================================================================

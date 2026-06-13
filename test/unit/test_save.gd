@@ -39,7 +39,7 @@ func test_round_trip_preserves_all_fields() -> void:
 	GameState.food_buff_until = 1_234_567_999
 	var talents: Array[int] = [0, 1, 2, 7]
 	GameState.talents_allocated = talents
-	GameState.roster_extra = [{"n": "Korr", "r": "rare", "role": "3★ DPS · Reaver"}]
+	GameState.total_summons = 12
 	GameState.claim_quest(2)
 	GameState.active_pet = 3
 	GameState.last_played_utc = 1_750_000_000
@@ -79,9 +79,7 @@ func test_round_trip_preserves_all_fields() -> void:
 	assert_eq(GameState.talents_allocated.size(), 4)
 	for id in [0, 1, 2, 7]:
 		assert_true(GameState.talents_allocated.has(id), "talent %d survives the round-trip" % id)
-	assert_eq(GameState.roster_extra.size(), 1)
-	assert_eq(String(GameState.roster_extra[0]["n"]), "Korr")
-	assert_eq(String(GameState.roster_extra[0]["r"]), "rare")
+	assert_eq(GameState.total_summons, 12, "lifetime summons survive the round-trip")
 	assert_true(GameState.quests_claimed.has(2), "claimed quest survives")
 	assert_eq(GameState.active_pet, 3)
 	assert_eq(GameState.last_played_utc, 1_750_000_000)
@@ -137,40 +135,33 @@ func test_equip_from_bag_respects_slot_rules() -> void:
 	assert_eq(String((GameState.equipped[0] as Dictionary)["n"]), String(helm["n"]))
 
 
-func test_party_lineup_round_trip_and_rules() -> void:
-	# Swap semantics: putting Mordrake in slot 0 keeps the lineup dupe-free.
-	assert_true(GameState.set_party_slot(0, "mord"), "recruited hero slots in")
-	assert_eq(GameState.party_ids[0], "mord")
-	assert_false(GameState.party_ids.has("brand"), "brand left the lineup")
-	assert_true(GameState.set_party_slot(1, "mord"), "moving an in-party hero swaps")
-	assert_eq(GameState.party_ids[1], "mord")
-	assert_eq(GameState.party_ids[0], "ash", "the displaced hero takes the old slot")
-	assert_false(GameState.set_party_slot(0, "veyra"), "locked heroes cannot slot in")
-	assert_false(GameState.set_party_slot(0, "nope"), "unknown ids are refused")
+func test_single_character_save_drops_roster_keys() -> void:
+	# The single-character save no longer serializes the roster/lineup.
+	GameState.choose_class("warrior", "Brakka")
+	var d := GameState.to_dict()
+	assert_false(d.has("party_lineup"), "party_lineup is gone from the save")
+	assert_false(d.has("roster_extra"), "roster_extra is gone from the save")
+	assert_true(d.has("total_summons"), "total_summons replaces them")
 
+
+func test_total_summons_round_trip_and_legacy_migration() -> void:
+	# New save: total_summons round-trips.
+	GameState.total_summons = 9
 	var parsed: Variant = JSON.parse_string(JSON.stringify(GameState.to_dict()))
 	GameState.reset_to_defaults()
-	assert_eq(GameState.party_ids, GameContent.DEFAULT_PARTY_IDS, "defaults restore")
 	GameState.from_dict(parsed)
-	assert_eq(GameState.party_ids[1], "mord", "lineup survives the round-trip")
+	assert_eq(GameState.total_summons, 9)
 
-	# Tampered lineups (dupes / unknown ids) are rejected — the loader keeps
-	# the current (default, in the real SaveManager flow) four.
+	# Legacy v2 blob: total_summons is seeded from the roster length so pet
+	# unlocks survive the migration.
 	GameState.reset_to_defaults()
-	GameState.from_dict({"party_lineup": ["mord", "mord", "hex", "wren"]})
-	assert_eq(GameState.party_ids, GameContent.DEFAULT_PARTY_IDS, "dupes rejected")
+	GameState.from_dict({"roster_extra": [{"n": "Korr", "r": "rare"}, {"n": "Wisp", "r": "rare"}, {"n": "Grub", "r": "common"}]})
+	assert_eq(GameState.total_summons, 3, "lifetime summons migrate from a legacy roster")
 
-
-func test_aura_check_diagnoses_compositions() -> void:
-	assert_true(bool(GameContent.aura_check(["brand", "ash", "hex", "wren"])["ok"]))
-	assert_eq(String(GameContent.aura_check(["brand", "mord", "ash", "wren"])["msg"]),
-		"Too many tanks")
-	assert_eq(String(GameContent.aura_check(["ash", "hex", "korr", "wren"])["msg"]),
-		"Missing a tank")
-	assert_eq(String(GameContent.aura_check(["brand", "ash", "hex", "korr"])["msg"]),
-		"Missing a healer")
-	assert_eq(String(GameContent.aura_check(["brand", "korr", "korr", "wren"])["msg"]),
-		"DPS must differ")
+	# When both are present, the larger wins (defensive).
+	GameState.reset_to_defaults()
+	GameState.from_dict({"total_summons": 5, "roster_extra": [{"n": "Korr", "r": "rare"}]})
+	assert_eq(GameState.total_summons, 5)
 
 
 func test_equip_swap_keeps_bag_position() -> void:

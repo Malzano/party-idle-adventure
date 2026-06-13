@@ -44,10 +44,11 @@ func test_lineup_swap_reclaims_hero_bobs() -> void:
 	bf.size = Vector2(1600, 900)
 	await get_tree().process_frame
 
-	assert_eq(bf._hero_units.size(), GameState.party_ids.size(), "four heroes spawned")
+	assert_eq(bf._hero_units.size(), 1, "1 account = 1 character on the field")
+	assert_eq(bf._hero_units.size(), GameContent.active_party().size(), "matches active_party")
 	var old_sprite: Object = bf._hero_units[0].get_meta("sprite")
 
-	GameState.set_party_slot(0, "mord")  # emits lineup_changed
+	EventBus.lineup_changed.emit()  # e.g. a 409 server-save adoption rebuilds
 	await get_tree().process_frame  # deferred connection fires
 	await get_tree().process_frame
 

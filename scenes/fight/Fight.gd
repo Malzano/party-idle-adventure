@@ -85,6 +85,8 @@ func _ready() -> void:
 	EventBus.sim_boss_started.connect(_on_boss_started)
 	EventBus.sim_boss_hp.connect(_on_boss_hp)
 	EventBus.sim_boss_defeated.connect(_on_boss_defeated)
+	# Joining/leaving a party changes the composition aura → rebuild the badge.
+	EventBus.party_changed.connect(_fill_team_aura)
 	EventBus.sim_loot.connect(_on_loot)
 	EventBus.sim_party_vitals.connect(_on_party_vitals)
 	EventBus.sim_speed_changed.connect(_on_speed_changed)
@@ -351,8 +353,8 @@ func _build_party_finder() -> void:
 	col.add_child(pad)
 	_fill_pf_slots()
 
-	# Design v2 .pf-actions: MANAGE (the hero roster) beside FIND PARTY
-	# (the multiplayer notice board).
+	# .pf-actions: CHARACTER (your one delver's gear/talents) beside FIND PARTY
+	# (team up with real players). The local "manage 4 heroes" roster is gone.
 	var bpad := MarginContainer.new()
 	bpad.add_theme_constant_override("margin_left", 8)
 	bpad.add_theme_constant_override("margin_right", 8)
@@ -361,14 +363,14 @@ func _build_party_finder() -> void:
 	actions.add_theme_constant_override("separation", 8)
 	bpad.add_child(actions)
 
-	var manage := Style.make_button("MANAGE", "ember", 10)
+	var manage := Style.make_button("CHARACTER", "ember", 10)
 	manage.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	manage.pressed.connect(func() -> void: WindowManager.open_hero_tab(4))
+	manage.pressed.connect(func() -> void: WindowManager.open_hero_tab(0))
 	Tip.attach(manage, {
-		"name": "Hero Roster",
-		"type": "Hero window · T",
+		"name": "Your Delver",
+		"type": "Hero window · 3",
 		"rarity": "",
-		"flavor": "Choose which four heroes walk the Hollow.",
+		"flavor": "Gear, pets, relics and talents for your one character.",
 	})
 	actions.add_child(manage)
 
@@ -507,14 +509,16 @@ func _fill_team_aura() -> void:
 	add_child(panel)
 	panel.resized.connect(_request_layout)
 
+	var pct: int = int(round((GameState.party_aura_mult - 1.0) * 100.0))
 	var tip := {
-		"name": "Team Aura: Optimal" if optimal else "Team Aura: Unbalanced",
-		"type": "Composition bonus",
+		"name": "Party Aura: Active" if optimal else "Party Aura",
+		"type": "Real-party composition bonus",
 		"rarity": "legendary" if optimal else "common",
-		"flavor": "A balanced delve burns brightest." if optimal else "Need 1 tank, 1 healer, 2 different DPS.",
+		"flavor": "Your party's class spread is boosting everyone." if optimal \
+			else "Team up with real players for a composition bonus.",
 	}
 	if optimal:
-		tip["stats"] = [["All stats", "+18%"], ["Comp", "1 Tank · 1 Healer · 2 DPS"]]
+		tip["stats"] = [["All stats", "+%d%%" % pct]]
 	Tip.attach(panel, tip)
 
 	var row := HBoxContainer.new()
@@ -535,8 +539,8 @@ func _fill_team_aura() -> void:
 	var text := VBoxContainer.new()
 	text.add_theme_constant_override("separation", 1)
 	text.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	text.add_child(Style.display_label("TEAM AURA · OPTIMAL" if optimal else "TEAM AURA", 12, Palette.GOLD_BRIGHT if optimal else Palette.TX_DIM))
-	text.add_child(Style.body_label("+18% all stats" if optimal else "Comp unbalanced", 11, Palette.CYAN_BRIGHT if optimal else Palette.TX_MUTE))
+	text.add_child(Style.display_label("PARTY AURA · +%d%%" % pct if optimal else "PARTY AURA", 12, Palette.GOLD_BRIGHT if optimal else Palette.TX_DIM))
+	text.add_child(Style.body_label("+%d%% all stats" % pct if optimal else "Solo — no bonus", 11, Palette.CYAN_BRIGHT if optimal else Palette.TX_MUTE))
 	row.add_child(text)
 
 

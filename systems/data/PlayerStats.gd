@@ -65,24 +65,19 @@ static func compute() -> Dictionary:
 	if GameState.food_buff_active():
 		block.apply_effect(GameState.food_buff_effect)
 
-	# --- Party DPS (the live lineup, not the design template) -----------------
-	var base_dps := 0.0
-	var bases: Dictionary = Balance.value("heroes.base_dps", {})
-	for id in GameState.party_ids:
-		base_dps += float(bases.get(String(id), 250000.0))
+	# --- Character DPS (1 account = 1 character) ------------------------------
+	# Base DPS is the chosen class's; gear/talents scale it via dps_mult; the
+	# real-party composition aura (party_aura_mult, server-side, 1.0 solo)
+	# multiplies on top. Calibrated so a solo player ≈ the old optimal 4-party.
+	var char_bases: Dictionary = Balance.value("character.base_dps", {})
+	var base_dps := float(char_bases.get(GameState.class_id, char_bases.get("default", 4000000.0)))
 
 	var half := Balance.num("dps_model.half_coef", 0.5)
 	var dps_mult := 1.0 + block.get_inc("all_damage") \
 		+ half * (block.get_inc("melee_damage") + block.get_inc("spell_damage") \
 		+ block.get_inc("fire_damage") + block.get_inc("attack_speed"))
-	var aura_mult := 1.0 + (Balance.num("heroes.team_aura_bonus", 0.18) if team_aura_optimal() else 0.0)
 
-	var roster_dps := 0.0
-	var support: Dictionary = Balance.value("roster.support_dps", {})
-	for hero in GameState.roster_extra:
-		roster_dps += float(support.get(String(hero.get("r", "common")), 0.0))
-
-	var party_dps := base_dps * dps_mult * aura_mult + roster_dps
+	var party_dps := base_dps * dps_mult * GameState.party_aura_mult
 
 	# --- Attributes + derived -------------------------------------------------
 	var attrs := {}
@@ -137,10 +132,12 @@ static func compute() -> Dictionary:
 	return _cache
 
 
-## Team Aura: exactly 1 tank + 1 healer + 2 DPS of different classes (§2).
-## Evaluates the LIVE lineup; diagnostics live in GameContent.aura_check.
+## Whether a real-party composition aura is currently active (server-computed;
+## 1.0 = solo / no bonus). The old local 1-tank/1-healer/2-DPS check is gone —
+## the aura now comes from your real party (party_aura_mult, set on the
+## /party/mine heartbeat). Drives the Fight "Party Aura" badge.
 static func team_aura_optimal() -> bool:
-	return bool(GameContent.aura_check(GameState.party_ids)["ok"])
+	return GameState.party_aura_mult > 1.0001
 
 
 ## The forge-upgraded weapon's stat pairs, scaled by stat_growth^(levels above

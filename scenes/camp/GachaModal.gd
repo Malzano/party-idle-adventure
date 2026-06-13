@@ -163,7 +163,7 @@ func _build_stage() -> Control:
 	altar.add_child(aborder)
 	aborder.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_idle_box.add_child(altar)
-	var hint := Style.display_label("Offer soulstones to summon a hero.", 13, Palette.TX_MUTE, true)
+	var hint := Style.display_label("Offer soulstones to summon gear for your delver.", 13, Palette.TX_MUTE, true)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_idle_box.add_child(hint)
 	_stage_center.add_child(_idle_box)
@@ -229,9 +229,10 @@ func _make_card(hero: Dictionary, card_size: Vector2, delay: float) -> Control:
 	var nm := Style.display_label(String(hero["n"]), 16, rc, true)
 	nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	fcol.add_child(nm)
-	var role := Style.body_label(String(hero["role"]), 9, Palette.TX_MUTE)
-	role.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	fcol.add_child(role)
+	# A pull rolls GEAR now: show its slot + item level (not a hero role).
+	var sub := Style.body_label("%s · ilvl %d" % [String(hero.get("slot", "Gear")), int(hero.get("ilvl", 0))], 9, Palette.TX_MUTE)
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	fcol.add_child(sub)
 
 	# FLIP: squash to 0, swap faces, expand back out.
 	var tw := create_tween()

@@ -85,7 +85,7 @@ func put_save() -> Dictionary:
 	var body := {
 		"client_seq": _client_seq,
 		"checksum": "",  # integrity-advisory; server recomputes (STRICT off)
-		"save": {"version": 2, "state": GameState.to_dict()},
+		"save": {"version": SaveManager.SAVE_VERSION, "state": GameState.to_dict()},
 	}
 	if mock:
 		return _wrap(200, {
@@ -106,7 +106,7 @@ func put_save() -> Dictionary:
 func get_save() -> Dictionary:
 	if mock:
 		return _wrap(200, {
-			"save": {"version": 2, "state": GameState.to_dict()},
+			"save": {"version": SaveManager.SAVE_VERSION, "state": GameState.to_dict()},
 			"server_seq": _client_seq,
 			"stored_last_played_utc": GameState.last_played_utc,
 		})
@@ -142,8 +142,10 @@ func sync_combat() -> Dictionary:
 	return res
 
 
-## POST /v1/gacha/pull — server-authoritative summons. Applies all side
-## effects (spend, pity, roster) in both modes; callers render `results`.
+## POST /v1/gacha/pull — server-authoritative summons. A pull now rolls GEAR
+## (1 account = 1 character, no roster to summon into): items bank into the bag,
+## a full bag salvages to gold. Applies spend/pity/items in both modes; callers
+## render `results` (an array of canonical items {n,r,slot,ilvl,s}).
 func gacha_pull(count: int) -> Dictionary:
 	if mock:
 		var cost := Balance.inum("gacha.cost_x1", GameContent.GACHA_COST_X1) if count == 1 \
@@ -152,25 +154,45 @@ func gacha_pull(count: int) -> Dictionary:
 			return _error(422, "insufficient_funds",
 				"Need %d soulstones, have %d." % [cost, GameState.premium_currency])
 		var p := GameState.pity
+		var s_index := Balance.stage_index(GameState.act, GameState.stage)
+		var ilvl := clampi(roundi(s_index * 0.45 + 5.0), 1, 999)
 		var results: Array = []
 		for i in count:
 			var r := GameContent.gacha_roll_rarity(p, _rng)
 			p = 0 if r == "legendary" else p + 1
-			var hero: Dictionary = GameContent.gacha_pick(r, _rng)
-			results.append(hero)
-			GameState.add_roster_hero(hero)
+			var item: Dictionary = GameContent.generate_item(ilvl, r, _rng)
+			results.append(item)
+			_bank_gacha_item(item, s_index)
 		GameState.set_pity(p)
+		GameState.total_summons += count
+		GameState.daily_summons += count
+		EventBus.quests_changed.emit()
+		EventBus.equipment_changed.emit()
 		return _wrap(200, {"results": results, "pity": p, "soulstones": GameState.premium_currency})
 	var body := {"count": count, "idempotency_key": _uuid()}
 	var res: Dictionary = await _api("POST", "/v1/gacha/pull", body)
 	if bool(res["ok"]):
 		var data: Dictionary = res["data"]
-		for hero in data.get("results", []):
-			GameState.add_roster_hero(hero)
+		var s_index2 := Balance.stage_index(GameState.act, GameState.stage)
+		var items: Array = data.get("results", [])
+		for item in items:
+			_bank_gacha_item(item, s_index2)
+		GameState.total_summons += items.size()
+		GameState.daily_summons += items.size()
 		GameState.set_pity(int(data.get("pity", GameState.pity)))
 		GameState.premium_currency = int(data.get("soulstones", GameState.premium_currency))
 		EventBus.currencies_changed.emit()
+		EventBus.quests_changed.emit()
+		EventBus.equipment_changed.emit()
 	return res
+
+
+## Bank one gacha gear drop into the bag; salvage to gold (like a full-bag
+## chest) when the bag is full so a pull is never lost.
+func _bank_gacha_item(item: Dictionary, s_index: int) -> void:
+	if not GameState.add_bag_item(item):
+		GameState.add_gold(int(round(Balance.wave_gold(s_index) * 4.0)))
+	EventBus.item_summoned.emit(item)
 
 
 ## POST /v1/forge/upgrade.
@@ -581,6 +603,8 @@ func _party_view(doc: Dictionary, now: int, include_code: bool = false) -> Dicti
 		"member_count": members.size(),
 		"avg_stage_key": roundi(float(key_sum) / maxf(1.0, float(members.size()))),
 		"members": members,
+		# Mirror the server: a real-party composition bonus over online members.
+		"party_aura_mult": GameContent.composition_aura_mult(members),
 	}
 	if include_code:
 		v["join_code"] = String(doc.get("join_code", ""))

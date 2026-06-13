@@ -91,7 +91,8 @@ func focus_main() -> void:
 	get_tree().root.grab_focus()
 
 
-## Open the Hero window directly on a tab (0 Equipment … 4 Roster).
+## Open the Hero window directly on a tab (0 Equipment, 1 Pets, 2 Relics,
+## 3 Talents). The Roster tab was removed (single-character pivot).
 func open_hero_tab(tab_idx: int) -> void:
 	open(WIN_HERO)
 	EventBus.hero_tab_requested.emit(tab_idx)

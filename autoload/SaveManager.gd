@@ -6,7 +6,10 @@ extends Node
 ## pending_offline_seconds for the offline-progress system to consume later.
 
 const SAVE_PATH := "user://savegame.json"
-const SAVE_VERSION := 2  # v2: full Grimhollow profile (pity, talents, loadout)
+## v3: single-character profile (roster dropped, total_summons added). v2→v3 is
+## backward-compatible — from_dict tolerates missing keys and migrates the
+## legacy roster — so both load via from_dict (see the gate in load_game).
+const SAVE_VERSION := 3
 
 ## Hours of offline time beyond which no further progress accrues. Open
 ## question in CLAUDE.md §10.5 — placeholder until confirmed.
@@ -64,9 +67,12 @@ func load_game() -> bool:
 	var data: Dictionary = parsed
 	var state: Dictionary = data.get("state", {})
 	GameState.reset_to_defaults()
-	if int(data.get("version", 0)) < SAVE_VERSION:
-		# Pre-Grimhollow save: the profile schema changed wholesale, so start
-		# from the new defaults but keep the old timestamp for offline gains.
+	if int(data.get("version", 0)) < 2:
+		# Truly ancient (pre-Grimhollow v2) save: the schema changed wholesale,
+		# so start from new defaults but keep the timestamp for offline gains.
+		# NOTE: this gate is `< 2`, NOT `< SAVE_VERSION` — v2 and v3 are
+		# compatible and MUST go through from_dict (bumping the version with a
+		# `< SAVE_VERSION` gate would silently wipe every existing profile).
 		GameState.last_played_utc = int(state.get("last_played_utc", _now_utc()))
 	else:
 		GameState.from_dict(state)

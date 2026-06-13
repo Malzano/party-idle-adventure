@@ -16,8 +16,12 @@ signal window_state_changed(id: String, open: bool)
 ## Emitted after offline/active progress hands the player loot to collect.
 signal rewards_collected(rewards: Dictionary)
 
-## Emitted when a new hero is added to the roster (gacha or unlock).
+## Emitted when a new hero is added to the roster (gacha or unlock). LEGACY —
+## the roster is gone; kept only so dormant listeners don't break.
 signal hero_summoned(hero_id: String)
+
+## Emitted when a gacha pull rolls a gear item (the new summon payload).
+signal item_summoned(item: Dictionary)
 
 ## Emitted whenever a resource (gold, soulstone, ember dust, energy, xp, level)
 ## changes, so every resource strip / inventory footer refreshes without polling.

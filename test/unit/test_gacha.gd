@@ -40,14 +40,23 @@ func test_rolls_only_return_known_rarities() -> void:
 		assert_true(GameContent.RARITY_RANK.has(r), "unknown rarity '%s'" % r)
 
 
-func test_gacha_pick_matches_requested_rarity() -> void:
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 99
-	var hero := GameContent.gacha_pick("epic", rng)
-	assert_eq(String(hero["r"]), "epic")
-	# Unknown rarity falls back to the common pool.
-	var fallback := GameContent.gacha_pick("mythic", rng)
-	assert_eq(String(fallback["r"]), "common")
+func test_gacha_pull_rolls_gear_into_the_bag() -> void:
+	# A pull now rolls GEAR for the single character (no roster). The item banks
+	# into the bag and lifetime summons increment (the pet-unlock gate).
+	BackendClient.mock = true
+	GameState.reset_to_defaults()
+	GameState.bag_equipment = []
+	GameState.premium_currency = 5000
+	var summons_before := GameState.total_summons
+	var res: Dictionary = await BackendClient.gacha_pull(1)
+	assert_true(bool(res["ok"]), "a pull with enough soulstones succeeds")
+	var results: Array = res["data"]["results"]
+	assert_eq(results.size(), 1, "a x1 pull yields one item")
+	var item: Dictionary = results[0]
+	assert_true(item.has("slot") and item.has("ilvl") and item.has("r"),
+		"the pull rolls a canonical gear item, not a hero")
+	assert_eq(GameState.total_summons, summons_before + 1, "lifetime summons increment")
+	assert_eq(GameState.bag_equipment.size(), 1, "the item banks into the bag")
 
 
 func test_spend_soulstones_refuses_when_poor() -> void:

@@ -123,7 +123,7 @@ func _refresh_active() -> void:
 		var need := GameContent.pet_unlock_need(_sel)
 		var text := "Not yet tamed"
 		if need > 0:
-			text = "Follows after %d summons (%d/%d)" % [need, GameState.roster_extra.size(), need]
+			text = "Follows after %d summons (%d/%d)" % [need, GameState.total_summons, need]
 		var locked := Style.display_label(text, 13, Palette.TX_MUTE, true)
 		locked.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		_active_body.add_child(locked)
@@ -268,7 +268,7 @@ func _pc_cell(index: int) -> Control:
 	}
 	if not owned:
 		var need := GameContent.pet_unlock_need(index)
-		tip["flavor"] = ("Follows after %d summons (%d/%d)." % [need, GameState.roster_extra.size(), need]) \
+		tip["flavor"] = ("Follows after %d summons (%d/%d)." % [need, GameState.total_summons, need]) \
 			if need > 0 else "Tame this companion in the wild."
 	Tip.attach(cell, tip)
 	return cell

@@ -73,9 +73,25 @@
     "support_dps": { "common": 8000, "uncommon": 20000, "rare": 50000, "epic": 120000, "legendary": 300000 }
   },
 
+  "character": {
+    "comment": "Single-character base DPS per class (1 account = 1 character). Calibrated so a SOLO player ≈ the old optimal 4-hero party (default heroes summed ~3.4M base × 1.18 team aura ≈ 4.0M). The real-party composition aura (party_aura_mult, server-side) multiplies on top when partied. 'default' covers an unset class_id.",
+    "base_dps": {
+      "warrior": 3600000, "mage": 4400000, "hunter": 4000000, "rogue": 4200000,
+      "default": 4000000
+    }
+  },
+
   "dps_model": {
-    "comment": "party_dps = sum(base_dps) * (1 + all_damage + half_coef*(melee+spell+fire+attack_speed)) * aura * food, + roster flat.",
+    "comment": "party_dps = character.base_dps[class] * (1 + all_damage + half_coef*(melee+spell+fire+attack_speed)) * party_aura_mult.",
     "half_coef": 0.5
+  },
+
+  "composition": {
+    "comment": "Real-party composition aura (mirror of the server's compositionAura.ts). party_aura_mult = 1 + min(cap, size_step*(online-1) + class_step*(distinctClasses-1) + role_step*(distinctRoles-1)). Used in mock mode; live mode reads party_aura_mult straight off the server PartyView.",
+    "size_step": 0.03,
+    "class_step": 0.035,
+    "role_step": 0.025,
+    "cap": 0.28
   },
 
   "derived_bases": {

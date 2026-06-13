@@ -64,8 +64,12 @@ var pity: int = 47
 var talents_allocated: Array[int] = []
 ## Index into GameContent.PETS of the active companion.
 var active_pet: int = 0
-## Extra heroes pulled from the gacha this profile: Array of {n, r, role}.
+## LEGACY: heroes a v2 profile pulled from the gacha. No longer serialized or
+## used for DPS (gacha rolls gear now); kept only so dormant readers don't crash.
 var roster_extra: Array = []
+## Lifetime gacha summons. Replaces roster_extra.size() as the pet-unlock gate
+## (save key "total_summons"; migrated from a legacy roster's length on load).
+var total_summons: int = 0
 ## Daily quest indices already claimed (resets daily).
 var quests_claimed: Array[int] = []
 
@@ -140,9 +144,11 @@ func add_bag_item(item: Dictionary) -> bool:
 # --- Chests -----------------------------------------------------------------------
 var daily_chests: int = 0
 
-# --- Hero lineup (the fighting four; design v2 roster) -----------------------------
-## Hero ids from GameContent.HEROES, one per battlefield slot. Saved as
-## "party_lineup". Edited in the Hero window's ROSTER tab.
+# --- Hero lineup (VESTIGIAL) --------------------------------------------------
+## LEGACY: the old 4-hero lineup. No longer serialized, edited, or read by the
+## sim (1 account = 1 character — active_party() returns your single delver).
+## Kept as a harmless default so dormant references don't crash; removed in a
+## later cleanup with the HEROES pool.
 var party_ids: Array[String] = ["brand", "ash", "hex", "wren"]
 
 ## hero_id -> equipped skin bundle id (AssetManager). Empty = base art.
@@ -161,29 +167,16 @@ func set_hero_skin(hero_id: String, skin_id: String) -> void:
 	EventBus.lineup_changed.emit()
 
 
-## Put [param hero_id] into [param slot] (design PartyStore.assign): if the
-## hero already holds another slot the two swap, so the lineup never dupes.
-func set_party_slot(slot: int, hero_id: String) -> bool:
-	if slot < 0 or slot >= party_ids.size():
-		return false
-	if not GameContent.hero_recruited(hero_id):
-		return false
-	var cur := party_ids.find(hero_id)
-	if cur == slot:
-		return false
-	if cur >= 0:
-		party_ids[cur] = party_ids[slot]
-	party_ids[slot] = hero_id
-	EventBus.lineup_changed.emit()
-	EventBus.loadout_changed.emit()  # aura/base DPS reprice
-	return true
-
-
 # --- Party (server-authoritative; this is only the client mirror) -------------------
 ## PartyView from GET /v1/party/mine ({} = solo). NOT part of to_dict — the
 ## server owns party membership; BackendClient refreshes the mirror (and
 ## persists the mock world in user://netstate.json, not the save blob).
 var party: Dictionary = {}
+
+## Real-party composition aura multiplier from the server (1.0 = solo / no
+## bonus). Set by BackendClient on the /party/mine heartbeat; multiplies
+## party_dps in PlayerStats. Runtime only — never serialized.
+var party_aura_mult: float = 1.0
 
 
 func in_party() -> bool:
@@ -192,6 +185,9 @@ func in_party() -> bool:
 
 func set_party(p: Dictionary) -> void:
 	party = p
+	# Adopt the real-party composition aura (server-authoritative; 1.0 solo).
+	# CombatSim reprices party_dps and the Fight badge rebuilds on party_changed.
+	party_aura_mult = float(p.get("party_aura_mult", 1.0)) if not p.is_empty() else 1.0
 	EventBus.party_changed.emit()
 
 # --- Timed buffs -------------------------------------------------------------------
@@ -250,14 +246,6 @@ func spend_soulstones(amount: int) -> bool:
 func set_pity(value: int) -> void:
 	pity = clampi(value, 0, GameContent.PITY_HARD)
 	EventBus.pity_changed.emit(pity)
-
-
-func add_roster_hero(hero: Dictionary) -> void:
-	roster_extra.append(hero)
-	daily_summons += 1
-	EventBus.quests_changed.emit()
-	EventBus.hero_summoned.emit(String(hero.get("n", "")))
-	EventBus.loadout_changed.emit()  # roster support DPS changed
 
 
 func claim_quest(index: int) -> void:
@@ -418,6 +406,7 @@ func reset_to_defaults() -> void:
 	talents_allocated = []
 	active_pet = 0
 	roster_extra = []
+	total_summons = 0
 	quests_claimed = []
 	iron_ingots = 46
 	forge_level = 7
@@ -464,14 +453,13 @@ func to_dict() -> Dictionary:
 		"pity": pity,
 		"talents_allocated": talents_allocated,
 		"active_pet": active_pet,
-		"roster_extra": roster_extra,
+		"total_summons": total_summons,
 		"quests_claimed": quests_claimed,
 		"iron_ingots": iron_ingots,
 		"forge_level": forge_level,
 		"equipped": equipped,
 		"bag_equipment": bag_equipment,
 		"daily_chests": daily_chests,
-		"party_lineup": party_ids,
 		"hero_skins": hero_skins,
 		"food_buff": food_buff,
 		"food_buff_effect": food_buff_effect,
@@ -513,7 +501,12 @@ func from_dict(data: Dictionary) -> void:
 	for v in data.get("talents_allocated", []):
 		talents_allocated.append(int(v))
 	active_pet = int(data.get("active_pet", active_pet))
-	roster_extra = data.get("roster_extra", roster_extra)
+	# Migration: the roster is gone. Seed lifetime summons from total_summons
+	# (new saves) OR a legacy roster's length (v2 saves), whichever is larger,
+	# so pet unlocks survive. roster_extra itself is dropped.
+	var legacy_roster: Array = data.get("roster_extra", [])
+	total_summons = maxi(int(data.get("total_summons", 0)), legacy_roster.size())
+	roster_extra = []
 	quests_claimed.clear()
 	for v in data.get("quests_claimed", []):
 		quests_claimed.append(int(v))
@@ -526,29 +519,12 @@ func from_dict(data: Dictionary) -> void:
 	else:
 		seed_default_equipment()
 	daily_chests = int(data.get("daily_chests", 0))
-	# Lineup: only valid, RECRUITED, non-duplicated 4-hero sets are adopted
-	# (same gate as set_party_slot); anything else keeps the current four.
-	# roster_extra was adopted above, so hero_recruited sees the loaded state.
-	var old_lineup := party_ids.duplicate()
-	var lineup_v: Variant = data.get("party_lineup", [])
-	if typeof(lineup_v) == TYPE_ARRAY and (lineup_v as Array).size() == party_ids.size():
-		var seen := {}
-		var valid := true
-		for id_v in lineup_v:
-			var id := String(id_v)
-			if not GameContent.hero_recruited(id) or seen.has(id):
-				valid = false
-				break
-			seen[id] = true
-		if valid:
-			for i in party_ids.size():
-				party_ids[i] = String((lineup_v as Array)[i])
 	var skins_v: Variant = data.get("hero_skins", {})
 	hero_skins = (skins_v as Dictionary).duplicate() if typeof(skins_v) == TYPE_DICTIONARY else {}
-	# Runtime loads (e.g. adopting the server save on a 409) must refresh the
-	# lineup-bound surfaces; at boot nothing listens yet, so this is free.
-	if party_ids != old_lineup or not hero_skins.is_empty():
-		EventBus.lineup_changed.emit.call_deferred()
+	# Adopting a server save (409) can change the character's name/class/level,
+	# so refresh every lineup-bound surface (HUD frame, battlefield sprite, sim
+	# vitals). At boot nothing listens yet, so the deferred emit is free.
+	EventBus.lineup_changed.emit.call_deferred()
 	food_buff = str(data.get("food_buff", food_buff))
 	food_buff_effect = str(data.get("food_buff_effect", food_buff_effect))
 	food_buff_until = int(data.get("food_buff_until", food_buff_until))

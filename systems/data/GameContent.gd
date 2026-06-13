@@ -57,9 +57,49 @@ static func hero_by_id(id: String) -> Dictionary:
 
 ## The asset bundle a hero renders from: its equipped skin if one is set,
 ## else the base "hero.<id>" bundle. AssetManager resolves art (or placeholder).
+## The single character ("self") renders from its class bundle.
 static func hero_bundle(hero_id: String) -> String:
-	var skin := String(GameState.hero_skins.get(hero_id, ""))
-	return skin if skin != "" else "hero." + hero_id
+	if hero_id == "self":
+		var skin := String(GameState.hero_skins.get("self", ""))
+		return skin if skin != "" else "class." + GameState.class_id
+	var skin2 := String(GameState.hero_skins.get(hero_id, ""))
+	return skin2 if skin2 != "" else "hero." + hero_id
+
+
+## Battlefield role for a class id — no healer tier; mirrors the server's
+## composition aura. Reused by active_party() and the party display.
+static func class_role(class_id: String) -> Dictionary:
+	match class_id:
+		"warrior": return {"role": "tank", "lbl": "Tank"}
+		"mage": return {"role": "mage", "lbl": "Mage"}
+		"hunter": return {"role": "dps", "lbl": "Ranger"}
+		"rogue": return {"role": "dps", "lbl": "Rogue"}
+		_: return {"role": "dps", "lbl": "Delver"}
+
+
+## Real-party composition aura — GD mirror of the server's compositionAura.ts so
+## a MOCK party shows a bonus too. Over the ONLINE members' class/role spread
+## (size + distinct classes + distinct roles, capped). Live mode reads the
+## server's party_aura_mult directly; this is only the mock fallback.
+static func composition_aura_mult(members: Array) -> float:
+	var online: Array = []
+	for m_v in members:
+		var m := m_v as Dictionary
+		if bool(m.get("online", false)) and String(m.get("class_id", "")) != "":
+			online.append(m)
+	if online.size() <= 1:
+		return 1.0
+	var classes := {}
+	var roles := {}
+	for m in online:
+		var cid := String((m as Dictionary)["class_id"])
+		classes[cid] = true
+		roles[String(class_role(cid)["role"])] = true
+	var c: Dictionary = Balance.value("composition", {})
+	var bonus := float(c.get("size_step", 0.03)) * float(online.size() - 1) \
+		+ float(c.get("class_step", 0.035)) * float(classes.size() - 1) \
+		+ float(c.get("role_step", 0.025)) * float(roles.size() - 1)
+	return 1.0 + minf(float(c.get("cap", 0.28)), bonus)
 
 
 ## Locked heroes join the collection once the altar gives them back: any
@@ -76,20 +116,27 @@ static func hero_recruited(id: String) -> bool:
 	return false
 
 
-## The live fighting four: lineup heroes wearing PARTY's battlefield anchors
-## (cluster x/y per slot) — mirrors the design's `{...PARTY[i], ...h, x, y}`.
+## The single character you play (1 account = 1 character). The battlefield,
+## the Fight HUD frame, the party-finder dock and the sim vitals all read this,
+## so returning one entry renders one delver everywhere. Wears the cluster's
+## lead anchor. (The 12-hero HEROES pool + aura_check are dormant — pruned in a
+## later cleanup once no v2 saves reference them.)
 static func active_party() -> Array:
-	var out: Array = []
-	for i in PARTY.size():
-		var slot: Dictionary = PARTY[i]
-		var hero := hero_by_id(GameState.party_ids[i] if i < GameState.party_ids.size() else "")
-		var merged: Dictionary = slot.duplicate()
-		for key in hero:
-			merged[key] = hero[key]
-		merged["x"] = slot["x"]
-		merged["y"] = slot["y"]
-		out.append(merged)
-	return out
+	var cls := class_by_id(GameState.class_id)
+	var cr := class_role(GameState.class_id)
+	var nm := GameState.player_name if GameState.player_name != "" else String(cls.get("name", "Delver"))
+	return [{
+		"id": "self",
+		"name": nm,
+		"role": String(cr["role"]),
+		"role_lbl": String(cr["lbl"]),
+		"cls": String(cls.get("name", "Delver")),
+		"hp": 100.0,
+		"mana": 80.0,
+		"x": 26.0,
+		"y": 66.0,
+		"lvl": GameState.player_level,
+	}]
 
 
 ## Team Aura diagnostics (design v2 PartyStore.aura): exactly 1 tank +
@@ -471,7 +518,8 @@ static func pet_owned(i: int) -> bool:
 	var pet: Dictionary = PETS[clampi(i, 0, PETS.size() - 1)]
 	if bool(pet["owned"]):
 		return true
-	return GameState.roster_extra.size() >= int(pet.get("unlock_summons", 1 << 30))
+	# Gated on lifetime summons (the roster is gone — gacha rolls gear now).
+	return GameState.total_summons >= int(pet.get("unlock_summons", 1 << 30))
 
 
 static func pet_unlock_need(i: int) -> int:

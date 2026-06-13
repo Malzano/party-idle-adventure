@@ -27,9 +27,36 @@ func test_compute_returns_positive_party_dps() -> void:
 	assert_gt(float(profile["gear_power"]), 0.0)
 
 
-func test_team_aura_optimal_for_default_party() -> void:
-	assert_true(PlayerStats.team_aura_optimal(),
-		"1 tank + 1 healer + 2 different DPS classes should activate the aura")
+func test_party_aura_reflects_server_multiplier() -> void:
+	# The local 1-tank/1-healer/2-DPS check is gone; the aura is the server's
+	# real-party composition multiplier (1.0 = solo) and it scales party DPS.
+	GameState.party_aura_mult = 1.0
+	assert_false(PlayerStats.team_aura_optimal(), "solo: no composition aura")
+	GameState.party_aura_mult = 1.2
+	assert_true(PlayerStats.team_aura_optimal(), "a real-party aura activates it")
+
+	GameState.party_aura_mult = 1.0
+	PlayerStats.invalidate()
+	var solo := float(PlayerStats.compute()["party_dps"])
+	GameState.party_aura_mult = 1.25
+	PlayerStats.invalidate()
+	var partied := float(PlayerStats.compute()["party_dps"])
+	assert_almost_eq(partied / solo, 1.25, 0.001, "party aura scales DPS by its multiplier")
+	GameState.party_aura_mult = 1.0
+
+
+func test_character_base_dps_is_class_keyed() -> void:
+	GameState.party_aura_mult = 1.0
+	GameState.class_id = "warrior"
+	PlayerStats.invalidate()
+	var w := float(PlayerStats.compute()["party_dps"])
+	GameState.class_id = "mage"
+	PlayerStats.invalidate()
+	var m := float(PlayerStats.compute()["party_dps"])
+	assert_gt(w, 0.0)
+	assert_gt(m, 0.0)
+	assert_ne(w, m, "different classes have different base DPS")
+	GameState.class_id = ""
 
 
 func test_extra_talent_node_never_lowers_stats() -> void:

@@ -84,6 +84,8 @@ func _ready() -> void:
 	EventBus.talents_changed.connect(_recompute_stats)
 	EventBus.loadout_changed.connect(_recompute_stats)
 	EventBus.game_loaded.connect(_recompute_stats)
+	# Joining/leaving a party changes the composition aura → reprice party_dps.
+	EventBus.party_changed.connect(_recompute_stats)
 	_compute_offline()
 
 

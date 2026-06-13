@@ -10,9 +10,10 @@ const _EquipmentTabScript := preload("res://scenes/hero/EquipmentTab.gd")
 const _PetsTabScript := preload("res://scenes/hero/PetsTab.gd")
 const _RelicsTabScript := preload("res://scenes/hero/RelicsTab.gd")
 const _TalentsTabScript := preload("res://scenes/hero/TalentsTab.gd")
-const _RosterTabScript := preload("res://scenes/hero/RosterTab.gd")
 
-const _TAB_DEFS := [["Equipment", "Q"], ["Pets", "W"], ["Relics", "E"], ["Talents", "R"], ["Roster", "T"]]
+# Roster tab removed: 1 account = 1 character, so there is no party to manage —
+# you team up with real players via the Party Finder.
+const _TAB_DEFS := [["Equipment", "Q"], ["Pets", "W"], ["Relics", "E"], ["Talents", "R"]]
 
 var _tab_buttons: Array[Button] = []
 var _pages: Array[Control] = []
@@ -45,7 +46,7 @@ func _ready() -> void:
 	body.mouse_filter = Control.MOUSE_FILTER_PASS
 	column.add_child(body)
 
-	var scripts: Array = [_EquipmentTabScript, _PetsTabScript, _RelicsTabScript, _TalentsTabScript, _RosterTabScript]
+	var scripts: Array = [_EquipmentTabScript, _PetsTabScript, _RelicsTabScript, _TalentsTabScript]
 	for s in scripts:
 		var page := (s as GDScript).new() as Control
 		page.visible = false
@@ -173,8 +174,6 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			idx = 2
 		KEY_R:
 			idx = 3
-		KEY_T:
-			idx = 4
 	if idx >= 0:
 		_select_tab(idx)
 		get_viewport().set_input_as_handled()
