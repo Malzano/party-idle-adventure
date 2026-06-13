@@ -51,6 +51,18 @@ var _vitals_dirty_ticks: int = 0
 var _kills_emitted: int = 0
 var _rng := RandomNumberGenerator.new()
 
+## Boss-wave state (set by _reset_wave; "normal" the rest of the time). The
+## skill modulations live in Balance and are applied identically here (live)
+## and in simulate_offline so away-gains never diverge.
+var _wave_kind: String = "normal"
+var _wave_ticks: int = 0           # boss-wave tick count (integer → no float drift)
+var _wave_elapsed: float = 0.0     # = _wave_ticks / TICK_RATE; drives skill timing
+var _boss_kit: Dictionary = {}
+var _boss_regen: float = 0.0       # absolute boss HP recovered per second
+var _boss_adds_done: bool = false
+var _boss_add_hp: float = 0.0      # one-time threshold bump from an adds wave
+var _boss_shield_on: bool = false  # tracks the shield window for telegraphs
+
 
 func _ready() -> void:
 	_rng.seed = 0x6D2B79F5  # fixed seed: deterministic flavor rolls
@@ -111,12 +123,43 @@ func _maybe_relic_unlock() -> void:
 
 func _reset_wave() -> void:
 	wave_pool = Balance.wave_pool(Balance.stage_index(act, stage))
+	_wave_kind = Balance.wave_kind(act, stage, wave)
 	wave_damage = 0.0
+	_wave_ticks = 0
+	_wave_elapsed = 0.0
+	_boss_adds_done = false
+	_boss_add_hp = 0.0
+	_boss_shield_on = false
 	_kills_emitted = 0
+	if _wave_kind != "normal":
+		wave_pool *= Balance.boss_hp_mult(_wave_kind)
+		_boss_kit = Balance.boss_kit(_wave_kind)
+		_boss_regen = Balance.boss_regen_per_sec(_boss_kit, wave_pool)
+		var fl := Balance.floor_index(act, stage)
+		EventBus.sim_boss_started.emit(_wave_kind, Balance.boss_name(_wave_kind, fl), _wave_kind, wave_pool)
+		EventBus.sim_boss_hp.emit(1.0)
+	else:
+		_boss_kit = {}
+		_boss_regen = 0.0
+
+
+## Damage needed to clear the current wave NOW. For boss waves this grows with
+## the enrage ramp and any adds bump; for normal waves it is just wave_pool.
+func _boss_threshold() -> float:
+	if _wave_kind == "normal":
+		return wave_pool
+	return wave_pool * (1.0 + Balance.boss_enrage_factor(_boss_kit, _wave_elapsed)) + _boss_add_hp
 
 
 func wave_fill() -> float:
-	return clampf(wave_damage / wave_pool * 100.0, 0.0, 100.0)
+	return clampf(wave_damage / _boss_threshold() * 100.0, 0.0, 100.0)
+
+
+## Un-multiplied wave pool for the current stage. Presentation layers (the
+## battlefield's cosmetic enemy HP / time-to-kill) must read THIS, not wave_pool,
+## which is boss-HP-multiplied (×9 / ×4) during boss waves.
+func base_wave_pool() -> float:
+	return Balance.wave_pool(Balance.stage_index(act, stage))
 
 
 func _process(delta: float) -> void:
@@ -141,17 +184,44 @@ func _process(delta: float) -> void:
 func _tick() -> void:
 	GameState.check_daily_reset()
 
-	var dmg := party_dps / TICK_RATE
-	wave_damage += dmg
+	var dmg: float
+	var cleared := false
+	if _wave_kind == "normal":
+		dmg = party_dps / TICK_RATE
+		wave_damage += dmg
+		# Each wave is per_wave enemies; emit a kill whenever damage crosses the
+		# next enemy's HP share so the battlefield drops a token in sync.
+		var per_wave := Balance.inum("enemy.per_wave", 8)
+		var kills_due := mini(per_wave, int(wave_damage / wave_pool * float(per_wave)))
+		while _kills_emitted < kills_due:
+			_kills_emitted += 1
+			EventBus.sim_enemy_killed.emit()
+		cleared = wave_damage >= wave_pool
+	else:
+		# Boss wave: party DPS is modulated by the kit's skills (shield/debuff
+		# windows), the boss may regen, and an adds wave can bump the threshold.
+		# Clock off an INTEGER tick count so the elapsed time is exactly
+		# float(n)/TICK_RATE — byte-for-byte equal to _boss_clear_secs offline
+		# (accumulating += 0.1 drifts and flips integer-second skill boundaries).
+		_wave_ticks += 1
+		_wave_elapsed = float(_wave_ticks) / TICK_RATE
+		var mult := Balance.boss_dps_mult(_boss_kit, _wave_elapsed)
+		dmg = party_dps * mult / TICK_RATE
+		wave_damage = maxf(0.0, wave_damage + dmg - _boss_regen / TICK_RATE)
+		if not _boss_adds_done and _boss_kit.has("adds"):
+			var adds: Dictionary = _boss_kit["adds"]
+			if wave_damage >= float(adds.get("at_frac", 2.0)) * wave_pool:
+				_boss_adds_done = true
+				_boss_add_hp = float(adds.get("hp_frac", 0.0)) * wave_pool
+		var shielded := mult < 1.0
+		if shielded != _boss_shield_on:
+			_boss_shield_on = shielded
+			EventBus.sim_boss_skill.emit("shield", shielded, 0.0)
+		EventBus.sim_boss_hp.emit(clampf(1.0 - wave_damage / _boss_threshold(), 0.0, 1.0))
+		# Threshold force-clear keeps offline/idle a speed-bump, never a wall.
+		cleared = wave_damage >= _boss_threshold() or _wave_elapsed >= Balance.boss_time_cap()
 	GameState.daily_damage += dmg
-	# Each wave is per_wave enemies; emit a kill whenever damage crosses the
-	# next enemy's HP share so the battlefield drops a token in sync.
-	var per_wave := Balance.inum("enemy.per_wave", 8)
-	var kills_due := mini(per_wave, int(wave_damage / wave_pool * float(per_wave)))
-	while _kills_emitted < kills_due:
-		_kills_emitted += 1
-		EventBus.sim_enemy_killed.emit()
-	if wave_damage >= wave_pool:
+	if cleared:
 		_on_wave_cleared()
 	EventBus.sim_wave_progress.emit(wave_fill())
 
@@ -188,10 +258,15 @@ func _tick() -> void:
 
 
 func _on_wave_cleared() -> void:
-	wave_damage -= wave_pool
+	if _wave_kind != "normal":
+		EventBus.sim_boss_defeated.emit(_wave_kind)
+	# No carryover: every wave (the _reset_wave calls below zero wave_damage)
+	# clears in a whole number of ticks, so the live sim and simulate_offline
+	# stay identical. Boss waves pay a reward multiplier for the longer fight.
 	var s_index := Balance.stage_index(act, stage)
-	GameState.add_gold(wave_gold_reward(s_index))
-	GameState.add_xp(wave_xp_reward(s_index))
+	var rmult := Balance.boss_reward_mult(_wave_kind)
+	GameState.add_gold(int(wave_gold_reward(s_index) * rmult))
+	GameState.add_xp(int(wave_xp_reward(s_index) * rmult))
 	var waves_per_stage := Balance.inum("enemy.waves_per_stage", 5)
 	if wave >= waves_per_stage:
 		wave = 1
@@ -291,15 +366,26 @@ func simulate_offline(seconds: int) -> Dictionary:
 	var gold_mult := 1.0 + float(profile["derived"]["gold_find"])
 	var xp_mult := 1.0 + float(profile["derived"]["xp_gain"])
 
-	while time_left > 0.0 and waves_cleared < 200000:
+	# Backstop only (never the reward limiter): 12h at 1 tick/wave = 432000
+	# waves, so this must sit above that or strong parties lose late offline time.
+	while time_left > 0.0 and waves_cleared < 500000:
 		var s_index := Balance.stage_index(sim_act, sim_stage)
-		var wave_time := Balance.wave_pool(s_index) / dps
+		var kind := Balance.wave_kind(sim_act, sim_stage, sim_wave)
+		var pool := Balance.wave_pool(s_index)
+		var wave_time: float
+		if kind == "normal":
+			# Tick-quantize so offline matches the live sim's whole-tick clears.
+			wave_time = ceilf(pool / dps * TICK_RATE) / TICK_RATE
+		else:
+			pool *= Balance.boss_hp_mult(kind)
+			wave_time = _boss_clear_secs(pool, Balance.boss_kit(kind), dps)
 		if wave_time > time_left:
 			break
 		time_left -= wave_time
 		waves_cleared += 1
-		gold += Balance.wave_gold(s_index) * gold_mult
-		xp_total += Balance.wave_xp(s_index) * xp_mult
+		var rmult := Balance.boss_reward_mult(kind)
+		gold += Balance.wave_gold(s_index) * gold_mult * rmult
+		xp_total += Balance.wave_xp(s_index) * xp_mult * rmult
 		if sim_wave >= waves_per_stage:
 			sim_wave = 1
 			sim_stage += 1
@@ -338,6 +424,36 @@ func simulate_offline(seconds: int) -> Dictionary:
 		"end_stage": sim_stage,
 		"end_wave": sim_wave,
 	}
+
+
+## Seconds to clear one boss wave, stepped at TICK_RATE with the exact same
+## per-tick math as the live boss branch in _tick — so offline gains match the
+## live sim. Force-clears at the time cap so a weak party is slowed, not walled.
+func _boss_clear_secs(pool: float, kit: Dictionary, dps: float) -> float:
+	var cap := Balance.boss_time_cap()
+	var max_ticks := int(cap * TICK_RATE)
+	var regen := Balance.boss_regen_per_sec(kit, pool)
+	var has_adds: bool = kit.has("adds")
+	var adds_at := INF
+	var adds_hp := 0.0
+	if has_adds:
+		var adds: Dictionary = kit["adds"]
+		adds_at = float(adds.get("at_frac", 2.0)) * pool
+		adds_hp = float(adds.get("hp_frac", 0.0)) * pool
+	var dmg := 0.0
+	var add_hp := 0.0
+	var adds_done := false
+	for n in range(1, max_ticks + 1):
+		var t := float(n) / TICK_RATE
+		var mult := Balance.boss_dps_mult(kit, t)
+		dmg = maxf(0.0, dmg + dps * mult / TICK_RATE - regen / TICK_RATE)
+		if not adds_done and has_adds and dmg >= adds_at:
+			adds_done = true
+			add_hp = adds_hp
+		var threshold := pool * (1.0 + Balance.boss_enrage_factor(kit, t)) + add_hp
+		if dmg >= threshold:
+			return float(n) / TICK_RATE
+	return cap
 
 
 ## Apply pending offline rewards to the profile (Collect button) — including

@@ -327,7 +327,7 @@ func _make_enemy_node(enemy_name: String, elite: bool, lunge: bool) -> Control:
 		"type": ("Elite · Stage %s" if elite else "Stage %s") % CombatSim.stage_label(),
 		"rarity": "epic" if elite else "common",
 		"stats": [
-			["HP", Style.group_int(int(CombatSim.wave_pool / Balance.inum("enemy.per_wave", 8) * (2.0 if elite else 1.0)))],
+			["HP", Style.group_int(int(CombatSim.base_wave_pool() / Balance.inum("enemy.per_wave", 8) * (2.0 if elite else 1.0)))],
 			["Range", "Closing"],
 		],
 	})
@@ -452,7 +452,9 @@ func _add_footstep(at_pct: Vector2, flip: bool, life: float) -> void:
 ## Approach + engage + cosmetic HP drain at the real time-to-kill rate.
 func _update_enemies(delta: float, spd: float) -> void:
 	var per_wave := Balance.inum("enemy.per_wave", 8)
-	var ttk := maxf(0.5, (CombatSim.wave_pool / float(per_wave)) / maxf(1.0, CombatSim.party_dps))
+	# Cosmetic time-to-kill uses the BASE (un-boss-multiplied) pool so the field
+	# enemy bars keep draining at the normal rate during boss waves.
+	var ttk := maxf(0.5, (CombatSim.base_wave_pool() / float(per_wave)) / maxf(1.0, CombatSim.party_dps))
 	for e in _enemies:
 		if String(e["state"]) == "dying":
 			continue

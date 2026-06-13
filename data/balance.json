@@ -6,7 +6,13 @@
     "pool_growth": 1.076,
     "waves_per_stage": 5,
     "stages_per_act": 50,
-    "per_wave": 8
+    "per_wave": 8,
+    "comment_floors": "stages_per_act (50) is FROZEN — it is the global stage-index multiplier read by the server (caps/leaderboard/chests). substages_per_floor groups the flat 1..50 stage counter into floors for boss cadence (10 substages = 1 floor → 5 floors per act). Mini-boss on the final wave of substage 5, floor boss on the final wave of substage 10.",
+    "substages_per_floor": 10,
+    "miniboss_substage": 5,
+    "boss_substage": 10,
+    "miniboss_hp_mult": 4.0,
+    "boss_hp_mult": 9.0
   },
 
   "rewards": {
@@ -17,7 +23,9 @@
     "xp_to_next_growth": 1.15,
     "loot_interval_ticks": 21.0,
     "offline_cap_hours": 12,
-    "offline_item_waves_per_item": 15
+    "offline_item_waves_per_item": 15,
+    "miniboss_reward_mult": 4.0,
+    "boss_reward_mult": 10.0
   },
 
   "energy": {

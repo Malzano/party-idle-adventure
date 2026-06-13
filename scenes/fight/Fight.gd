@@ -25,6 +25,12 @@ var _wave_lbl: Label
 var _wave_bar: StatBar
 var _pips: Array = []
 
+# Boss banner (built once, hidden; shown/hidden + updated on the boss signals).
+var _boss_banner: PanelContainer
+var _boss_tier_lbl: Label
+var _boss_name_lbl: Label
+var _boss_bar: StatBar
+
 var _hp_bars: Array = []
 var _mana_bars: Array = []
 var _hp_nums: Array = []
@@ -62,6 +68,7 @@ func _ready() -> void:
 	battlefield.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 	_build_wave_bar()
+	_build_boss_banner()
 	_build_party_finder()
 	_build_team_aura()
 	_build_loot_ticker()
@@ -75,6 +82,9 @@ func _ready() -> void:
 	EventBus.sim_wave_progress.connect(_on_wave_progress)
 	EventBus.sim_wave_changed.connect(_on_wave_changed)
 	EventBus.sim_stage_changed.connect(_on_stage_changed)
+	EventBus.sim_boss_started.connect(_on_boss_started)
+	EventBus.sim_boss_hp.connect(_on_boss_hp)
+	EventBus.sim_boss_defeated.connect(_on_boss_defeated)
 	EventBus.sim_loot.connect(_on_loot)
 	EventBus.sim_party_vitals.connect(_on_party_vitals)
 	EventBus.sim_speed_changed.connect(_on_speed_changed)
@@ -149,9 +159,10 @@ func _build_wave_bar() -> void:
 	prog.add_theme_constant_override("separation", 5)
 	prog.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	prog.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var wps := Balance.inum("enemy.waves_per_stage", 5)
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", 12)
-	_wave_lbl = Style.body_label("Wave %d / 5" % CombatSim.wave, 11, Palette.TX_DIM)
+	_wave_lbl = Style.body_label("Wave %d / %d" % [CombatSim.wave, wps], 11, Palette.TX_DIM)
 	head.add_child(_wave_lbl)
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -172,16 +183,52 @@ func _build_wave_bar() -> void:
 	prog.add_child(_wave_bar)
 	row.add_child(prog)
 
-	# 5 wave pips (done = gold-dim, current = glowing ember).
+	# Wave pips (done = gold-dim, current = glowing ember), one per wave.
 	var pips := HBoxContainer.new()
 	pips.add_theme_constant_override("separation", 5)
 	pips.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	for n in 5:
+	for n in wps:
 		var pip := _Pip.new()
 		_pips.append(pip)
 		pips.add_child(pip)
 	row.add_child(pips)
 	_refresh_pips(CombatSim.wave)
+
+
+## Boss banner: a crimson-framed name + HP bar, built once and shown only while
+## a boss/mini-boss wave is live (driven by the sim_boss_* signals). One
+## persistent node — never rebuilt — so its layout closure can't dangle.
+func _build_boss_banner() -> void:
+	var panel := PanelContainer.new()
+	var sb := Style.panel_box(true)
+	sb.content_margin_left = 16
+	sb.content_margin_right = 16
+	sb.content_margin_top = 6
+	sb.content_margin_bottom = 8
+	sb.border_color = Palette.R_MYTHIC
+	panel.add_theme_stylebox_override("panel", sb)
+	panel.custom_minimum_size = Vector2(680, 0)
+	panel.visible = false
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(panel)
+	_boss_banner = panel
+	# y=220 sits clear of the mythic ribbon (_RIBBON_Y=188) so an SSR drop during
+	# a boss wave doesn't overlay the banner.
+	_hud_layouts.append(func(rs: Vector2) -> void:
+		panel.position = Vector2((rs.x - panel.size.x) * 0.5, 220.0))
+
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 3)
+	panel.add_child(col)
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 8)
+	_boss_tier_lbl = Style.display_label("BOSS", 11, Palette.R_MYTHIC)
+	head.add_child(_boss_tier_lbl)
+	_boss_name_lbl = Style.display_label("", 14, Palette.EMBER_BRIGHT)
+	head.add_child(_boss_name_lbl)
+	col.add_child(head)
+	_boss_bar = StatBar.new("hp", 100.0, 10.0)
+	col.add_child(_boss_bar)
 
 
 func _refresh_pips(wave: int) -> void:
@@ -1088,11 +1135,31 @@ func _on_wave_progress(fill: float) -> void:
 
 
 func _on_wave_changed(wave: int) -> void:
-	_wave_lbl.text = "Wave %d / 5" % wave
+	_wave_lbl.text = "Wave %d / %d" % [wave, Balance.inum("enemy.waves_per_stage", 5)]
 	_refresh_pips(wave)
 
 
+func _on_boss_started(_id: String, boss_name: String, tier: String, _max_hp: float) -> void:
+	_boss_tier_lbl.text = "FLOOR BOSS" if tier == "boss" else "MINI-BOSS"
+	_boss_name_lbl.text = boss_name
+	_boss_bar.pct = 100.0
+	_boss_banner.visible = true
+	_request_layout()
+
+
+func _on_boss_hp(fill: float) -> void:
+	_boss_bar.pct = clampf(fill * 100.0, 0.0, 100.0)
+
+
+func _on_boss_defeated(_id: String) -> void:
+	_boss_banner.visible = false
+
+
 func _on_stage_changed(label_text: String, stage_name: String) -> void:
+	# Stage advances always land on a normal wave 1, so any boss banner is now
+	# stale. This also covers retreat() / collect_offline(), which leave a boss
+	# wave WITHOUT a sim_boss_defeated (the banner's only other hide path).
+	_boss_banner.visible = false
 	_stage_val.text = label_text
 	_stage_name_lbl.text = stage_name
 	_on_wave_changed(CombatSim.wave)

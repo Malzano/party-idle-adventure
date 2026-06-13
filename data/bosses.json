@@ -1,0 +1,31 @@
+{
+  "comment": "Boss content for the first floors. Skills are DETERMINISTIC scalar pacing modulations applied by CombatSim every TICK (live) and mirrored verbatim into simulate_offline — never a party-wipe model. Five primitives: enrage (clear threshold ramps after a delay, capped), shield (periodic windows where party DPS is multiplied by `leak`), regen (boss recovers a fraction of its pool per second), adds (a one-time HP bump once damage crosses a fraction of the pool). Two generic kits (miniboss = lighter, boss = fuller) parameterized by floor via HP/stage growth; per-floor bespoke kits are a later content pass. Names are indexed by floor (wraps past 10).",
+
+  "boss_time_cap": 600.0,
+
+  "miniboss_names": [
+    "Marrow Knight", "Cinder Acolyte", "Gravebound Brute", "Hexwright Adept",
+    "Tomb Sentinel", "Ashen Revenant", "Bog Drowner", "Spineweaver",
+    "Dread Chanter", "Hollow Vanguard"
+  ],
+  "boss_names": [
+    "The Bone Warden", "Embermaw", "The Gravetide Colossus", "Archhex Vol'Karreth",
+    "The Tomb Tyrant", "Cinderlord Maug", "The Drowned King", "Mother of Spines",
+    "The Dread Choir", "Sovereign of the Hollow"
+  ],
+
+  "kits": {
+    "miniboss": {
+      "comment": "Light pacing: a slow enrage and a short periodic shield. Always clears well within the cap at on-curve DPS.",
+      "enrage": { "start": 14.0, "ramp": 0.03, "cap": 0.6 },
+      "shield": { "start": 7.0, "period": 13.0, "duration": 2.5, "leak": 0.15 }
+    },
+    "boss": {
+      "comment": "Fuller kit: stronger enrage, a longer/harder shield, slow regen, and one adds wave at 55% damage. Tuned so net progress per shield-period stays positive at on-curve DPS; the cap force-clears the grossly underleveled.",
+      "enrage": { "start": 20.0, "ramp": 0.04, "cap": 1.0 },
+      "shield": { "start": 9.0, "period": 15.0, "duration": 3.5, "leak": 0.10 },
+      "regen": { "per_sec_frac": 0.008 },
+      "adds":  { "at_frac": 0.55, "hp_frac": 0.35 }
+    }
+  }
+}

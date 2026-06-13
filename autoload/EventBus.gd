@@ -42,6 +42,18 @@ signal sim_wave_changed(wave: int)
 ## Stage advanced; label like "4-7", name like "The Sunken Reliquary".
 signal sim_stage_changed(label: String, stage_name: String)
 
+## A boss/mini-boss wave began. tier is "boss" | "miniboss".
+signal sim_boss_started(id: String, boss_name: String, tier: String, max_hp: float)
+
+## Boss remaining-HP fraction (1.0 full → 0.0 dead) for the boss HP bar.
+signal sim_boss_hp(fill: float)
+
+## Boss skill window state changed (shield/enrage/etc.) for telegraphs.
+signal sim_boss_skill(kind: String, active: bool, telegraph_s: float)
+
+## The current boss/mini-boss wave was cleared.
+signal sim_boss_defeated(id: String)
+
 ## Auto-loot ticker entry: [who, verb, item, rarity].
 signal sim_loot(entry: Array)
 

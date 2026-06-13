@@ -78,8 +78,68 @@ func test_wave_gold_reward_applies_dungeon_gold_rush() -> void:
 func test_wave_fill_is_clamped_percentage() -> void:
 	CombatSim.wave_pool = 200.0
 	CombatSim.wave_damage = 50.0
+	CombatSim._wave_kind = "normal"
 	assert_almost_eq(CombatSim.wave_fill(), 25.0, 0.0001)
 	CombatSim.wave_damage = 1000.0
 	assert_eq(CombatSim.wave_fill(), 100.0, "fill clamps at 100%")
 	CombatSim._reset_wave()
 	assert_eq(CombatSim.wave_fill(), 0.0, "fresh wave starts at 0%")
+
+
+# --- Bosses: live/offline parity + no-stall ---------------------------------
+
+func test_floor_boss_clear_matches_live_tick() -> void:
+	# The live tick and the offline sim must clear a boss in the SAME number of
+	# ticks at EVERY DPS — the kit's skill windows fall on integer-second
+	# boundaries (enrage 20s, shield 9s / period 15s), so an accumulating float
+	# clock would drift across a boundary at some DPS and diverge. Sweep several
+	# DPS values whose clear times cross those boundaries differently.
+	var kit := Balance.boss_kit("boss")
+	var cap := Balance.boss_time_cap()
+	var wps := Balance.inum("enemy.waves_per_stage", 5)
+	for div: float in [20.0, 28.0, 30.0, 37.0, 45.0]:
+		GameState.reset_to_defaults()
+		CombatSim.act = 1
+		CombatSim.stage = 10  # floor-boss sub-stage
+		CombatSim.wave = wps  # final wave
+		CombatSim._reset_wave()
+		assert_eq(CombatSim._wave_kind, "boss", "stage 10 final wave is the floor boss")
+
+		var pool := CombatSim.wave_pool
+		var dps := pool / div
+		CombatSim.party_dps = dps
+		var off_secs := CombatSim._boss_clear_secs(pool, kit, dps)
+		assert_gt(off_secs, 9.0, "fight crosses at least the shield window")
+		assert_lt(off_secs, cap, "on-curve DPS clears before the cap")
+
+		# Live: re-arm the same boss wave and tick until defeated; count ticks.
+		CombatSim.wave = wps
+		CombatSim._reset_wave()
+		var defeated := [false]
+		var cb := func(_id: String) -> void: defeated[0] = true
+		EventBus.sim_boss_defeated.connect(cb)
+		var ticks := 0
+		var guard := int(cap * CombatSim.TICK_RATE) + 5
+		while not defeated[0] and ticks < guard:
+			CombatSim._tick()
+			ticks += 1
+		EventBus.sim_boss_defeated.disconnect(cb)
+
+		var live_secs := float(ticks) / CombatSim.TICK_RATE
+		assert_almost_eq(live_secs, off_secs, 0.0001,
+			"live vs offline boss clear must match exactly at dps=pool/%.0f" % div)
+
+
+func test_boss_never_stalls() -> void:
+	var cap := Balance.boss_time_cap()
+	for kind in ["miniboss", "boss"]:
+		var kit := Balance.boss_kit(kind)
+		var pool := 1.0e9  # an absurd pool no weak party can chew through
+		# Tiny DPS: force-clears at the cap (slowed, never walled).
+		var weak := CombatSim._boss_clear_secs(pool, kit, 1.0)
+		assert_almost_eq(weak, cap, 0.0001,
+			"%s force-clears at the time cap for a too-weak party" % kind)
+		# Ample DPS: clears well before the cap.
+		var strong := CombatSim._boss_clear_secs(pool, kit, pool)
+		assert_gt(strong, 0.0)
+		assert_lt(strong, cap, "%s clears quickly at high DPS" % kind)
