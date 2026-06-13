@@ -823,7 +823,10 @@ func _on_floater(kind: String, amount: int, hero_idx: int) -> void:
 	var xp: float
 	var yp: float
 	if kind == "heal":
-		var h: Dictionary = GameContent.PARTY[clampi(hero_idx, 0, GameContent.PARTY.size() - 1)]
+		# Anchor on the live lineup (the single delver), NOT the legacy 4-hero
+		# PARTY template — otherwise heals pop off the old slot-0 anchor.
+		var lineup := GameContent.active_party()
+		var h: Dictionary = lineup[clampi(hero_idx, 0, lineup.size() - 1)]
 		xp = float(h["x"]) + _rng.randf_range(-2.5, 2.5)
 		yp = float(h["y"]) - 4.0 + _rng.randf_range(-2.0, 2.0)
 	else:

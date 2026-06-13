@@ -165,7 +165,9 @@ func gacha_pull(count: int) -> Dictionary:
 			_bank_gacha_item(item, s_index)
 		GameState.set_pity(p)
 		GameState.total_summons += count
-		GameState.daily_summons += count
+		# Clamp to the server schema cap (save.ts daily_summons max 1000) so a
+		# heavy spender can't push the daily counter past it and 422 every save.
+		GameState.daily_summons = mini(GameState.daily_summons + count, 1000)
 		EventBus.quests_changed.emit()
 		EventBus.equipment_changed.emit()
 		return _wrap(200, {"results": results, "pity": p, "soulstones": GameState.premium_currency})
@@ -178,7 +180,7 @@ func gacha_pull(count: int) -> Dictionary:
 		for item in items:
 			_bank_gacha_item(item, s_index2)
 		GameState.total_summons += items.size()
-		GameState.daily_summons += items.size()
+		GameState.daily_summons = mini(GameState.daily_summons + items.size(), 1000)
 		GameState.set_pity(int(data.get("pity", GameState.pity)))
 		GameState.premium_currency = int(data.get("soulstones", GameState.premium_currency))
 		EventBus.currencies_changed.emit()
