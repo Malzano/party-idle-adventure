@@ -52,9 +52,11 @@ var energy: int = 86
 var energy_max: int = 120
 
 # --- Progression ---------------------------------------------------------------
-var act: int = 4
-var stage: int = 7
-var max_stage: int = 407
+# A fresh delver begins at the level-1 dungeon: floor 1, sub-stage 1
+# (max_stage = act*100 + stage = 101). Existing saves keep their stored position.
+var act: int = 1
+var stage: int = 1
+var max_stage: int = 101
 
 # --- Gacha ----------------------------------------------------------------------
 var pity: int = 47
@@ -434,9 +436,9 @@ func reset_to_defaults() -> void:
 	ember_dust = 38
 	energy = 86
 	energy_max = 120
-	act = 4
-	stage = 7
-	max_stage = 407
+	act = 1
+	stage = 1
+	max_stage = 101
 	pity = 47
 	talents_allocated = []
 	active_pet = 0

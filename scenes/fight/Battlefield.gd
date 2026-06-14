@@ -26,6 +26,12 @@ const _CHEST_SIZE := Vector2(56, 46)
 const CHEST_MAX := 2                          # alive at once
 const CHEST_LIFE := 25.0                      # seconds before it sinks away
 
+# --- hero focusing + projectiles (presentation only; never feeds the sim) ---
+const FOCUS_RECOMPUTE_INTERVAL := 0.15        # how often the hero re-picks a target
+const FIRE_INTERVAL := 0.55                   # cosmetic attack period at 1× speed
+const MAX_PROJECTILES := 24                   # hard cap (bounds 4×-speed bursts)
+const _BOSS_SIZE := Vector2(132, 168)
+
 var _t: float = 0.0
 var _layouts: Array[Callable] = []
 var _bobs: Array[Dictionary] = []
@@ -49,6 +55,13 @@ var _chests: Array[Dictionary] = []     # {node, glow, pct, life, opening}
 var _next_chest_at: float = 8.0         # _t deadline for the next cache
 var _hero_units: Array[Control] = []    # the fighting four (lineup-rebuilt)
 
+var _focus: Dictionary = {}             # the hero's target: a reference into _enemies ({} = none)
+var _focus_accum: float = 0.0
+var _fire_accum: float = 0.0
+var _projectiles: Array[Dictionary] = []  # {node, from, to, t, dur, impact}
+var _proj_holder: Control
+var _boss_entry: Dictionary = {}        # the single on-field boss token during a boss wave
+
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -58,6 +71,12 @@ func _ready() -> void:
 	resized.connect(_request_relayout)
 	EventBus.sim_floater.connect(_on_floater)
 	EventBus.sim_enemy_killed.connect(_on_enemy_killed)
+	# A real boss wave puts ONE distinct token on the field (Fight.gd keeps the
+	# HUD banner). Normal waves never show a boss.
+	EventBus.sim_boss_started.connect(_on_boss_started)
+	EventBus.sim_boss_defeated.connect(_on_boss_defeated)
+	EventBus.sim_boss_hp.connect(_on_boss_hp_field)
+	EventBus.sim_stage_changed.connect(_on_stage_changed_clear_boss)
 	_request_relayout()
 
 
@@ -91,6 +110,25 @@ func _process(delta: float) -> void:
 	var drift_pct := Vector2(drift_px.x / size.x, drift_px.y / size.y) * 100.0
 	_scroll_world(drift_px, drift_pct, delta)
 	_update_enemies(delta, spd)
+	# Hero focusing: re-pick the nearest target on a throttle or when it's lost.
+	_focus_accum += delta
+	if _focus_accum >= FOCUS_RECOMPUTE_INTERVAL or not _focus_valid():
+		_focus_accum = 0.0
+		_retarget_focus()
+	# Cosmetic attacks on a speed-scaled cadence (bounded so 4× can't flood the
+	# field): ranged classes fire projectiles, melee classes lunge.
+	var spec := _projectile_spec_for_active()
+	if _focus_valid() and not spec.is_empty():
+		_fire_accum += delta * spd
+		var acts := 0
+		while _fire_accum >= FIRE_INTERVAL and acts < 2:
+			_fire_accum -= FIRE_INTERVAL
+			acts += 1
+			if bool(spec.get("ranged", false)):
+				_fire_projectile(spec)
+			else:
+				_maybe_melee_lunge(spec)
+	_update_projectiles(delta, spd)
 	while not _respawn_at.is_empty() and _respawn_at[0] <= _t:
 		_respawn_at.pop_front()
 		_spawn_enemy(false)
@@ -156,6 +194,12 @@ func _build() -> void:
 	_units_holder.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_units_holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_units_holder)
+
+	# Projectiles draw above the units but are NOT depth-sorted (own holder).
+	_proj_holder = Control.new()
+	_proj_holder.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_proj_holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_proj_holder)
 
 	for p: Dictionary in GameContent.PROPS:
 		var prop := _make_prop(p)
@@ -269,9 +313,12 @@ func _spawn_enemy(initial: bool) -> void:
 		if bool(e["elite"]) and String(e["state"]) != "dying":
 			has_elite = true
 			break
-	var elite := not has_elite
+	var elite := (not has_elite) and _boss_entry.is_empty()  # no cosmetic elite while a real boss holds the field
 	var lunge := (not elite) and _rng.randf() < 0.45
-	var enemy_name := "Bone Warden" if elite else ("Marrow Stalker" if _rng.randf() < 0.4 else "Hollow Ghoul")
+	# Floor-themed names: floor 1 = weak early creatures; deeper floors swap in.
+	var roster := GameContent.enemy_roster_for_floor(Balance.floor_index(CombatSim.act, CombatSim.stage))
+	var trash: Array = roster["trash"]
+	var enemy_name := String(roster["elite"]) if elite else String(trash[_rng.randi_range(0, trash.size() - 1)])
 
 	# Edge spawn point: hot (top-right) markers weighted ×3, elite always TR.
 	var spawn: Dictionary = GameContent.SPAWNS[0]
@@ -347,7 +394,7 @@ func _make_enemy_node(enemy_name: String, elite: bool, lunge: bool) -> Control:
 
 	# UnitSprite: real frames when the enemy's bundle has art, else the labeled
 	# placeholder. The code-driven approach/lunge bob is unchanged.
-	var bundle := "enemy.elite" if elite else ("enemy.ghoul" if enemy_name == "Hollow Ghoul" else "enemy.skeleton")
+	var bundle := "enemy.elite" if elite else ("enemy.ghoul" if _rng.randf() < 0.5 else "enemy.skeleton")
 	var sprite := UnitSprite.new(bundle, "96×112\nelite" if elite else "64×80\nfoe", true)
 	sprite.size = usz
 	unit.add_child(sprite)
@@ -469,7 +516,7 @@ func _update_enemies(delta: float, spd: float) -> void:
 				pct += to_go / d * minf(d, float(e["speed"]) * spd * delta)
 				e["pct"] = pct
 			_update_enemy_visual(e)
-		else:
+		elif not is_same(e, _boss_entry):  # boss bar tracks sim_boss_hp, not the cosmetic drain
 			var bar := e["bar"] as StatBar
 			bar.pct = maxf(5.0, bar.pct - 100.0 / ttk * spd * delta)
 		_pos_bottom(e["node"], e["pct"])
@@ -667,16 +714,20 @@ func _update_enemy_visual(e: Dictionary) -> void:
 ## a flatten-and-fade, then queue a replacement from the edges.
 func _on_enemy_killed() -> void:
 	var victim: Dictionary = {}
-	for e in _enemies:
-		if String(e["state"]) != "engaged":
-			continue
-		if victim.is_empty():
-			victim = e
-			continue
-		var v_better := (bool(victim["elite"]) and not bool(e["elite"])) \
-			or ((bool(victim["elite"]) == bool(e["elite"])) and (victim["bar"] as StatBar).pct > (e["bar"] as StatBar).pct)
-		if v_better:
-			victim = e
+	# The hero kills what it's hitting: drop the focused token first.
+	if _focus_valid() and String(_focus["state"]) == "engaged":
+		victim = _focus
+	if victim.is_empty():
+		for e in _enemies:
+			if String(e["state"]) != "engaged":
+				continue
+			if victim.is_empty():
+				victim = e
+				continue
+			var v_better := (bool(victim["elite"]) and not bool(e["elite"])) \
+				or ((bool(victim["elite"]) == bool(e["elite"])) and (victim["bar"] as StatBar).pct > (e["bar"] as StatBar).pct)
+			if v_better:
+				victim = e
 	if victim.is_empty():
 		# Nothing engaged yet — take the closest approacher instead.
 		var best_d := INF
@@ -689,19 +740,263 @@ func _on_enemy_killed() -> void:
 				victim = e
 	if victim.is_empty():
 		return
+	if is_same(victim, _focus):
+		_focus = {}  # focus died → retarget next frame
+	_kill_entry(victim)
+	_respawn_at.append(_t + _rng.randf_range(0.4, 1.3) / maxf(1.0, float(CombatSim.speed) * 0.6))
 
-	victim["state"] = "dying"
-	var unit := victim["node"] as Control
-	var sprite := victim["sprite"] as Control
-	_bobs = _bobs.filter(func(b: Dictionary) -> bool: return b["node"] != sprite)
+
+## Flatten-and-fade a token, then free it. Idempotent (safe for overlapping
+## tweens, or a boss cleared by both defeat and a stage change). Shared by the
+## sim-kill path and the boss removal.
+func _kill_entry(entry: Dictionary) -> void:
+	if entry.is_empty() or not _enemies.has(entry) or String(entry["state"]) == "dying":
+		return
+	entry["state"] = "dying"
+	var unit := entry["node"] as Control
+	var sprite: Variant = entry["sprite"]
+	_bobs = _bobs.filter(func(b: Dictionary) -> bool: return not is_same(b["node"], sprite))
 	var tw := unit.create_tween()
 	tw.set_parallel(true)
 	tw.tween_property(unit, "scale:y", 0.06, 0.3).set_ease(Tween.EASE_IN)
 	tw.tween_property(unit, "modulate:a", 0.0, 0.32)
 	tw.chain().tween_callback(func() -> void:
-		_enemies.erase(victim)
+		_enemies.erase(entry)
 		unit.queue_free())
-	_respawn_at.append(_t + _rng.randf_range(0.4, 1.3) / maxf(1.0, float(CombatSim.speed) * 0.6))
+
+
+# =========================================================================
+# Hero focusing + projectiles (presentation only — never feeds the sim)
+# =========================================================================
+
+func _focus_valid() -> bool:
+	return not _focus.is_empty() and _enemies.has(_focus) and String(_focus["state"]) != "dying"
+
+
+## Nearest non-dying enemy to the party; an engaged token always outranks an
+## approaching one (the hero fights what's in front of it first).
+func _nearest_enemy() -> Dictionary:
+	var best: Dictionary = {}
+	var best_score := INF
+	for e in _enemies:
+		if String(e["state"]) == "dying":
+			continue
+		var score := (e["pct"] as Vector2).distance_to(PARTY_CENTER) - (1000.0 if String(e["state"]) == "engaged" else 0.0)
+		if score < best_score:
+			best_score = score
+			best = e
+	return best
+
+
+## Sticky targeting: keep the current focus until it dies or leaves, then pick
+## the nearest. (A boss wave sets _focus explicitly; it stays valid here.)
+func _retarget_focus() -> void:
+	if _focus_valid():
+		return
+	_focus = _nearest_enemy()
+	_face_hero_at_focus()
+
+
+## Flip the hero to face the focus — the OUTER UnitSprite Control's scale.x
+## (the inner _anim is rewritten by UnitSprite._fit()).
+func _face_hero_at_focus() -> void:
+	if _hero_units.is_empty() or not _focus_valid():
+		return
+	var spr: Variant = _hero_units[0].get_meta("sprite")
+	if spr is Control:
+		(spr as Control).scale.x = 1.0 if (_focus["pct"] as Vector2).x >= PARTY_CENTER.x else -1.0
+
+
+func _projectile_spec_for_active() -> Dictionary:
+	var party := GameContent.active_party()
+	if party.is_empty():
+		return {}
+	return GameContent.projectile_spec(String((party[0] as Dictionary).get("class_id", "")))
+
+
+func _proj_color(key: String) -> Color:
+	match key:
+		"cyan":
+			return Palette.CYAN_BRIGHT
+		"gold":
+			return Palette.GOLD_BRIGHT
+		_:
+			return Palette.EMBER_BRIGHT
+
+
+func _hero_screen_center() -> Vector2:
+	var h := _hero_units[0]
+	return h.position + h.size * Vector2(0.5, 0.45)  # roughly the chest
+
+
+func _focus_screen_center() -> Vector2:
+	var pct: Vector2 = _focus["pct"]
+	return Vector2(size.x * pct.x / 100.0, size.y * pct.y / 100.0) - Vector2(0.0, 30.0)  # body, above the feet
+
+
+## A cosmetic projectile flying hero → focus. Aim is captured now, so a focus
+## dying mid-flight still lands (reads as the killing blow).
+func _fire_projectile(spec: Dictionary) -> void:
+	if _hero_units.is_empty() or not _focus_valid() or _projectiles.size() >= MAX_PROJECTILES:
+		return
+	var from := _hero_screen_center()
+	var to := _focus_screen_center()
+	var is_arrow := String(spec.get("shape", "orb")) == "arrow"
+	var p := _Projectile.new(String(spec.get("shape", "orb")), _proj_color(String(spec.get("color_key", "ember"))), bool(spec.get("sparkle", false)))
+	p.size = Vector2(34, 8) if is_arrow else Vector2(18, 18)
+	p.pivot_offset = p.size * 0.5
+	if is_arrow:
+		p.rotation = (to - from).angle()
+	_proj_holder.add_child(p)
+	p.position = from - p.size * 0.5
+	var dur := clampf(0.42 / maxf(0.5, float(spec.get("speed", 1.0))), 0.18, 0.55)
+	_projectiles.append({"node": p, "from": from, "to": to, "t": 0.0, "dur": dur, "impact": String(spec.get("impact", "none"))})
+
+
+func _update_projectiles(delta: float, spd: float) -> void:
+	var keep: Array[Dictionary] = []
+	for p in _projectiles:
+		var node: Variant = p["node"]
+		if not is_instance_valid(node):
+			continue
+		var ctrl := node as Control
+		p["t"] = float(p["t"]) + delta * spd / maxf(0.01, float(p["dur"]))
+		if float(p["t"]) >= 1.0:
+			ctrl.position = (p["to"] as Vector2) - ctrl.size * 0.5
+			_impact(p)
+			continue
+		ctrl.position = (p["from"] as Vector2).lerp(p["to"], float(p["t"])) - ctrl.size * 0.5
+		keep.append(p)
+	_projectiles = keep
+
+
+func _impact(p: Dictionary) -> void:
+	var node: Variant = p["node"]
+	if not is_instance_valid(node):
+		return
+	var ctrl := node as Control
+	if String(p["impact"]) == "flash":
+		var tw := ctrl.create_tween()
+		tw.set_parallel(true)
+		tw.tween_property(ctrl, "scale", ctrl.scale * 1.8, 0.14)
+		tw.tween_property(ctrl, "modulate:a", 0.0, 0.16)
+		tw.chain().tween_callback(ctrl.queue_free)
+	else:
+		ctrl.queue_free()
+
+
+## Melee classes: a quick lunge of the hero toward the focus and back.
+func _maybe_melee_lunge(_spec: Dictionary) -> void:
+	if _hero_units.is_empty() or not _focus_valid():
+		return
+	var hero := _hero_units[0]
+	if bool(hero.get_meta("lunging", false)):
+		return
+	hero.set_meta("lunging", true)
+	var base: Vector2 = hero.position
+	var dir := (_focus_screen_center() - (base + hero.size * 0.5)).normalized()
+	var tw := hero.create_tween()
+	tw.tween_property(hero, "position", base + dir * 14.0, 0.1).set_trans(Tween.TRANS_SINE)
+	tw.tween_property(hero, "position", base, 0.16).set_trans(Tween.TRANS_SINE)
+	tw.tween_callback(func() -> void: hero.set_meta("lunging", false))
+
+
+# =========================================================================
+# Real boss waves: ONE distinct token on the field (HUD banner unchanged)
+# =========================================================================
+
+func _on_boss_started(_id: String, boss_name: String, tier: String, _max_hp: float) -> void:
+	for e in _enemies:  # clear the cosmetic elite so only the boss holds the field
+		if bool(e["elite"]) and String(e["state"]) != "dying":
+			_kill_entry(e)
+	_boss_entry = _spawn_boss_token(boss_name, tier)
+	_focus = _boss_entry
+	_face_hero_at_focus()
+
+
+func _on_boss_defeated(_id: String) -> void:
+	_clear_boss_token()
+
+
+## Retreat / offline-collect change the stage WITHOUT a sim_boss_defeated, so
+## clear any lingering boss token on a stage change too.
+func _on_stage_changed_clear_boss(_label: String, _stage_name: String) -> void:
+	_clear_boss_token()
+
+
+func _clear_boss_token() -> void:
+	if _boss_entry.is_empty():
+		return
+	if is_same(_focus, _boss_entry):
+		_focus = {}
+	_kill_entry(_boss_entry)
+	_boss_entry = {}
+
+
+## Mirror the HUD boss HP bar onto the field token (presentation only).
+func _on_boss_hp_field(fill: float) -> void:
+	if not _boss_entry.is_empty() and _enemies.has(_boss_entry):
+		(_boss_entry["bar"] as StatBar).pct = clampf(fill, 0.0, 1.0) * 100.0
+
+
+## One big, named, glowing boss token planted at the clash zone (engaged — it
+## doesn't approach, it IS the wave). Added to _enemies so the focus + projectile
+## helpers target it unchanged.
+func _spawn_boss_token(boss_name: String, tier: String) -> Dictionary:
+	var col := Palette.R_MYTHIC if tier == "boss" else Palette.R_EPIC
+	var usz := _BOSS_SIZE
+	var unit := Control.new()
+	unit.size = usz
+	unit.pivot_offset = Vector2(usz.x * 0.5, usz.y)
+	unit.mouse_filter = Control.MOUSE_FILTER_STOP
+	unit.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	Tip.attach(unit, func() -> Dictionary: return {
+		"name": boss_name,
+		"type": ("FLOOR BOSS" if tier == "boss" else "MINI-BOSS") + " · Stage " + CombatSim.stage_label(),
+		"rarity": "mythic" if tier == "boss" else "epic",
+		"stats": [["Threat", "Extreme" if tier == "boss" else "High"]],
+	})
+
+	var shadow := _Shadow.new(0.7)
+	shadow.size = Vector2(112, 22)
+	shadow.position = Vector2(usz.x * 0.5 - 56.0, usz.y - 14.0)
+	unit.add_child(shadow)
+
+	var sprite := UnitSprite.new("enemy.elite", "132×168\n%s" % boss_name, true)
+	sprite.size = usz
+	sprite.pivot_offset = usz * 0.5
+	unit.add_child(sprite)
+	sprite.play("walk")
+
+	var glow := Panel.new()
+	var gsb := StyleBoxFlat.new()
+	gsb.draw_center = false
+	gsb.set_border_width_all(2)
+	gsb.border_color = col
+	gsb.set_corner_radius_all(4)
+	gsb.shadow_color = Palette.with_alpha(col, 0.55 * Palette.GLOW)
+	gsb.shadow_size = int(30 * Palette.GLOW)
+	glow.add_theme_stylebox_override("panel", gsb)
+	glow.size = usz
+	glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	unit.add_child(glow)
+
+	var bar := StatBar.new("hp", 100.0, 7.0)
+	bar.size = Vector2(usz.x, 7.0)
+	bar.position = Vector2(0.0, -12.0)
+	unit.add_child(bar)
+
+	_units_holder.add_child(unit)
+	unit.set_meta("depth_bias", 4.0)
+	var pct := Vector2(float(GameContent.CLASH["x"]) + 8.0, float(GameContent.CLASH["y"]) - 4.0)
+	var entry := {
+		"node": unit, "sprite": sprite, "bar": bar, "pct": pct,
+		"engage": pct, "start_d": 1.0, "speed": 0.0, "elite": true, "state": "engaged",
+	}
+	_enemies.append(entry)
+	_pos_bottom(unit, pct)
+	_bobs.append({"node": sprite, "base": Vector2.ZERO, "kind": "approach", "period": 2.4, "delay": 0.0})
+	return entry
 
 
 ## Painter re-sort: children ordered by feet y (+ hero bias) as units move.
@@ -736,6 +1031,13 @@ func _spawn_party_heroes() -> void:
 		_bobs = _bobs.filter(func(b: Dictionary) -> bool: return b["node"] != spr)
 		unit.queue_free()
 	_hero_units.clear()
+	# The hero origin is gone — drop in-flight projectiles + the stale focus.
+	for p in _projectiles:
+		var pn: Variant = p["node"]
+		if is_instance_valid(pn):
+			(pn as Node).queue_free()
+	_projectiles.clear()
+	_focus = {}
 	var lineup := GameContent.active_party()
 	for i in lineup.size():
 		var hero := _make_hero(lineup[i], i)
@@ -1101,6 +1403,38 @@ class _Streak:
 		draw_polygon(
 			PackedVector2Array([Vector2(0, 0), Vector2(w, 0), Vector2(w, h), Vector2(0, h)]),
 			PackedColorArray([solid, clear, clear, solid]))
+
+
+## Cosmetic attack projectile: "arrow" = bright streak + tip (rotated to its
+## flight angle); "orb" = arcane bolt (glow ring + hot core + optional sparkle).
+class _Projectile:
+	extends Control
+
+	var shape := "orb"
+	var col := Color.WHITE
+	var sparkle := false
+
+	func _init(p_shape: String, p_col: Color, p_sparkle: bool) -> void:
+		shape = p_shape
+		col = p_col
+		sparkle = p_sparkle
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _ready() -> void:
+		resized.connect(queue_redraw)
+
+	func _draw() -> void:
+		var c := size * 0.5
+		if shape == "arrow":
+			draw_line(Vector2(2.0, c.y), Vector2(size.x - 2.0, c.y), Palette.with_alpha(col, 0.5), 5.0, true)
+			draw_line(Vector2(size.x * 0.45, c.y), Vector2(size.x - 1.0, c.y), col, 3.0, true)
+			draw_circle(Vector2(size.x - 2.0, c.y), 3.0, Color(1, 1, 1, 0.9))
+		else:
+			draw_circle(c, size.x * 0.5, Palette.with_alpha(col, 0.22))
+			draw_circle(c, size.x * 0.3, Palette.with_alpha(col, 0.6))
+			draw_circle(c, size.x * 0.17, Color(1, 1, 1, 0.95))
+			if sparkle:
+				draw_circle(c + Vector2(size.x * 0.22, -size.x * 0.18), 1.6, Color(1, 1, 1, 0.85))
 
 
 ## Hero ground ring: flattened role-colored ellipse with a soft glow.

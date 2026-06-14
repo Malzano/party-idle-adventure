@@ -130,6 +130,7 @@ static func active_party() -> Array:
 		"name": nm,
 		"role": String(cr["role"]),
 		"role_lbl": String(cr["lbl"]),
+		"class_id": GameState.class_id,  # battlefield reads this for facing + projectile spec
 		"cls": String(cls.get("name", "Delver")),
 		"hp": 100.0,
 		"mana": 80.0,
@@ -137,6 +138,49 @@ static func active_party() -> Array:
 		"y": 66.0,
 		"lvl": GameState.player_level,
 	}]
+
+
+# --- Floor-themed enemy rosters (the names the battlefield spawns; wraps per
+# floor like the boss-name tables in bosses.json). Floor 1 = weak early foes. --
+const ENEMY_ROSTER := [
+	{"elite": "Bonepicker Brute", "trash": ["Hollow Ghoul", "Crypt Rat"]},    # floor 1
+	{"elite": "Cinder Acolyte", "trash": ["Ash Crawler", "Ember Wretch"]},    # floor 2
+	{"elite": "Gravebound Ogre", "trash": ["Tomb Shambler", "Rotwalker"]},    # floor 3
+	{"elite": "Hexwright Adept", "trash": ["Curse Wisp", "Hex Thrall"]},      # floor 4
+	{"elite": "Marrow Knight", "trash": ["Marrow Stalker", "Pale Husk"]},     # floor 5
+	{"elite": "Bog Drowner", "trash": ["Mire Lurker", "Drowned Thrall"]},     # floor 6
+]
+
+
+## Enemy roster for a floor (1-indexed); wraps so deeper floors recycle themes.
+static func enemy_roster_for_floor(floor_i: int) -> Dictionary:
+	if ENEMY_ROSTER.is_empty():
+		return {"elite": "Bone Warden", "trash": ["Hollow Ghoul"]}
+	return ENEMY_ROSTER[(maxi(1, floor_i) - 1) % ENEMY_ROSTER.size()]
+
+
+# --- Attack / projectile specs per class: ranged classes fire a projectile,
+# melee classes lunge. Built to be overridden by gear/skill later. ------------
+const PROJECTILE_SPECS := {
+	"mage": {"ranged": true, "shape": "orb", "color_key": "cyan", "speed": 1.0, "trail": 0.45, "impact": "flash", "sparkle": true, "count": 1},
+	"hunter": {"ranged": true, "shape": "arrow", "color_key": "ember", "speed": 1.4, "trail": 0.3, "impact": "flash", "sparkle": false, "count": 1},
+	"warrior": {"ranged": false, "shape": "lunge", "color_key": "ember", "speed": 1.0, "trail": 0.0, "impact": "none", "sparkle": false, "count": 1},
+	"rogue": {"ranged": false, "shape": "lunge", "color_key": "cyan", "speed": 1.2, "trail": 0.0, "impact": "none", "sparkle": false, "count": 1},
+	"default": {"ranged": false, "shape": "lunge", "color_key": "ember", "speed": 1.0, "trail": 0.0, "impact": "none", "sparkle": false, "count": 1},
+}
+
+
+## Resolve the attack/projectile spec for a class. The two hooks let a future
+## equipped weapon or an active skill cast override the base effect — the
+## battlefield renderer only ever consumes the RESOLVED dict, so the visual can
+## change per gear/skill without any change to the firing loop or draw class.
+static func projectile_spec(class_id: String, overrides: Dictionary = {}) -> Dictionary:
+	var base: Dictionary = (PROJECTILE_SPECS.get(class_id, PROJECTILE_SPECS["default"]) as Dictionary).duplicate(true)
+	# HOOK 1 (future): equipped weapon → base.merge(weapon_projectile_override(class_id), true)
+	# HOOK 2 (future): active skill cast → base.merge(skill_projectile_override(skill_id), true)
+	if not overrides.is_empty():
+		base.merge(overrides, true)
+	return base
 
 
 ## Team Aura diagnostics (design v2 PartyStore.aura): exactly 1 tank +
