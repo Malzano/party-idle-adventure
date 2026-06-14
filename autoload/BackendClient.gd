@@ -69,9 +69,13 @@ func _process(delta: float) -> void:
 	# Shared-delve heartbeat (Stage 5): the leader checkpoints, members follow.
 	if not mock and GameState.in_party():
 		_delve_accum += delta
-		if _delve_accum >= DELVE_INTERVAL and not _delve_busy:
+		if _delve_accum >= DELVE_INTERVAL:
+			# Reset FIRST so a slow in-flight beat can't let the accumulator
+			# stack and then fire back-to-back beats (which would trip the
+			# server's rate limit). If a beat is still running, just skip this one.
 			_delve_accum = 0.0
-			_delve_beat()
+			if not _delve_busy:
+				_delve_beat()
 	elif GameState.in_delve():
 		# Left the party (or went solo): end the delve and resume the solo sim.
 		GameState.set_delve({})
@@ -595,12 +599,14 @@ func party_leave() -> Dictionary:
 		GameState.set_party({})
 		_save_netstate()
 		return _wrap(200, {"left": true})
+	# Stop the shared delve immediately (optimistic) so the heartbeat halts even
+	# if the leave POST fails or is slow.
+	GameState.set_delve({})
+	CombatSim.set_follow_mode(false)
+	delve_leave()  # fire-and-forget: drop from any shared session
 	var res: Dictionary = await _api("POST", "/v1/party/leave", {})
 	if bool(res["ok"]):
 		GameState.set_party({})
-		GameState.set_delve({})
-		CombatSim.set_follow_mode(false)
-		delve_leave()  # fire-and-forget: drop from any shared session
 	return res
 
 
@@ -652,7 +658,10 @@ func _delve_beat() -> void:
 		var s := sess_v as Dictionary
 		GameState.set_delve(s)
 		if String(s.get("leader_uid", "")) == _uid:
-			CombatSim.set_follow_mode(false)  # I drive my own sim
+			# Just promoted (was following)? Continue from the session position so
+			# the first checkpoint isn't a "backward" jump that stalls the delve.
+			if CombatSim.follow_mode:
+				CombatSim.adopt_as_leader(s)
 			await delve_checkpoint({
 				"seq": int(s.get("seq", 0)) + 1,
 				"act": CombatSim.act,

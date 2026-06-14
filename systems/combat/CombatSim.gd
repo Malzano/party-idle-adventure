@@ -369,6 +369,22 @@ func apply_session(sess: Dictionary) -> void:
 	EventBus.sim_wave_progress.emit(wave_fill())
 
 
+## Become the delve LEADER continuing from the shared session position (host
+## migration). Without this, a just-promoted follower would set_follow_mode(false)
+## back to its own (behind) solo floor and its first checkpoint would be rejected
+## as "backward", stalling the whole delve.
+func adopt_as_leader(sess: Dictionary) -> void:
+	follow_mode = false
+	act = int(sess.get("act", act))
+	stage = int(sess.get("stage", stage))
+	wave = int(sess.get("wave", wave))
+	stage_name = GameContent.STAGE_NAMES[(stage - 1) % GameContent.STAGE_NAMES.size()]
+	_reset_wave()
+	wave_damage = clampf(float(sess.get("wave_fill", 0.0)), 0.0, 100.0) / 100.0 * _boss_threshold()
+	EventBus.sim_stage_changed.emit(stage_label(), stage_name)
+	EventBus.sim_wave_changed.emit(wave)
+
+
 ## Enter/leave follower mode. Leaving restores the player's OWN solo position so
 ## offline/solo progress continues from where it actually is.
 func set_follow_mode(on: bool) -> void:
