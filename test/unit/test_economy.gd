@@ -37,6 +37,10 @@ func test_forge_upgrade_success_spends_and_levels() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_val
 
+	# A fresh profile starts with no materials — grant enough to forge.
+	GameState.gold = 100000
+	GameState.iron_ingots = 50
+	GameState.ember_dust = 20
 	var gold_cost := Balance.forge_gold_cost(GameState.forge_level)
 	var gold_before := GameState.gold
 	var iron_before := GameState.iron_ingots
@@ -60,6 +64,10 @@ func test_forge_upgrade_failure_spends_but_keeps_level() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_val
 
+	# A fresh profile starts with no materials — grant enough to forge.
+	GameState.gold = 100000
+	GameState.iron_ingots = 50
+	GameState.ember_dust = 20
 	var gold_before := GameState.gold
 	var level_before := GameState.forge_level
 	var result := GameState.try_forge_upgrade(rng)

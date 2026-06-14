@@ -20,8 +20,8 @@ var player_class: String = ""
 ## One of GameContent.CLASSES ids ("warrior"/"mage"/"hunter"/"rogue"; "" for
 ## legacy profiles created before classes existed).
 var class_id: String = ""
-var prestige: String = "III"
-var global_rank: int = 11
+var prestige: String = "I"
+var global_rank: int = 0
 
 
 ## True once a profile exists (class chosen, or a legacy pre-class save).
@@ -42,13 +42,16 @@ func choose_class(id: String, chosen_name: String) -> void:
 	EventBus.currencies_changed.emit()
 
 # --- Resources ----------------------------------------------------------------
-var player_level: int = 47
-var xp: int = 12480
-var xp_to_next: int = 14000
-var gold: int = 248910
-var premium_currency: int = 1204   # soulstones
-var ember_dust: int = 38
-var energy: int = 86
+# Fresh-start seeds — a new delver begins clean at the level-1 dungeon. xp_to_next
+# at level 1 ≈ 14000 / 1.15^46, so the client's ×1.15-per-level curve lands back on
+# the server's expected 14000 by level 47 (validation.ts plausibility check).
+var player_level: int = 1
+var xp: int = 0
+var xp_to_next: int = 23
+var gold: int = 0
+var premium_currency: int = 480    # soulstones — small welcome grant (≤ bootstrap cap)
+var ember_dust: int = 0
+var energy: int = 120
 var energy_max: int = 120
 
 # --- Progression ---------------------------------------------------------------
@@ -59,7 +62,7 @@ var stage: int = 1
 var max_stage: int = 101
 
 # --- Gacha ----------------------------------------------------------------------
-var pity: int = 47
+var pity: int = 0
 
 # --- Loadout / collections -------------------------------------------------------
 ## Talent node ids currently allocated (empty until first load seeds defaults).
@@ -76,8 +79,9 @@ var total_summons: int = 0
 var quests_claimed: Array[int] = []
 
 # --- Materials & forge ----------------------------------------------------------
-var iron_ingots: int = 46
-## Upgrade level of the main-hand weapon (design base is +7).
+var iron_ingots: int = 0
+## Upgrade level of the main-hand weapon (design base is +7; the server save
+## schema floors this at 7, so a fresh delver starts here — not at 0).
 var forge_level: int = 7
 
 # --- Equipment (canonical items: {n, r, slot, ilvl, s}) ---------------------------
@@ -426,26 +430,26 @@ func reset_to_defaults() -> void:
 	player_title = ""
 	player_class = ""
 	class_id = ""
-	prestige = "III"
-	global_rank = 11
-	player_level = 47
-	xp = 12480
-	xp_to_next = 14000
-	gold = 248910
-	premium_currency = 1204
-	ember_dust = 38
-	energy = 86
+	prestige = "I"
+	global_rank = 0
+	player_level = 1
+	xp = 0
+	xp_to_next = 23
+	gold = 0
+	premium_currency = 480
+	ember_dust = 0
+	energy = 120
 	energy_max = 120
 	act = 1
 	stage = 1
 	max_stage = 101
-	pity = 47
+	pity = 0
 	talents_allocated = []
 	active_pet = 0
 	roster_extra = []
 	total_summons = 0
 	quests_claimed = []
-	iron_ingots = 46
+	iron_ingots = 0
 	forge_level = 7
 	seed_default_equipment()
 	daily_chests = 0

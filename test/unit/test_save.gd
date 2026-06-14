@@ -89,9 +89,9 @@ func test_from_dict_missing_keys_keep_defaults() -> void:
 	GameState.from_dict({"gold": 5})
 	assert_eq(GameState.gold, 5)
 	assert_eq(GameState.forge_level, 7, "missing forge_level keeps the default")
-	assert_eq(GameState.iron_ingots, 46, "missing iron_ingots keeps the default")
+	assert_eq(GameState.iron_ingots, 0, "missing iron_ingots keeps the (fresh-start) default")
 	assert_eq(GameState.dungeon_attempts, 3, "missing dungeon_attempts keeps the default")
-	assert_eq(GameState.pity, 47, "missing pity keeps the default")
+	assert_eq(GameState.pity, 0, "missing pity keeps the (fresh-start) default")
 	assert_eq(GameState.equipped.size(), GameContent.EQUIP_SLOTS.size(),
 		"pre-equipment saves seed the default paperdoll")
 
