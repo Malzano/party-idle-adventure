@@ -724,10 +724,6 @@ func _hero_frame(h: Dictionary, idx: int) -> Control:
 	var ps := PixelSlot.new("56²", true)
 	portrait.add_child(ps)
 	ps.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	var chip := Style.make_role_tag(String(h["role"]), String(h["role_lbl"]))
-	chip.resized.connect(func() -> void:
-		chip.position = Vector2(27.0 - chip.size.x * 0.5, 54.0 + 6.0 - chip.size.y))
-	portrait.add_child(chip)
 	row.add_child(portrait)
 
 	# Name + LV over live hp/mana bars.
@@ -774,6 +770,13 @@ func _hero_frame(h: Dictionary, idx: int) -> Control:
 	for s in 3:
 		skills.add_child(_SkillPip.new(s == 0, float(s) * 0.3))
 	row.add_child(skills)
+
+	# Role chip tabbed onto the RIGHT edge of the frame — hangs just outside,
+	# clear of the skill pips, vertically centered (frame is 252×84).
+	var chip := Style.make_role_tag(String(h["role"]), String(h["role_lbl"]))
+	frame.add_child(chip)
+	chip.resized.connect(func() -> void:
+		chip.position = Vector2(249.0, (84.0 - chip.size.y) * 0.5))
 	return frame
 
 
