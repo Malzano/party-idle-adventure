@@ -165,6 +165,16 @@ func _boss_threshold() -> float:
 
 
 func wave_fill() -> float:
+	# Solo / party-leader normal waves: the bar tracks the SLOWER of damage and
+	# the elapsed minimum, so it reaches 100% exactly when the wave clears (not
+	# the instant the pool is out-DPSed). Followers don't tick _wave_elapsed —
+	# their fill is the leader's broadcast value reconstructed in apply_session,
+	# so they keep the plain damage-based read.
+	if _wave_kind == "normal" and not follow_mode:
+		var min_secs := Balance.num("enemy.min_wave_seconds", 12.0)
+		var dmg_frac := (wave_damage / wave_pool) if wave_pool > 0.0 else 1.0
+		var time_frac := (_wave_elapsed / min_secs) if min_secs > 0.0 else 1.0
+		return clampf(minf(dmg_frac, time_frac) * 100.0, 0.0, 100.0)
 	return clampf(wave_damage / _boss_threshold() * 100.0, 0.0, 100.0)
 
 
@@ -200,27 +210,37 @@ func _process(delta: float) -> void:
 func _tick() -> void:
 	GameState.check_daily_reset()
 
+	# Wave clock (INTEGER tick count so elapsed is exactly float(n)/TICK_RATE —
+	# byte-for-byte equal to the offline projection; accumulating += 0.1 drifts
+	# and flips integer-second boundaries). Drives boss skill windows AND the
+	# normal-wave minimum duration, so live and offline clear in the same tick.
+	_wave_ticks += 1
+	_wave_elapsed = float(_wave_ticks) / TICK_RATE
+
 	var dmg: float
 	var cleared := false
 	if _wave_kind == "normal":
 		dmg = party_dps / TICK_RATE
 		wave_damage += dmg
-		# Each wave is per_wave enemies; emit a kill whenever damage crosses the
-		# next enemy's HP share so the battlefield drops a token in sync.
+		# Pacing floor: a wave never clears faster than min_wave_seconds, so even
+		# an overpowered party watches the wave play out. simulate_offline mirrors
+		# this with the same max(min, dps-time) so away-gains never diverge.
+		var min_secs := Balance.num("enemy.min_wave_seconds", 12.0)
+		# Each wave is per_wave enemies; drop a token whenever the SLOWER of
+		# (damage done, elapsed minimum) crosses the next enemy's share — so the
+		# last minion falls exactly as the wave clears (the next wave only starts
+		# once the field is cleared).
 		var per_wave := Balance.inum("enemy.per_wave", 8)
-		var kills_due := mini(per_wave, int(wave_damage / wave_pool * float(per_wave)))
+		var dmg_frac := (wave_damage / wave_pool) if wave_pool > 0.0 else 1.0
+		var time_frac := (_wave_elapsed / min_secs) if min_secs > 0.0 else 1.0
+		var kills_due := mini(per_wave, int(minf(dmg_frac, time_frac) * float(per_wave)))
 		while _kills_emitted < kills_due:
 			_kills_emitted += 1
 			EventBus.sim_enemy_killed.emit()
-		cleared = wave_damage >= wave_pool
+		cleared = wave_damage >= wave_pool and _wave_elapsed >= min_secs
 	else:
 		# Boss wave: party DPS is modulated by the kit's skills (shield/debuff
 		# windows), the boss may regen, and an adds wave can bump the threshold.
-		# Clock off an INTEGER tick count so the elapsed time is exactly
-		# float(n)/TICK_RATE — byte-for-byte equal to _boss_clear_secs offline
-		# (accumulating += 0.1 drifts and flips integer-second skill boundaries).
-		_wave_ticks += 1
-		_wave_elapsed = float(_wave_ticks) / TICK_RATE
 		var mult := Balance.boss_dps_mult(_boss_kit, _wave_elapsed)
 		dmg = party_dps * mult / TICK_RATE
 		wave_damage = maxf(0.0, wave_damage + dmg - _boss_regen / TICK_RATE)
@@ -481,8 +501,11 @@ func simulate_offline(seconds: int) -> Dictionary:
 		var pool := Balance.wave_pool(s_index)
 		var wave_time: float
 		if kind == "normal":
-			# Tick-quantize so offline matches the live sim's whole-tick clears.
-			wave_time = ceilf(pool / dps * TICK_RATE) / TICK_RATE
+			# Tick-quantize so offline matches the live sim's whole-tick clears,
+			# and floor it at the SAME minimum the live tick enforces (the wave
+			# clears at max(min_secs, dps-time) in both paths → identical waves).
+			var min_secs := Balance.num("enemy.min_wave_seconds", 12.0)
+			wave_time = maxf(ceilf(min_secs * TICK_RATE) / TICK_RATE, ceilf(pool / dps * TICK_RATE) / TICK_RATE)
 		else:
 			pool *= Balance.boss_hp_mult(kind)
 			wave_time = _boss_clear_secs(pool, Balance.boss_kit(kind), dps)

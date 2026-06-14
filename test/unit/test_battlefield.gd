@@ -217,3 +217,45 @@ func test_boss_defeated_removes_the_token() -> void:
 	EventBus.sim_boss_started.emit("boss", "Embermaw", "boss", 9000.0)
 	EventBus.sim_boss_defeated.emit("boss")
 	assert_true((bf._boss_entry as Dictionary).is_empty(), "boss token cleared on defeat")
+
+
+# --- Discrete waves: clear the field, then the next wave marches in ----------
+
+func test_normal_wave_advance_stages_a_full_batch() -> void:
+	var bf := _bf()
+	await get_tree().process_frame
+	bf.set_process(false)
+	CombatSim.act = 1
+	CombatSim.stage = 1
+	CombatSim.wave = 2  # a normal wave (sub-stage 1, not a boss)
+	bf._respawn_at.clear()
+	bf._on_sim_wave_advanced(2)
+	assert_eq(bf._respawn_at.size(), Balance.inum("enemy.per_wave", 8),
+		"a normal wave advance stages a full fresh batch of minions")
+	# Every living straggler from the previous wave is being cleared.
+	for e in bf._enemies:
+		assert_eq(String(e["state"]), "dying", "the previous wave's minions are cleared first")
+
+
+func test_boss_wave_advance_does_not_stage_trash() -> void:
+	var bf := _bf()
+	await get_tree().process_frame
+	bf.set_process(false)
+	CombatSim.act = 1
+	CombatSim.stage = 10  # floor-boss sub-stage
+	CombatSim.wave = Balance.inum("enemy.waves_per_stage", 5)  # the boss wave
+	bf._respawn_at.clear()
+	bf._on_sim_wave_advanced(CombatSim.wave)
+	assert_eq(bf._respawn_at.size(), 0, "a boss wave refills no trash (the boss token spawns separately)")
+
+
+func test_kill_does_not_respawn_mid_wave() -> void:
+	var bf := _bf()
+	await get_tree().process_frame
+	bf.set_process(false)
+	bf._respawn_at.clear()
+	bf._enemies[0]["state"] = "engaged"
+	bf._focus = bf._enemies[0]
+	bf._on_enemy_killed()
+	assert_eq(bf._respawn_at.size(), 0,
+		"no mid-wave respawn — the field refills only when the wave advances")

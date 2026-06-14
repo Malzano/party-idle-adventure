@@ -77,6 +77,9 @@ func _ready() -> void:
 	EventBus.sim_boss_defeated.connect(_on_boss_defeated)
 	EventBus.sim_boss_hp.connect(_on_boss_hp_field)
 	EventBus.sim_stage_changed.connect(_on_stage_changed_clear_boss)
+	# Discrete waves: a fresh batch of minions marches in only once the previous
+	# wave is cleared (no mid-wave respawn). Boss waves are a single token.
+	EventBus.sim_wave_changed.connect(_on_sim_wave_advanced)
 	_request_relayout()
 
 
@@ -743,7 +746,8 @@ func _on_enemy_killed() -> void:
 	if is_same(victim, _focus):
 		_focus = {}  # focus died → retarget next frame
 	_kill_entry(victim)
-	_respawn_at.append(_t + _rng.randf_range(0.4, 1.3) / maxf(1.0, float(CombatSim.speed) * 0.6))
+	# No mid-wave respawn: the field refills only when the wave advances
+	# (_on_sim_wave_advanced), so each wave's minions are cleared before the next.
 
 
 ## Flatten-and-fade a token, then free it. Idempotent (safe for overlapping
@@ -763,6 +767,26 @@ func _kill_entry(entry: Dictionary) -> void:
 	tw.chain().tween_callback(func() -> void:
 		_enemies.erase(entry)
 		unit.queue_free())
+
+
+## Discrete waves: a fresh batch of per_wave minions marches in when the wave
+## advances — only once the previous wave is cleared (no mid-wave respawn), so
+## the field empties between waves. Boss / mini-boss waves are a single token
+## spawned by _on_boss_started, so they refill nothing here.
+func _on_sim_wave_advanced(_wave: int) -> void:
+	if size.x < 4.0 or not _boss_entry.is_empty():
+		return  # a boss owns the field; trash refills once it is defeated
+	# Fade any living straggler (a kill that found no victim) so the per-wave
+	# count stays exact, then stage a fresh staggered batch via the respawn queue.
+	for e in _enemies.duplicate():
+		if String(e["state"]) != "dying" and not is_same(e, _boss_entry):
+			_kill_entry(e)
+	_respawn_at.clear()
+	if Balance.wave_kind(CombatSim.act, CombatSim.stage, CombatSim.wave) != "normal":
+		return  # the boss token spawns from sim_boss_started
+	var n := Balance.inum("enemy.per_wave", 8)
+	for i in n:
+		_respawn_at.append(_t + float(i) * 0.18)
 
 
 # =========================================================================
@@ -906,8 +930,12 @@ func _maybe_melee_lunge(_spec: Dictionary) -> void:
 # =========================================================================
 
 func _on_boss_started(_id: String, boss_name: String, tier: String, _max_hp: float) -> void:
-	for e in _enemies:  # clear the cosmetic elite so only the boss holds the field
-		if bool(e["elite"]) and String(e["state"]) != "dying":
+	# Clear ALL of the wave's living minions (not just a cosmetic elite) so only
+	# the boss holds the field. The discrete-wave reaper (_on_sim_wave_advanced)
+	# early-returns once a boss is up, so the boss-start path must reap any
+	# wave-N straggler itself or it would linger beside the boss the whole fight.
+	for e in _enemies.duplicate():
+		if String(e["state"]) != "dying":
 			_kill_entry(e)
 	_boss_entry = _spawn_boss_token(boss_name, tier)
 	_focus = _boss_entry

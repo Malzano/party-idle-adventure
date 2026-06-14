@@ -83,11 +83,50 @@ func test_wave_fill_is_clamped_percentage() -> void:
 	CombatSim.wave_pool = 200.0
 	CombatSim.wave_damage = 50.0
 	CombatSim._wave_kind = "normal"
+	# The fill is min(damage, elapsed-vs-minimum); set elapsed past the minimum so
+	# this asserts the DAMAGE fraction (the time gate is satisfied).
+	CombatSim._wave_elapsed = 9999.0
 	assert_almost_eq(CombatSim.wave_fill(), 25.0, 0.0001)
 	CombatSim.wave_damage = 1000.0
 	assert_eq(CombatSim.wave_fill(), 100.0, "fill clamps at 100%")
 	CombatSim._reset_wave()
 	assert_eq(CombatSim.wave_fill(), 0.0, "fresh wave starts at 0%")
+
+
+func test_normal_wave_respects_minimum_duration() -> void:
+	# Request 1: even infinite DPS cannot clear a normal wave faster than
+	# min_wave_seconds, so every wave is a visible fight the minions march into.
+	GameState.reset_to_defaults()
+	GameState.player_level = 47
+	CombatSim.act = 1
+	CombatSim.stage = 1
+	CombatSim.wave = 1
+	CombatSim._reset_wave()
+	CombatSim.party_dps = 1.0e12  # would vaporise the pool in a single tick
+	assert_eq(CombatSim._wave_kind, "normal")
+
+	var min_secs := Balance.num("enemy.min_wave_seconds", 12.0)
+	var min_ticks := int(ceil(min_secs * CombatSim.TICK_RATE))
+	var start_wave := CombatSim.wave
+	for _i in min_ticks - 1:
+		CombatSim._tick()
+	assert_eq(CombatSim.wave, start_wave, "wave holds until the minimum elapses, despite infinite DPS")
+	CombatSim._tick()  # this tick crosses the minimum
+	assert_ne(CombatSim.wave, start_wave, "wave clears the tick the minimum is reached")
+
+
+func test_offline_floors_normal_wave_at_minimum() -> void:
+	# The same floor offline: an over-powered party clears exactly one wave per
+	# minimum window (live and offline agree on max(min, dps-time)).
+	GameState.reset_to_defaults()
+	GameState.player_level = 47
+	CombatSim.act = 1
+	CombatSim.stage = 1
+	CombatSim.wave = 1
+	CombatSim.party_dps = 1.0e12
+	var min_secs := Balance.num("enemy.min_wave_seconds", 12.0)
+	var d := CombatSim.simulate_offline(int(min_secs))
+	assert_eq(int(d["waves"]), 1, "min duration caps an OP party to one wave per window offline")
 
 
 # --- Bosses: live/offline parity + no-stall ---------------------------------
