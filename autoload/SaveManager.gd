@@ -15,9 +15,49 @@ const SAVE_VERSION := 3
 ## question in CLAUDE.md §10.5 — placeholder until confirmed.
 const OFFLINE_CAP_SECONDS := 12 * 60 * 60
 
+## DEV: wipe ALL local cached state on every editor run so the game boots fresh
+## at the Login screen (no save, party, auth, settings, or asset cache). Editor
+## ONLY — exported builds keep normal persistence. Flip to false to keep state
+## between runs in the editor.
+const DEV_FRESH_START := true
+
 
 func _ready() -> void:
+	# Runs before BackendClient (auth/netstate) and AssetManager (cache) read
+	# their files — autoload order: …, SaveManager(3), …, BackendClient(6),
+	# AssetManager(8) — so clearing here gives a truly clean boot.
+	if DEV_FRESH_START and OS.has_feature("editor"):
+		_dev_clear_local_state()
 	load_game()
+
+
+## Delete the cached profile / party / auth / settings / downloaded assets so an
+## editor run starts from scratch. Targets specific paths only (never the engine
+## caches). No-op in exported builds.
+func _dev_clear_local_state() -> void:
+	for f: String in ["user://savegame.json", "user://netstate.json",
+			"user://auth.json", "user://settings.cfg"]:
+		if FileAccess.file_exists(f):
+			DirAccess.remove_absolute(f)
+	_dev_rm_rf("user://assets")  # AssetManager's hash-keyed download cache
+	print("[SaveManager] DEV_FRESH_START: cleared local state → fresh boot.")
+
+
+func _dev_rm_rf(path: String) -> void:
+	var d := DirAccess.open(path)
+	if d == null:
+		return
+	d.list_dir_begin()
+	var entry := d.get_next()
+	while entry != "":
+		var full := path.path_join(entry)
+		if d.current_is_dir():
+			_dev_rm_rf(full)
+		else:
+			DirAccess.remove_absolute(full)
+		entry = d.get_next()
+	d.list_dir_end()
+	DirAccess.remove_absolute(path)
 
 
 ## Write the current GameState to disk. Returns true on success.
