@@ -15,6 +15,15 @@ through gear, pets, relics, a talent tree, and gacha-summoned heroes.
 > gotchas, and validation commands, and records the decisions taken on §10's open questions.
 > Keep that file updated when the architecture changes.
 
+> **⚠ CORE-LOOP PIVOT (2026-06-14) — §2/§5/§6 below are partly SUPERSEDED.** The game is now
+> **1 account = 1 character** (no party of 4 owned heroes): you build your single class-picked
+> delver and team up with REAL players. **Floors/bosses** (10 sub-stages/floor, mini-boss@5,
+> boss@10, deterministic skill pacing), **gacha rolls GEAR** (not heroes), and **Team Aura → a
+> server-computed real-party composition bonus**. The backend is **LIVE on party-idle-dev**
+> (Cloud Run, asia-southeast1); the client ships `mock=false`. Full record of what changed and
+> why is in [docs/ARCHITECTURE.md §Single-character pivot](docs/ARCHITECTURE.md). The true
+> synchronized shared battlefield (Stage 5) is the deferred next milestone.
+
 ---
 
 ## 1. Tech stack & targets

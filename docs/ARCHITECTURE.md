@@ -7,12 +7,53 @@
 
 A **party-based idle dungeon crawler** for PC/Steam in **Godot 4.6 (typed GDScript, tabs)**.
 Dark gothic ARPG mood ("Grimhollow" design system: carved stone, beveled iron, ember glow).
-A party of 4 heroes auto-fights 24/7 — including while the game is closed — and the player
-builds power through gear, talents, pets, relics, food buffs, and gacha summons.
+Your **single character** auto-fights 24/7 — including while the game is closed — and you build
+power through gear, talents, pets, relics, food buffs, and gacha summons (real-player parties
+add a shared-combat bonus).
 
 **Sister repo:** [party-idle-adventure-srv](https://github.com/Malzano/party-idle-adventure-srv)
-(`party-idle-api`) — TypeScript/Express 5/Firestore on Cloud Run. The server owns all mutable
-shared state; this client ships with a schema-faithful **mock mode** (see §Backend).
+(`party-idle-api`) — TypeScript/Express 5/Firestore on Cloud Run, **LIVE on party-idle-dev**
+(asia-southeast1). The server owns all mutable shared state; the client ships **`mock=false`**
+(set `BackendClient.mock=true` to run fully offline; same schemas).
+
+---
+
+## Single-character pivot (2026-06-14) — the current model
+
+> Earlier versions had a player-owned **party of 4 gacha heroes** with a Roster tab. That is
+> **GONE**. The four stages below shipped + deployed; the design memory has the full record.
+
+- **1 account = 1 character.** `GameContent.active_party()` returns ONE class-derived delver
+  (cascades to the battlefield, Fight HUD, party dock and `CombatSim` vitals — all read it
+  size-agnostically). `PlayerStats` base DPS = `character.base_dps[class_id]` (balance.json)
+  × gear/talent mult × `GameState.party_aura_mult`. The 12-hero `HEROES` pool, `aura_check`,
+  `gacha_pick`, `set_party_slot`/`add_roster_hero`, and `party_ids` are **dormant** (pruned in
+  a later cleanup). The Roster tab is removed.
+- **Floors & bosses.** The flat `stage` (1..50) is the sub-stage counter; `floor =
+  (stage_index-1)/10+1`. Mini-boss on the final wave of sub-stage 5, floor boss on sub-stage
+  10 (`Balance.wave_kind`). `data/bosses.json` holds 5 deterministic scalar skill primitives
+  (enrage/shield/regen/adds). `CombatSim` clocks the boss with an INTEGER tick counter so the
+  live tick and `_boss_clear_secs` (offline) are byte-identical; bosses force-clear at
+  `boss_time_cap` → offline never stalls. `stages_per_act=50` is FROZEN (server stage-index
+  unit); `enemy.substages_per_floor` is the new cadence knob.
+- **Gacha rolls GEAR** into the bag (mock + live, bag-full salvage to gold). The pet-unlock
+  gate reads `GameState.total_summons` (migrated from a legacy roster's length on load).
+- **Team Aura → real-party composition bonus.** Server `lib/compositionAura.ts` returns
+  `party_aura_mult` on the PartyView (online members' class/role spread, capped +28%, solo
+  1.0). `GameState.set_party` adopts it; `party_changed` reprices the sim + rebuilds the
+  Fight "PARTY AURA · +N%" badge.
+- **Save schema (both repos, coordinated rollout).** `to_dict` dropped `party_lineup` +
+  `roster_extra`, added `total_summons`. `SAVE_VERSION` 2→3 with the load gate fixed to `< 2`
+  (the old `< SAVE_VERSION` gate would have WIPED every v2 save). Server went **permissive
+  first** (`roster_extra` optional, anti-cheat re-keyed to `total_summons` growth) before the
+  client dropped the keys, so nothing 422s.
+- **Firestore gotcha (critical):** Firestore can't store arrays-of-arrays, and item stat pairs
+  are `s: [["Armour","+248"],...]`. So the save blob is persisted as a **JSON string** on the
+  server (`lib/blob.ts`; client/HTTP contract unchanged). Live-test saves WITH items, not just
+  empty ones. Verified live: save+items, gacha→gear (idempotent), chest, sync, forge all 200.
+- **Deferred (Stage 5):** the true real-time synchronized shared battlefield
+  (`combat_sessions` + delve heartbeat). The composition aura is the shippable group-bonus
+  slice meanwhile.
 
 ---
 

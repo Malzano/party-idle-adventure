@@ -11,6 +11,13 @@
 > guild/mail UI, private parties with invite codes, Roster tab, pet/relic milestone
 > acquisition, welcome-back fix, focus navigation, LICENSE, affix calibration, warning
 > sweep, live materials tab. What remains of them is folded below.*
+>
+> *2026-06-14: **SINGLE-CHARACTER PIVOT shipped + deployed** (Stages 1-4 — see
+> [docs/ARCHITECTURE.md §Single-character pivot](docs/ARCHITECTURE.md)). 1 account = 1
+> character (Roster tab removed), floors + sub-stage bosses, gacha rolls GEAR, real-party
+> composition aura. Backend LIVE on party-idle-dev; client ships mock=false. **Next milestone:
+> Stage 5 — the true synchronized shared battlefield** (`combat_sessions` + delve heartbeat).
+> Cleanup later: prune the dormant HEROES pool / `party_ids` / `aura_check` / `gacha_pick`.*
 
 ## 1. Go live against the backend
 
