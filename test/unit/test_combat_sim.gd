@@ -11,6 +11,10 @@ func before_all() -> void:
 
 func before_each() -> void:
 	GameState.reset_to_defaults()
+	# DPS scales with level (Balance.level_dps_mult); these offline tests run at
+	# floor 4-7, so put the character at the calibration level so it has the
+	# demo-tuned power there (a fresh level-1 delver would clear nothing at 4-7).
+	GameState.player_level = Balance.inum("dps_model.level_ref", 47)
 	PlayerStats.invalidate()
 	CombatSim.act = 4
 	CombatSim.stage = 7

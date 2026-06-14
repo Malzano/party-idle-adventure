@@ -273,6 +273,9 @@ func add_xp(amount: int) -> void:
 func level_up() -> void:
 	player_level += 1
 	xp_to_next = int(float(xp_to_next) * 1.15)
+	# DPS scales with level (Balance.level_dps_mult), so a new level must reprice
+	# the cached stat profile. CombatSim re-reads party_dps after the level-up.
+	PlayerStats.invalidate()
 
 
 ## Spend soulstones; returns false (and changes nothing) if unaffordable.

@@ -59,6 +59,32 @@ func test_character_base_dps_is_class_keyed() -> void:
 	GameState.class_id = ""
 
 
+func test_party_dps_scales_with_character_level() -> void:
+	# A fresh level-1 delver is intentionally weak (so floor 1-1 is a fight);
+	# power grows with level and hits the demo-tuned base at the calibration level.
+	var ref := Balance.inum("dps_model.level_ref", 47)
+	assert_almost_eq(Balance.level_dps_mult(ref), 1.0, 0.0001, "calibration level = 1.0x")
+
+	GameState.player_level = 1
+	PlayerStats.invalidate()
+	var lvl1 := float(PlayerStats.compute()["party_dps"])
+	GameState.player_level = ref
+	PlayerStats.invalidate()
+	var lvl_ref := float(PlayerStats.compute()["party_dps"])
+	GameState.player_level = ref + 10
+	PlayerStats.invalidate()
+	var lvl_hi := float(PlayerStats.compute()["party_dps"])
+
+	assert_gt(lvl1, 0.0, "even a level-1 delver deals real DPS")
+	assert_lt(lvl1, lvl_ref, "level 1 is far weaker than the calibration level")
+	assert_lt(lvl_ref, lvl_hi, "DPS keeps growing past the calibration level")
+	# Floor 1-1's pool must survive at least a few ticks at level 1 — not vanish
+	# in one (that was the "10 stages a second" bug).
+	var pool := Balance.wave_pool(Balance.stage_index(1, 1))
+	assert_gt(pool / (lvl1 / CombatSim.TICK_RATE), 3.0,
+		"floor 1-1 wave should take at least a few ticks for a level-1 party")
+
+
 func test_extra_talent_node_never_lowers_stats() -> void:
 	var tree := GameContent.build_tree()
 	var nodes: Array = tree["nodes"]

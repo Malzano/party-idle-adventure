@@ -82,8 +82,11 @@
   },
 
   "dps_model": {
-    "comment": "party_dps = character.base_dps[class] * (1 + all_damage + half_coef*(melee+spell+fire+attack_speed)) * party_aura_mult.",
-    "half_coef": 0.5
+    "comment": "party_dps = character.base_dps[class] * (1 + all_damage + half_coef*(melee+spell+fire+attack_speed)) * party_aura_mult * level_growth^(player_level - level_ref).",
+    "half_coef": 0.5,
+    "level_ref": 47,
+    "level_growth": 1.22,
+    "level_comment": "DPS scales with character level. level_ref is the calibration anchor (the old demo character): at that level the multiplier is 1.0 so base_dps keeps its demo-tuned value and the deep-floor curve is unchanged. A fresh level-1 delver is intentionally weak for floor 1-1 (its tiny wave pool would otherwise vanish in one tick); power grows ~1.22x/level so the party levels into the deeper floors instead of out-running them."
   },
 
   "composition": {

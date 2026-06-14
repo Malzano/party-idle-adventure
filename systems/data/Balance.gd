@@ -111,6 +111,16 @@ static func wave_xp(s_index: int) -> float:
 	return num("rewards.xp_base", 4.0) * pow(num("rewards.xp_growth", 1.022), float(s_index - 1))
 
 
+## Character-level DPS multiplier: 1.0 at the calibration level (dps_model.level_ref),
+## smaller below it (a fresh delver is weak), larger above. This keeps a level-1
+## party from one-shotting floor 1-1's tiny wave pool — power grows with levels
+## toward the deep-floor curve instead of starting already over it.
+static func level_dps_mult(level: int) -> float:
+	var ref := inum("dps_model.level_ref", 47)
+	var growth := num("dps_model.level_growth", 1.22)
+	return pow(growth, float(level - ref))
+
+
 ## Forge gold cost to go from [param level] to level+1.
 static func forge_gold_cost(level: int) -> int:
 	var base_level := inum("forge.base_level", 7)

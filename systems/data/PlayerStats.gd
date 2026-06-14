@@ -77,7 +77,11 @@ static func compute() -> Dictionary:
 		+ half * (block.get_inc("melee_damage") + block.get_inc("spell_damage") \
 		+ block.get_inc("fire_damage") + block.get_inc("attack_speed"))
 
-	var party_dps := base_dps * dps_mult * GameState.party_aura_mult
+	# Character level scales DPS (1.0 at the calibration level): a fresh delver is
+	# weak enough that floor 1-1's tiny pool is a real fight, growing into the
+	# deeper floors as it levels. Invalidated on every level_up so this reprices.
+	var party_dps := base_dps * dps_mult * GameState.party_aura_mult \
+		* Balance.level_dps_mult(GameState.player_level)
 
 	# --- Attributes + derived -------------------------------------------------
 	var attrs := {}

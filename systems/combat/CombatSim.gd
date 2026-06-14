@@ -282,7 +282,13 @@ func _on_wave_cleared() -> void:
 	var s_index := Balance.stage_index(act, stage)
 	var rmult := Balance.boss_reward_mult(_wave_kind)
 	GameState.add_gold(int(wave_gold_reward(s_index) * rmult))
+	var lvl_before := GameState.player_level
 	GameState.add_xp(int(wave_xp_reward(s_index) * rmult))
+	# DPS scales with level, so a level-up here must reprice party_dps for the
+	# very next wave (otherwise the party would feel its new level only after a
+	# loadout change). Fires at most once per wave.
+	if GameState.player_level != lvl_before:
+		_recompute_stats()
 	var waves_per_stage := Balance.inum("enemy.waves_per_stage", 5)
 	if wave >= waves_per_stage:
 		wave = 1
