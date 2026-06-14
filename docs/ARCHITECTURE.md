@@ -51,9 +51,28 @@ add a shared-combat bonus).
   are `s: [["Armour","+248"],...]`. So the save blob is persisted as a **JSON string** on the
   server (`lib/blob.ts`; client/HTTP contract unchanged). Live-test saves WITH items, not just
   empty ones. Verified live: save+items, gacha→gear (idempotent), chest, sync, forge all 200.
-- **Deferred (Stage 5):** the true real-time synchronized shared battlefield
-  (`combat_sessions` + delve heartbeat). The composition aura is the shippable group-bonus
-  slice meanwhile.
+- **Stage 5 — synchronized shared delve (BUILT).** One `combat_sessions/{party_id}` doc per
+  party; the **leader's** deterministic client sim is authoritative and POSTs a checkpoint
+  every ~4 s (`BackendClient._delve_beat`, `DELVE_INTERVAL`), online members GET + render via
+  `CombatSim.apply_session` in `follow_mode` (no self-advance, no persist — solo position is
+  preserved for clean resume on leave). The server stores + **loosely** validates (`lib/delve.ts`
+  `validateCheckpoint`: leader-only, strictly-increasing seq, monotonic + `MAX_STAGE_JUMP=60`
+  capped), never re-simulates. `SESSION_STALE_SECONDS=15` drops a stalled delve so members fall
+  back to solo. Host migration (`leaveDelve`) promotes a remaining **live party member**
+  (`adopt_as_leader` continues from the session position so the first checkpoint isn't a
+  "backward" reject); the session is deleted on party dissolution so it can't orphan.
+  - **Followers earn (Stage 5.3).** `apply_session` credits gold/xp (with the player's own
+    gold_find/xp_gain) for the shared waves cleared since the last poll, at the **party floor**,
+    and advances `max_stage` toward it; a wave-index cursor baselines on the first apply so
+    joining a deep delve never back-pays. `sync.ts` stays the **only** gold/xp/max_stage writer.
+  - **Party-floor caps grace.** A carried member earns/reaches `max_stage` above their own solo
+    floor, which the solo anti-cheat would 422. So `save`/`sync` read the caller's live session
+    (`activeDelveFloor`, same transaction) and pass its floor to `checkCaps` as `delveStageIndex`:
+    reward RATE is priced at `max(ownFloor, partyFloor)` and the stage-rate cap permits *reaching*
+    (not exceeding) the party floor. Solo play untouched (`delveStageIndex 0 == absent`); the
+    floor is bounded by the leader-authoritative (capped) checkpoints, so it can't be forged.
+    Verified live: an identical floor 2→180 jump 422s with no session, succeeds with a live delve.
+- The composition aura (Stage 4) remains the always-on group bonus even when no delve is active.
 
 ---
 
