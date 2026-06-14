@@ -36,7 +36,7 @@ func _ready() -> void:
 ## caches). No-op in exported builds.
 func _dev_clear_local_state() -> void:
 	for f: String in ["user://savegame.json", "user://netstate.json",
-			"user://auth.json", "user://settings.cfg"]:
+			"user://auth.json", "user://settings.cfg", "user://tutorial.json"]:
 		if FileAccess.file_exists(f):
 			DirAccess.remove_absolute(f)
 	_dev_rm_rf("user://assets")  # AssetManager's hash-keyed download cache

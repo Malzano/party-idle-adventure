@@ -541,6 +541,10 @@ func _rebuild_gear_slots() -> void:
 		_pd_area.add_child(r)
 		_pd_right.append(r)
 	_layout_paperdoll()
+	# Tutorial spotlight anchor (step 11 — a gear slot drop target); re-run on
+	# every rebuild since the slots are destroyed/recreated on equipment_changed.
+	if not _pd_left.is_empty():
+		TutorialOverlay.register_anchor("hero.gearslot", _pd_left[0])
 
 
 func _layout_paperdoll() -> void:
@@ -772,6 +776,8 @@ func _rebuild_inv() -> void:
 	if _cap_num != null:
 		_cap_num.text = "%d / %d" % [bag.size(), GameContent.INV_CELLS]
 	_resize_square_cells(_inv_grid, 6, 9.0)
+	# Tutorial spotlight anchor (step 11 — the bag the player drags FROM).
+	TutorialOverlay.register_anchor("hero.inventory", _inv_grid)
 
 
 var _mat_iron := -1

@@ -19,6 +19,11 @@ func _ready() -> void:
 	_build()
 	_apply_button_state("fight", true)  # the main window IS the fight scene
 	EventBus.window_state_changed.connect(_on_window_state_changed)
+	# Tutorial spotlight anchors (nav steps 10/13).
+	if _entries_ui.has("hero"):
+		TutorialOverlay.register_anchor("nav.hero", _entries_ui["hero"]["button"])
+	if _entries_ui.has("camp"):
+		TutorialOverlay.register_anchor("nav.camp", _entries_ui["camp"]["button"])
 
 
 func _build() -> void:

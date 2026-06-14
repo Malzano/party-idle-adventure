@@ -22,6 +22,11 @@ func _ready() -> void:
 	EventBus.currencies_changed.connect(_refresh)
 	EventBus.game_loaded.connect(_refresh)
 	_refresh()
+	# Tutorial spotlight anchors (strip steps 8/9) — only the MAIN window's strip,
+	# so a popup's copy can't hijack the keys (those steps fire on the Fight HUD).
+	if get_window() == get_tree().root:
+		TutorialOverlay.register_anchor("strip.level", _level_label)
+		TutorialOverlay.register_anchor("strip.gold", _gold_label)
 
 
 func _build() -> void:

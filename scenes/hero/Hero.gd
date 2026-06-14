@@ -57,6 +57,9 @@ func _ready() -> void:
 	_select_tab(0)
 	EventBus.sim_stats_changed.connect(_refresh_power)
 	EventBus.hero_tab_requested.connect(_select_tab)
+	# Tutorial spotlight anchor (step 12 — the Talents tab button).
+	if _tab_buttons.size() > 3:
+		TutorialOverlay.register_anchor("hero.talents", _tab_buttons[3])
 
 
 func _refresh_power() -> void:

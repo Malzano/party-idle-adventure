@@ -69,6 +69,7 @@ func _ready() -> void:
 	var battlefield := _BattlefieldScript.new() as Control
 	add_child(battlefield)
 	battlefield.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	TutorialOverlay.register_anchor("fight.battlefield", battlefield)  # tutorial step 2
 
 	_build_wave_bar()
 	_build_boss_banner()
@@ -182,12 +183,14 @@ func _build_wave_bar() -> void:
 	dps_val.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	dps.add_child(dps_val)
 	head.add_child(dps)
+	TutorialOverlay.register_anchor("fight.dps", dps)  # tutorial step 4
 	prog.add_child(head)
 	# Live DPS label: re-read whenever the player's stats are recomputed.
 	EventBus.sim_stats_changed.connect(func() -> void:
 		dps_val.text = CombatSim.party_dps_label)
 	_wave_bar = StatBar.new("xp", CombatSim.wave_fill(), 9.0)
 	prog.add_child(_wave_bar)
+	TutorialOverlay.register_anchor("fight.wavebar", prog)  # tutorial step 3
 	row.add_child(prog)
 
 	# Wave pips (done = gold-dim, current = glowing ember), one per wave.
@@ -640,6 +643,7 @@ func _build_hero_hud() -> void:
 	_hud_box = HBoxContainer.new()
 	_hud_box.add_theme_constant_override("separation", 8)
 	add_child(_hud_box)
+	TutorialOverlay.register_anchor("fight.heroframe", _hud_box)  # tutorial step 5
 	_hud_box.resized.connect(_request_layout)
 	_hud_layouts.append(func(rs: Vector2) -> void:
 		_hud_box.position = Vector2(16.0, rs.y - 18.0 - _hud_box.size.y))
@@ -841,6 +845,7 @@ func _build_controls() -> void:
 		_speed_btns[speed] = b
 		group.add_child(b)
 	row.add_child(group)
+	TutorialOverlay.register_anchor("fight.speed", group)  # tutorial step 6
 	_refresh_speed(CombatSim.speed)
 
 	var div := ColorRect.new()
@@ -861,6 +866,7 @@ func _build_controls() -> void:
 		"flavor": "Heroes cast abilities automatically when off cooldown.",
 	})
 	row.add_child(skill_panel)
+	TutorialOverlay.register_anchor("fight.autoskill", skill_panel)  # tutorial step 7
 
 	_tog_adv = _make_toggle("Auto-Advance", "X", func() -> void:
 		CombatSim.auto_advance = not CombatSim.auto_advance)

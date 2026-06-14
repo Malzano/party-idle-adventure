@@ -15,6 +15,11 @@ var _nav_rail: Control
 func _ready() -> void:
 	get_tree().auto_accept_quit = false  # save on close (CLAUDE.md §3)
 	_build()
+	# The main window hosts the Fight HUD / nav rail / strip in project design
+	# space — register it so the tutorial overlay can spotlight those controls,
+	# then auto-run the first-session tour for a brand-new delver.
+	TutorialOverlay.set_main_host(self)
+	TutorialOverlay.maybe_autostart()
 
 
 func _build() -> void:

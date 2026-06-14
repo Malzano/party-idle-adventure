@@ -205,6 +205,8 @@ func _make_building(b: Dictionary) -> Control:
 		fglow.size = Vector2(w * 0.6, h * 0.5)
 		fglow.position = Vector2(w * 0.5 - fglow.size.x * 0.5, h * 0.58 - fglow.size.y * 0.5)
 		root.add_child(fglow)
+		# Tutorial finale (step 14) spotlights the featured Summoning Altar.
+		TutorialOverlay.register_anchor("camp.altar", root)
 
 	# Sprite border (hover → ember glow).
 	var border := Panel.new()

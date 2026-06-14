@@ -50,6 +50,14 @@ const _DEFS := {
 const _ResourceStripScene := preload("res://scenes/ui/ResourceStrip.tscn")
 
 var _windows: Dictionary = {}  # id -> Window
+var _stages: Dictionary = {}   # id -> stage Control (design-space host, for overlays)
+
+
+## The 1920×1080 design-space stage of a popup window (null if not yet created).
+## TutorialOverlay mounts its spotlight layer here so it scales with the screen.
+func get_stage(id: String) -> Control:
+	var s: Variant = _stages.get(id)
+	return s if (is_instance_valid(s) and s is Control) else null
 
 
 ## Open the window (creating it on first use) or focus it if already open.
@@ -124,6 +132,7 @@ func _create(id: String) -> Window:
 	stage.mouse_filter = Control.MOUSE_FILTER_PASS
 	w.add_child(stage)
 	stage.size = Vector2(1920, 1080)
+	_stages[id] = stage
 
 	# Screen content.
 	var scene := load(def["scene"]) as PackedScene

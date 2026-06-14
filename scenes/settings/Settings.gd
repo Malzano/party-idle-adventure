@@ -98,6 +98,12 @@ func _build_body() -> Control:
 		UserSettings.restore_defaults()
 		_rebuild())
 	foot.add_child(restore)
+	# Replay the first-session tutorial any time — close Options, then start it.
+	var replay := Style.make_button("REPLAY TUTORIAL", "ember", 11)
+	replay.pressed.connect(func() -> void:
+		WindowManager.close(WindowManager.WIN_SETTINGS)
+		TutorialOverlay.start())
+	foot.add_child(replay)
 	var fsp := Control.new()
 	fsp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	fsp.mouse_filter = Control.MOUSE_FILTER_IGNORE
