@@ -130,6 +130,36 @@ func test_floor_boss_clear_matches_live_tick() -> void:
 			"live vs offline boss clear must match exactly at dps=pool/%.0f" % div)
 
 
+func test_follow_mode_mirrors_session_without_persisting() -> void:
+	# Stage 5: a follower renders the leader's shared position but never advances
+	# or persists — its own saved act/stage stay put for when the delve ends.
+	GameState.reset_to_defaults()
+	GameState.act = 4
+	GameState.stage = 7
+	CombatSim.act = 4
+	CombatSim.stage = 7
+	CombatSim.wave = 1
+	CombatSim._reset_wave()
+
+	CombatSim.set_follow_mode(true)
+	assert_true(CombatSim.follow_mode, "follower mode engaged")
+
+	CombatSim.apply_session({"act": 5, "stage": 12, "wave": 3, "wave_fill": 50.0})
+	assert_eq(CombatSim.act, 5, "follower displays the party's act")
+	assert_eq(CombatSim.stage, 12, "follower displays the party's stage")
+	assert_eq(CombatSim.wave, 3)
+	assert_almost_eq(CombatSim.wave_fill(), 50.0, 0.5, "follower shows the shared wave progress")
+	# The player's OWN saved position is untouched.
+	assert_eq(GameState.act, 4, "the follower's own act is NOT changed by the delve")
+	assert_eq(GameState.stage, 7, "the follower's own stage is NOT changed by the delve")
+
+	# Leaving the delve restores the player's own solo position.
+	CombatSim.set_follow_mode(false)
+	assert_false(CombatSim.follow_mode)
+	assert_eq(CombatSim.act, 4, "solo resumes from the player's own act")
+	assert_eq(CombatSim.stage, 7, "solo resumes from the player's own stage")
+
+
 func test_boss_never_stalls() -> void:
 	var cap := Balance.boss_time_cap()
 	for kind in ["miniboss", "boss"]:

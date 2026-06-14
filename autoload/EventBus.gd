@@ -98,6 +98,9 @@ signal mythic_announced(player: String, item: String)
 ## GameState.party (the server-authoritative party mirror) was replaced.
 signal party_changed
 
+## Shared-delve (Stage 5) state changed: true = now in a synchronized delve.
+signal delve_changed(active: bool)
+
 ## GameState.party_ids (the fighting four) changed — HUD/battlefield rebuild.
 signal lineup_changed
 

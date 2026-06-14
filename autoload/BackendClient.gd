@@ -25,10 +25,15 @@ var web_api_key: String = "AIzaSyB4CGGcEsncE7WSgwmx56lBHH3QPJNiJIg"
 
 ## Combat heartbeat cadence (seconds). The server allows 4/min.
 const SYNC_INTERVAL := 45.0
+## Shared-delve (Stage 5) cadence — the leader checkpoints + members poll the
+## session this often while in a party.
+const DELVE_INTERVAL := 4.0
 const NETSTATE_PATH := "user://netstate.json"
 const AUTH_PATH := "user://auth.json"
 
 var _client_seq: int = 0
+var _delve_accum: float = 0.0
+var _delve_busy: bool = false
 var _id_token: String = ""
 var _refresh_token: String = ""
 var _uid: String = ""
@@ -60,6 +65,17 @@ func _process(delta: float) -> void:
 		AssetManager.sync_catalog()  # hot content: new skins/items reflect w/o restart
 		if GameState.in_party():
 			party_mine()  # presence refresh for the Party Finder
+
+	# Shared-delve heartbeat (Stage 5): the leader checkpoints, members follow.
+	if not mock and GameState.in_party():
+		_delve_accum += delta
+		if _delve_accum >= DELVE_INTERVAL and not _delve_busy:
+			_delve_accum = 0.0
+			_delve_beat()
+	elif GameState.in_delve():
+		# Left the party (or went solo): end the delve and resume the solo sim.
+		GameState.set_delve({})
+		CombatSim.set_follow_mode(false)
 
 
 func _boot_config() -> void:
@@ -582,7 +598,88 @@ func party_leave() -> Dictionary:
 	var res: Dictionary = await _api("POST", "/v1/party/leave", {})
 	if bool(res["ok"]):
 		GameState.set_party({})
+		GameState.set_delve({})
+		CombatSim.set_follow_mode(false)
+		delve_leave()  # fire-and-forget: drop from any shared session
 	return res
+
+
+# =========================================================================
+# Shared delve (Stage 5) — leader-authoritative synchronized co-op. No real
+# co-op in mock mode (single player + bots), so these no-op there.
+# =========================================================================
+
+## POST /v1/delve/start — the party leader opens a shared delve at the party's
+## current floor. Members auto-follow on their next heartbeat.
+func delve_start() -> Dictionary:
+	if mock:
+		return _wrap(200, {"session": null})
+	return await _api("POST", "/v1/delve/start", {})
+
+
+## GET /v1/delve — the active shared session ({}/null = not delving / stale).
+func delve_poll() -> Dictionary:
+	if mock:
+		return _wrap(200, {"session": null})
+	return await _api("GET", "/v1/delve", {})
+
+
+## POST /v1/delve/checkpoint — the leader pushes its shared progress.
+func delve_checkpoint(patch: Dictionary) -> Dictionary:
+	if mock:
+		return _wrap(200, {"session": null})
+	return await _api("POST", "/v1/delve/checkpoint", patch)
+
+
+## POST /v1/delve/leave — drop out (host migration or end the delve).
+func delve_leave() -> Dictionary:
+	if mock:
+		return _wrap(200, {"ok": true})
+	return await _api("POST", "/v1/delve/leave", {})
+
+
+## One delve heartbeat: poll the session; if it exists, the leader checkpoints
+## its live position and followers render it; otherwise the leader auto-opens a
+## delve once 2+ members are online.
+func _delve_beat() -> void:
+	_delve_busy = true
+	var res: Dictionary = await delve_poll()
+	if not bool(res.get("ok", false)):
+		_delve_busy = false
+		return
+	var sess_v: Variant = (res["data"] as Dictionary).get("session", null)
+	if typeof(sess_v) == TYPE_DICTIONARY:
+		var s := sess_v as Dictionary
+		GameState.set_delve(s)
+		if String(s.get("leader_uid", "")) == _uid:
+			CombatSim.set_follow_mode(false)  # I drive my own sim
+			await delve_checkpoint({
+				"seq": int(s.get("seq", 0)) + 1,
+				"act": CombatSim.act,
+				"stage": CombatSim.stage,
+				"wave": CombatSim.wave,
+				"wave_fill": CombatSim.wave_fill(),
+				"combined_dps": CombatSim.party_dps,
+				"member_uids": _online_member_uids(),
+			})
+		else:
+			CombatSim.set_follow_mode(true)  # I follow the leader's fight
+			CombatSim.apply_session(s)
+	else:
+		GameState.set_delve({})
+		CombatSim.set_follow_mode(false)
+		# Leader auto-opens a shared delve when the party has 2+ online.
+		if GameState.party_leader_uid() == _uid and GameState.party_online_count() >= 2:
+			await delve_start()
+	_delve_busy = false
+
+
+func _online_member_uids() -> Array:
+	var out: Array = []
+	for m in GameState.party.get("members", []):
+		if bool((m as Dictionary).get("online", false)):
+			out.append(String((m as Dictionary).get("uid", "")))
+	return out
 
 
 ## Mirrors the server's PartyView assembly (services/parties.ts view()):

@@ -183,6 +183,41 @@ func in_party() -> bool:
 	return not party.is_empty()
 
 
+## The shared-delve session (Stage 5) the player is in ({} = not delving). A
+## read-only mirror of the server combat_sessions doc; BackendClient refreshes
+## it on the ~4s delve heartbeat. Runtime only — never serialized.
+var delve: Dictionary = {}
+
+
+func in_delve() -> bool:
+	return not delve.is_empty()
+
+
+func set_delve(d: Dictionary) -> void:
+	var was := not delve.is_empty()
+	delve = d
+	var now_in := not d.is_empty()
+	if now_in != was:
+		EventBus.delve_changed.emit(now_in)
+
+
+## The uid of the party leader (from the PartyView), "" when solo / no leader.
+func party_leader_uid() -> String:
+	for m in party.get("members", []):
+		if bool((m as Dictionary).get("leader", false)):
+			return String((m as Dictionary).get("uid", ""))
+	return ""
+
+
+## Count of online party members (PartyView presence).
+func party_online_count() -> int:
+	var n := 0
+	for m in party.get("members", []):
+		if bool((m as Dictionary).get("online", false)):
+			n += 1
+	return n
+
+
 func set_party(p: Dictionary) -> void:
 	party = p
 	# Adopt the real-party composition aura (server-authoritative; 1.0 solo).

@@ -63,6 +63,11 @@ var _boss_adds_done: bool = false
 var _boss_add_hp: float = 0.0      # one-time threshold bump from an adds wave
 var _boss_shield_on: bool = false  # tracks the shield window for telegraphs
 
+## Shared-delve FOLLOWER mode (Stage 5): the party leader drives the fight; this
+## client renders the session position (apply_session) and does NOT self-advance
+## or persist. The leader + solo players keep follow_mode = false.
+var follow_mode: bool = false
+
 
 func _ready() -> void:
 	_rng.seed = 0x6D2B79F5  # fixed seed: deterministic flavor rolls
@@ -168,10 +173,13 @@ func _process(delta: float) -> void:
 	# No profile yet (Login scene) — the delve hasn't started, nothing accrues.
 	if not GameState.has_profile():
 		return
-	_accum += delta * TICK_RATE * float(speed)
-	while _accum >= 1.0:
-		_accum -= 1.0
-		_tick()
+	# As a shared-delve FOLLOWER the leader drives the fight; we only render the
+	# session (apply_session) and skip our own advancement. Energy still regens.
+	if not follow_mode:
+		_accum += delta * TICK_RATE * float(speed)
+		while _accum >= 1.0:
+			_accum -= 1.0
+			_tick()
 	# Energy regen runs on real time, independent of combat speed.
 	_energy_accum += delta
 	var regen := Balance.num("energy.regen_seconds", ENERGY_REGEN_SECONDS)
@@ -333,6 +341,48 @@ func retreat() -> void:
 ## Team Aura passthrough (the real check lives with the stats).
 func team_aura_optimal() -> bool:
 	return PlayerStats.team_aura_optimal()
+
+
+# ---------------------------------------------------------------------------
+# Shared delve (Stage 5): followers mirror the leader's session.
+# ---------------------------------------------------------------------------
+
+## Render the leader's shared position WITHOUT advancing or persisting (the
+## player's own GameState.act/stage stay put so solo resumes cleanly on leave).
+## Called by BackendClient on each delve heartbeat while following.
+func apply_session(sess: Dictionary) -> void:
+	var a := int(sess.get("act", act))
+	var st := int(sess.get("stage", stage))
+	var wv := int(sess.get("wave", wave))
+	var fill := clampf(float(sess.get("wave_fill", 0.0)), 0.0, 100.0)
+	if a != act or st != stage or wv != wave:
+		act = a
+		stage = st
+		wave = wv
+		stage_name = GameContent.STAGE_NAMES[(stage - 1) % GameContent.STAGE_NAMES.size()]
+		_reset_wave()  # sets _wave_kind / wave_pool, emits the boss banner if boss
+		EventBus.sim_stage_changed.emit(stage_label(), stage_name)
+		EventBus.sim_wave_changed.emit(wave)
+	wave_damage = fill / 100.0 * _boss_threshold()
+	if _wave_kind != "normal":
+		EventBus.sim_boss_hp.emit(clampf(1.0 - wave_damage / _boss_threshold(), 0.0, 1.0))
+	EventBus.sim_wave_progress.emit(wave_fill())
+
+
+## Enter/leave follower mode. Leaving restores the player's OWN solo position so
+## offline/solo progress continues from where it actually is.
+func set_follow_mode(on: bool) -> void:
+	if on == follow_mode:
+		return
+	follow_mode = on
+	if not on:
+		act = GameState.act
+		stage = GameState.stage
+		wave = 1
+		stage_name = GameContent.STAGE_NAMES[(stage - 1) % GameContent.STAGE_NAMES.size()]
+		_reset_wave()
+		EventBus.sim_stage_changed.emit(stage_label(), stage_name)
+		EventBus.sim_wave_changed.emit(wave)
 
 # ---------------------------------------------------------------------------
 # Offline progress (CLAUDE.md §3): elapsed time → the same per-wave math.

@@ -31,6 +31,9 @@ var _boss_tier_lbl: Label
 var _boss_name_lbl: Label
 var _boss_bar: StatBar
 
+# Shared-delve indicator (Stage 5), shown while in a synchronized delve.
+var _delve_chip: Label
+
 var _hp_bars: Array = []
 var _mana_bars: Array = []
 var _hp_nums: Array = []
@@ -69,6 +72,7 @@ func _ready() -> void:
 
 	_build_wave_bar()
 	_build_boss_banner()
+	_build_delve_chip()
 	_build_party_finder()
 	_build_team_aura()
 	_build_loot_ticker()
@@ -87,6 +91,7 @@ func _ready() -> void:
 	EventBus.sim_boss_defeated.connect(_on_boss_defeated)
 	# Joining/leaving a party changes the composition aura → rebuild the badge.
 	EventBus.party_changed.connect(_fill_team_aura)
+	EventBus.delve_changed.connect(_on_delve_changed)
 	EventBus.sim_loot.connect(_on_loot)
 	EventBus.sim_party_vitals.connect(_on_party_vitals)
 	EventBus.sim_speed_changed.connect(_on_speed_changed)
@@ -1157,6 +1162,24 @@ func _on_boss_hp(fill: float) -> void:
 
 func _on_boss_defeated(_id: String) -> void:
 	_boss_banner.visible = false
+
+
+## Shared-delve indicator: a small "DELVING TOGETHER" chip above the wave bar
+## while the party fights a synchronized delve.
+func _build_delve_chip() -> void:
+	var lbl := Style.display_label("⚔  DELVING TOGETHER", 12, Palette.CYAN_BRIGHT)
+	lbl.visible = false
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(lbl)
+	_delve_chip = lbl
+	_hud_layouts.append(func(rs: Vector2) -> void:
+		lbl.position = Vector2((rs.x - lbl.size.x) * 0.5, 78.0))
+
+
+func _on_delve_changed(active: bool) -> void:
+	if _delve_chip != null:
+		_delve_chip.visible = active
+		_request_layout()
 
 
 func _on_stage_changed(label_text: String, stage_name: String) -> void:
