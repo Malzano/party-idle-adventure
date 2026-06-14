@@ -1,12 +1,15 @@
 extends GutTest
-## Battlefield chest lifecycle regression: a chest that scrolls off behind the
-## party must unregister its glow pulse the moment its node is freed —
-## otherwise the next _process casts a freed object (caught live via MCP).
+## 2D side-scroller battlefield: lifecycle + coherence regressions. Positions are
+## a scalar x (0..1 of width; smaller = nearer the hero) + a lane index. Combat
+## truth lives in CombatSim; this layer renders a coherent readout of it.
 
 
 func before_each() -> void:
 	GameState.reset_to_defaults()
 	GameState.class_id = "mage"  # a ranged class so projectile paths are exercised
+	CombatSim.act = 1
+	CombatSim.stage = 1
+	CombatSim.wave = 1
 
 
 func after_all() -> void:
@@ -20,19 +23,20 @@ func _bf() -> Control:
 	return bf
 
 
+# --- Freed-object hygiene -----------------------------------------------------
+
 func test_scrolled_off_chest_unregisters_its_pulse() -> void:
-	var bf: Control = load("res://scenes/fight/Battlefield.gd").new()
-	add_child_autofree(bf)
-	bf.size = Vector2(1600, 900)
+	var bf := _bf()
 	await get_tree().process_frame
+	bf.set_process(false)
 
 	bf._spawn_chest()
 	assert_eq(bf._chests.size(), 1, "one cache spawned")
 	var glow: Object = bf._chests[0]["glow"]
 
-	# Drag it off behind the party and let the world-scroll pass collect it.
-	bf._chests[0]["pct"] = Vector2(-20.0, 50.0)
-	bf._scroll_world(Vector2.ZERO, Vector2.ZERO, 0.016)
+	# Drag it off behind the party and let the parallax scroll collect it.
+	bf._chests[0]["x"] = -0.2
+	bf._scroll_parallax(0.016, 1.0)
 	assert_eq(bf._chests.size(), 0, "off-screen cache despawns")
 	for p in bf._pulses:
 		assert_ne(p["node"], glow, "the glow pulse is unregistered with it")
@@ -45,12 +49,9 @@ func test_scrolled_off_chest_unregisters_its_pulse() -> void:
 
 
 func test_lineup_swap_reclaims_hero_bobs() -> void:
-	# Swapping the fighting four frees the old hero sprites; their stride
-	# bobs MUST be unregistered or the next _process casts a freed object.
-	var bf: Control = load("res://scenes/fight/Battlefield.gd").new()
-	add_child_autofree(bf)
-	bf.size = Vector2(1600, 900)
+	var bf := _bf()
 	await get_tree().process_frame
+	bf.set_process(false)
 
 	assert_eq(bf._hero_units.size(), 1, "1 account = 1 character on the field")
 	assert_eq(bf._hero_units.size(), GameContent.active_party().size(), "matches active_party")
@@ -64,16 +65,14 @@ func test_lineup_swap_reclaims_hero_bobs() -> void:
 		assert_ne(b["node"], old_sprite, "the freed hero's bob is unregistered")
 	assert_false(is_instance_valid(old_sprite), "old hero sprite was freed")
 
-	# The freed sprites must never be touched by the per-frame bob loop.
 	bf._process(0.016)
 	pass_test("no freed-object cast after lineup swap")
 
 
 func test_despawn_chest_is_idempotent() -> void:
-	var bf: Control = load("res://scenes/fight/Battlefield.gd").new()
-	add_child_autofree(bf)
-	bf.size = Vector2(1600, 900)
+	var bf := _bf()
 	await get_tree().process_frame
+	bf.set_process(false)
 
 	bf._spawn_chest()
 	var entry: Dictionary = bf._chests[0]
@@ -83,7 +82,7 @@ func test_despawn_chest_is_idempotent() -> void:
 	pass_test("double despawn does not double-free")
 
 
-# --- Feature 3a: floor-1 start ----------------------------------------------
+# --- Floor-1 start + floor roster (data) -------------------------------------
 
 func test_default_profile_starts_at_floor_1_1() -> void:
 	GameState.reset_to_defaults()
@@ -94,8 +93,6 @@ func test_default_profile_starts_at_floor_1_1() -> void:
 	assert_eq(Balance.wave_kind(1, 1, 1), "normal", "floor 1 wave 1 is not a boss")
 
 
-# --- Feature 3b: floor-aware roster -----------------------------------------
-
 func test_enemy_roster_is_floor_themed_and_wraps() -> void:
 	var f1: Dictionary = GameContent.enemy_roster_for_floor(1)
 	assert_true(f1.has("elite") and f1.has("trash"), "roster carries an elite + trash names")
@@ -104,7 +101,7 @@ func test_enemy_roster_is_floor_themed_and_wraps() -> void:
 	assert_eq(GameContent.enemy_roster_for_floor(n + 1), GameContent.enemy_roster_for_floor(1), "wraps per floor count")
 
 
-# --- Feature 1: hero focusing -----------------------------------------------
+# --- Hero focusing (nearest = smallest x; engaged outranks approaching) -------
 
 func test_focus_prefers_engaged_over_nearer_approacher() -> void:
 	var bf := _bf()
@@ -112,9 +109,9 @@ func test_focus_prefers_engaged_over_nearer_approacher() -> void:
 	bf.set_process(false)
 	var en: Array = bf._enemies
 	en[0]["state"] = "engaged"
-	en[0]["pct"] = Vector2(60, 30)   # engaged but far
+	en[0]["x"] = 0.62   # engaged but far
 	en[1]["state"] = "approach"
-	en[1]["pct"] = Vector2(26, 66)   # approaching but right on the party
+	en[1]["x"] = 0.42   # approaching but right on the party
 	bf._focus = {}
 	bf._retarget_focus()
 	assert_true(is_same(bf._focus, en[0]), "an engaged token outranks a nearer approacher")
@@ -127,7 +124,7 @@ func test_focus_is_sticky_until_invalid() -> void:
 	var en: Array = bf._enemies
 	en[0]["state"] = "engaged"
 	en[1]["state"] = "engaged"
-	en[1]["pct"] = Vector2(25, 66)   # nearer than en[0]
+	en[1]["x"] = 0.25   # nearer than en[0]
 	bf._focus = en[0]
 	bf._retarget_focus()
 	assert_true(is_same(bf._focus, en[0]), "keeps the current focus even if another is nearer")
@@ -154,7 +151,7 @@ func test_focus_handles_empty_lineup() -> void:
 	pass_test("facing with an empty lineup is a no-op")
 
 
-# --- Feature 2: projectiles --------------------------------------------------
+# --- Projectiles --------------------------------------------------------------
 
 func test_spec_ranged_by_class() -> void:
 	assert_true(bool(GameContent.projectile_spec("mage")["ranged"]), "mage is ranged")
@@ -197,29 +194,92 @@ func test_projectiles_cleared_on_lineup_swap() -> void:
 	assert_true((bf._focus as Dictionary).is_empty(), "focus reset on a lineup swap")
 
 
-# --- Feature 3c: boss-wave reaction -----------------------------------------
+# --- Approach → engage → stop at the clash line -------------------------------
 
-func test_boss_started_spawns_one_token_and_targets_it() -> void:
+func test_approach_stops_at_the_clash_line() -> void:
 	var bf := _bf()
 	await get_tree().process_frame
 	bf.set_process(false)
-	var before: int = (bf._enemies as Array).size()
-	EventBus.sim_boss_started.emit("boss", "The Bone Warden", "boss", 9000.0)
-	assert_false((bf._boss_entry as Dictionary).is_empty(), "a boss token is on the field")
-	assert_true(is_same(bf._focus, bf._boss_entry), "the hero targets the boss")
-	assert_eq((bf._enemies as Array).size(), before + 1, "exactly one boss token added")
+	# A fresh foe far to the right walks in and must STOP at its engage slot —
+	# never overrun toward the hero at HERO_X.
+	bf._enemies.clear()
+	bf._spawn_enemy(false)
+	var e: Dictionary = bf._enemies[0]
+	assert_eq(String(e["state"]), "approach", "spawns approaching from the right")
+	for _i in 200:
+		bf._update_enemies(0.1, 4.0)
+	assert_eq(String(e["state"]), "engaged", "reaches the clash line and engages")
+	assert_almost_eq(float(e["x"]), float(e["engage_x"]), 0.01, "stops exactly at its engage slot")
+	assert_gt(float(e["x"]), bf.HERO_X, "never overruns the hero")
 
 
-func test_boss_defeated_removes_the_token() -> void:
+func test_enemies_spread_across_lanes() -> void:
 	var bf := _bf()
 	await get_tree().process_frame
 	bf.set_process(false)
-	EventBus.sim_boss_started.emit("boss", "Embermaw", "boss", 9000.0)
-	EventBus.sim_boss_defeated.emit("boss")
-	assert_true((bf._boss_entry as Dictionary).is_empty(), "boss token cleared on defeat")
+	var lanes := {}
+	for e in bf._enemies:
+		if not bool(e["elite"]):
+			lanes[int(e["lane"])] = true
+	assert_gt(lanes.size(), 1, "trash spreads across more than one lane (no single-file stack)")
 
 
-# --- Discrete waves: clear the field, then the next wave marches in ----------
+# --- Coherent attacks: range gating + impact mints a number + drains HP -------
+
+func test_melee_waits_for_range_then_strikes() -> void:
+	var bf := _bf()
+	await get_tree().process_frame
+	bf.set_process(false)
+	GameState.class_id = "warrior"  # melee: must wait for the foe to arrive
+	var e: Dictionary = bf._enemies[0]
+
+	# Out of reach (still approaching far to the right): no strike.
+	e["state"] = "approach"
+	e["x"] = 0.7
+	e["hp_pct"] = 100.0
+	bf._focus = e
+	bf._fire_accum = bf.FIRE_INTERVAL + 0.01
+	bf._update_attack_cadence(0.0, 1.0)
+	assert_almost_eq(float(e["hp_pct"]), 100.0, 0.01, "a melee hero does NOT hit a foe that is out of range")
+
+	# In reach (engaged at the clash line): it strikes.
+	e["state"] = "engaged"
+	e["x"] = bf.CLASH_X
+	bf._fire_accum = bf.FIRE_INTERVAL + 0.01
+	bf._update_attack_cadence(0.0, 1.0)
+	assert_lt(float(e["hp_pct"]), 100.0, "once the foe is in range the melee hero strikes it")
+
+
+func test_impact_mints_a_number_and_drains_the_target() -> void:
+	var bf := _bf()
+	await get_tree().process_frame
+	bf.set_process(false)
+	var e: Dictionary = bf._enemies[0]
+	e["state"] = "engaged"
+	e["hp_pct"] = 100.0
+	var floaters_before: int = bf._floater_holder.get_child_count()
+	bf._on_impact(e, GameContent.projectile_spec("mage"), Vector2(800.0, 500.0))
+	assert_lt(float(e["hp_pct"]), 100.0, "a landed hit drains the struck foe's cosmetic HP")
+	# The damage number is anchored on the target (gated on the dmg-numbers
+	# setting — only assert when it's on, so the test is setting-agnostic).
+	if UserSettings.get_bool("dmg_numbers"):
+		assert_gt(bf._floater_holder.get_child_count(), floaters_before, "mints a number on the struck foe")
+
+
+func test_cosmetic_drain_never_kills_ahead_of_the_sim() -> void:
+	var bf := _bf()
+	await get_tree().process_frame
+	bf.set_process(false)
+	var e: Dictionary = bf._enemies[0]
+	e["state"] = "engaged"
+	e["hp_pct"] = 100.0
+	for _i in 20:  # hammer it well past empty
+		bf._on_impact(e, GameContent.projectile_spec("mage"), Vector2(800.0, 500.0))
+	assert_gte(float(e["hp_pct"]), bf.HP_FLOOR, "the bar floors at HP_FLOOR — only sim_enemy_killed actually kills")
+	assert_eq(String(e["state"]), "engaged", "the foe is alive until the sim says otherwise")
+
+
+# --- Discrete waves -----------------------------------------------------------
 
 func test_normal_wave_advance_stages_a_full_batch() -> void:
 	var bf := _bf()
@@ -232,7 +292,6 @@ func test_normal_wave_advance_stages_a_full_batch() -> void:
 	bf._on_sim_wave_advanced(2)
 	assert_eq(bf._respawn_at.size(), Balance.inum("enemy.per_wave", 8),
 		"a normal wave advance stages a full fresh batch of minions")
-	# Every living straggler from the previous wave is being cleared.
 	for e in bf._enemies:
 		assert_eq(String(e["state"]), "dying", "the previous wave's minions are cleared first")
 
@@ -259,3 +318,38 @@ func test_kill_does_not_respawn_mid_wave() -> void:
 	bf._on_enemy_killed()
 	assert_eq(bf._respawn_at.size(), 0,
 		"no mid-wave respawn — the field refills only when the wave advances")
+
+
+# --- Boss token: HP mirrors the sim, not our cosmetic hits --------------------
+
+func test_boss_started_spawns_one_token_and_targets_it() -> void:
+	var bf := _bf()
+	await get_tree().process_frame
+	bf.set_process(false)
+	var before: int = (bf._enemies as Array).size()
+	EventBus.sim_boss_started.emit("boss", "The Bone Warden", "boss", 9000.0)
+	assert_false((bf._boss_entry as Dictionary).is_empty(), "a boss token is on the field")
+	assert_true(is_same(bf._focus, bf._boss_entry), "the hero targets the boss")
+	assert_eq((bf._enemies as Array).size(), before + 1, "exactly one boss token added")
+
+
+func test_boss_defeated_removes_the_token() -> void:
+	var bf := _bf()
+	await get_tree().process_frame
+	bf.set_process(false)
+	EventBus.sim_boss_started.emit("boss", "Embermaw", "boss", 9000.0)
+	EventBus.sim_boss_defeated.emit("boss")
+	assert_true((bf._boss_entry as Dictionary).is_empty(), "boss token cleared on defeat")
+
+
+func test_boss_bar_mirrors_sim_not_hits() -> void:
+	var bf := _bf()
+	await get_tree().process_frame
+	bf.set_process(false)
+	EventBus.sim_boss_started.emit("boss", "Embermaw", "boss", 9000.0)
+	EventBus.sim_boss_hp.emit(0.5)
+	var bar := bf._boss_entry["bar"] as StatBar
+	assert_almost_eq(bar.pct, 50.0, 0.5, "the field boss bar mirrors sim_boss_hp")
+	# An impact on the boss mints a decorative number but must NOT move its bar.
+	bf._on_impact(bf._boss_entry, GameContent.projectile_spec("mage"), Vector2(900.0, 400.0))
+	assert_almost_eq(bar.pct, 50.0, 0.5, "boss HP is sim-owned — cosmetic hits never drain it")

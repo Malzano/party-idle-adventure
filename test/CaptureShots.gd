@@ -38,6 +38,7 @@ func _run() -> void:
 
 	# --- 2) Profile chosen → Fight with props/chests/ribbon ---
 	GameState.choose_class("warrior", "Shotbot")
+	TutorialOverlay._done = true  # capture the battlefield, not the first-run tour
 	var main := _MainScene.instantiate() as Control
 	add_child(main)
 	await get_tree().create_timer(3.0).timeout
