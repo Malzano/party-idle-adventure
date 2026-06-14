@@ -157,11 +157,17 @@ scenes/
   fight/Fight.gd         HUD: wave bar, party-finder dock (FIND/MANAGE PARTY button),
                          team aura, loot ticker, hero frames, controls, offline popup,
                          mythic announcement ribbon (EventBus.mythic_announced, queued)
-  fight/Battlefield.gd   living world: scrolling iso floor, footsteps, props (incl. trees/
-                         rocks) that wrap, edge-spawned enemies (approach→engage→die on
-                         sim kills), clickable Battle Caches (chests → BackendClient
-                         .chest_open), floaters. RULE: any node freed early must
-                         unregister its _bobs/_pulses entries or _process casts freed.
+  fight/Battlefield.gd   2D left→right side-scroller (rebuilt 2026-06; was iso): hero holds
+                         the LEFT facing right, foes rush in from the RIGHT to a clash line
+                         and cluster (approach→engage→die on sim kills); cavern backdrop +
+                         3 scrolling parallax layers; positions = scalar x (0..1) + lane.
+                         COHERENT attacks: melee dashes to strike in-range, ranged fires;
+                         a damage number is minted ON the struck foe and its HP bar drains
+                         by a hit-count budget (kept in lockstep with sim_enemy_killed; only
+                         the sim kills). Boss HP mirrors sim_boss_hp. Clickable Battle Caches
+                         (chests → BackendClient.chest_open) scroll left; heal floaters via
+                         sim_floater on the hero. RULE: any node freed early must unregister
+                         its _bobs/_pulses entries or _process casts freed.
   camp/                  Camp scene + Board (quests/leaderboard/dungeon/MAIL tabs) /
                          Gacha/Forge/Kitchen modals (all live systems)
   hero/                  Hero window tabs (Q/W/E/R/T): EquipmentTab = 3-zone sheet/
@@ -280,8 +286,8 @@ proxied through Express.** The server serves only a thin manifest.
 
 | Open question | What was built |
 |---|---|
-| Fight camera | Scroll-follow "endless travel": world drifts past, props wrap, party stays bottom-left heading top-right |
-| Clash behavior | Enemies approach to an engage ring, fight, and die on sim kills (both surround *and* steamroll) |
+| Fight camera | 2D left→right side-scroller (rebuilt 2026-06): hero holds the LEFT, parallax background scrolls left (treadmill), foes rush in from the right |
+| Clash behavior | Foes rush to a clash line near the hero, cluster, and die on sim kills; hero attacks the nearest in-range foe (melee dashes, ranged fires) |
 | 5 main stats | STR / DEX / INT / VIT / LUK, as placeholdered |
 | Hero acquisition | Fixed design party of 4 + gacha roster adds support DPS (managed in the Hero window's ROSTER tab, hotkey T); **player class** chosen once at first launch (warrior/mage/hunter/rogue) |
 | Per-hero equipment | **v1 ships ONE shared paperdoll** (the player-class loadout). Per-hero loadouts would multiply save schema, drag-drop, and stat plumbing ×4 for little idle-game payoff — revisit post-v1 if hero identity matters more |
