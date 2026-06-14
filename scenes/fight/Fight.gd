@@ -762,12 +762,14 @@ func _hero_frame(h: Dictionary, idx: int) -> Control:
 	_mana_nums.append(_bar_num(mana_bar, _mana_num_text(mana0)))
 	row.add_child(bars)
 
-	# Role chip tabbed onto the RIGHT edge of the frame — hangs just outside,
-	# vertically centered (frame is 252×84).
-	var chip := Style.make_role_tag(String(h["role"]), String(h["role_lbl"]))
-	frame.add_child(chip)
-	chip.resized.connect(func() -> void:
-		chip.position = Vector2(249.0, (84.0 - chip.size.y) * 0.5))
+	# 3 skill pips: first ready (ember + glow), others shaded cooldowns.
+	var skills := VBoxContainer.new()
+	skills.add_theme_constant_override("separation", 4)
+	skills.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	skills.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for s in 3:
+		skills.add_child(_SkillPip.new(s == 0, float(s) * 0.3))
+	row.add_child(skills)
 	return frame
 
 
@@ -1295,6 +1297,37 @@ class _Pip:
 			_:
 				draw_circle(c, 4.5, Color("0c0a07"))
 				draw_arc(c, 4.0, 0.0, TAU, 24, Palette.IRON_EDGE, 1.0)
+
+
+## Skill pip (20×14): ready = ember fill + glow; cooling = dark with a
+## black shade covering everything below the cooldown line.
+class _SkillPip:
+	extends Control
+
+	var ready_state := false
+	var shade_from := 0.0
+
+	func _init(p_ready: bool, p_shade: float) -> void:
+		ready_state = p_ready
+		shade_from = p_shade
+		custom_minimum_size = Vector2(20, 14)
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _ready() -> void:
+		resized.connect(queue_redraw)
+
+	func _draw() -> void:
+		var r := Rect2(Vector2.ZERO, size)
+		if ready_state:
+			var half := size.y * 0.5
+			draw_rect(Rect2(0, 0, size.x, half), Palette.EMBER_BRIGHT)
+			draw_rect(Rect2(0, half, size.x, size.y - half), Palette.EMBER_DEEP)
+			draw_rect(Rect2(1, 1, size.x - 2.0, size.y - 2.0), Palette.with_alpha(Palette.EMBER, 0.35), false, 2.0)
+			draw_rect(r, Palette.EMBER, false, 1.0)
+		else:
+			draw_rect(r, Color("0c0a07"))
+			draw_rect(Rect2(0, size.y * shade_from, size.x, size.y * (1.0 - shade_from)), Color(0, 0, 0, 0.6))
+			draw_rect(r, Palette.IRON_EDGE, false, 1.0)
 
 
 ## Toggle status dot (8px), cyan + glow when on.
