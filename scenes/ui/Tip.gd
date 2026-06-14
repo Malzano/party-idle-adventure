@@ -62,10 +62,19 @@ class TipLayer:
 
 	var _panel: PanelContainer
 	var _column: VBoxContainer
+	var _hide_timer: Timer
 
 	func _ready() -> void:
 		set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		# Dismiss with a short grace so a momentary hover loss — a hovered control
+		# re-laying-out under a stationary cursor while combat updates the HUD —
+		# doesn't flicker the tip. A re-hover within the grace cancels the hide.
+		_hide_timer = Timer.new()
+		_hide_timer.one_shot = true
+		_hide_timer.wait_time = 0.12
+		_hide_timer.timeout.connect(_do_hide)
+		add_child(_hide_timer)
 		_panel = PanelContainer.new()
 		_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var sb := StyleBoxFlat.new()
@@ -87,12 +96,17 @@ class TipLayer:
 		set_process(false)
 
 	func show_tip(d: Dictionary) -> void:
+		_hide_timer.stop()  # cancel a pending hide — we're (re)hovering
 		_rebuild(d)
 		visible = true
 		set_process(true)
 		_reposition()
 
 	func hide_tip() -> void:
+		if visible:
+			_hide_timer.start()  # deferred; a quick re-hover cancels it
+
+	func _do_hide() -> void:
 		visible = false
 		set_process(false)
 
