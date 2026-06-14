@@ -213,14 +213,19 @@ func render(state: Dictionary) -> void:
 		b.color = Palette.with_alpha(_SCRIM, alpha)
 
 	var bw := _BW_INTRO if big else _BW
+	# Pin the wrapping width on the autowrap labels (box has 18px L/R margins).
+	# Without this, get_combined_minimum_size wraps the body one-word-per-line and
+	# the box balloons to full screen height.
+	var content_w := bw - 36.0
+	_head.custom_minimum_size.x = content_w
+	_body.custom_minimum_size.x = content_w
 	_box.custom_minimum_size = Vector2(bw, 0)
-	_prog_fill.offset_right = (_prog_track.size.x) * (float(idx + 1) / float(total))
+	_prog_fill.offset_right = content_w * (float(idx + 1) / float(total))
 
 	# --- geometry ---
-	# size.y lags one layout frame (0 on a step's first render); fall back to the
-	# synchronous min height so placement isn't computed against 0, and the 0.1s
-	# poll refines it once the real laid-out height settles.
-	var bh := maxf(_box.size.y, maxf(_box.get_combined_minimum_size().y, 150.0))
+	# Labels are width-constrained above, so min height is the correctly wrapped
+	# height and reads synchronously. Cap defensively so the box can never balloon.
+	var bh := clampf(_box.get_combined_minimum_size().y, 150.0, 560.0)
 	var hole_rect: Rect2 = hole if hole is Rect2 else Rect2()
 	var has_hole := hole is Rect2
 

@@ -57,6 +57,9 @@ func test_layer_renders_without_error() -> void:
 	})
 	await get_tree().process_frame
 	assert_gt(layer.get_child_count(), 5, "bands + ring + box built")
+	# Regression: the box must stay a card, not balloon to full-screen height when
+	# the autowrap body computes its min size (the width-pin keeps it sane).
+	assert_lt(layer._box.get_combined_minimum_size().y, 400.0, "wording box is a card, not a full-height strip")
 	# Intro centered step (no hole).
 	layer.render({
 		"alpha": 0.66, "hole": null, "sec": null, "arrow": false, "prefer": "center",
