@@ -719,7 +719,9 @@ func _hero_frame(h: Dictionary, idx: int) -> Control:
 	portrait.custom_minimum_size = Vector2(54, 54)
 	portrait.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var ps := PixelSlot.new("56²\n%s" % String(h["name"]), true)
+	# Placeholder glyph only — the name is shown beside the portrait, and a second
+	# line here would render at the slot's bottom and collide with the role chip.
+	var ps := PixelSlot.new("56²", true)
 	portrait.add_child(ps)
 	ps.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var chip := Style.make_role_tag(String(h["role"]), String(h["role_lbl"]))
