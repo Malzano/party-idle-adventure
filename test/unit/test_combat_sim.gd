@@ -173,3 +173,46 @@ func test_boss_never_stalls() -> void:
 		var strong := CombatSim._boss_clear_secs(pool, kit, pool)
 		assert_gt(strong, 0.0)
 		assert_lt(strong, cap, "%s clears quickly at high DPS" % kind)
+
+
+func test_follower_banks_shared_waves_after_baseline() -> void:
+	# Stage 5.3: a follower credits gold/xp + "deepest reached" for the shared
+	# waves cleared while following, but baselines on the FIRST apply so joining a
+	# deep delve never back-pays the whole floor.
+	GameState.reset_to_defaults()
+	GameState.act = 1
+	GameState.stage = 2
+	GameState.max_stage = 102  # a low member about to be carried to floor 4-7
+	var gold0 := GameState.gold
+	var xp0 := GameState.xp
+	var max0 := GameState.max_stage
+
+	CombatSim.set_follow_mode(true)
+	# First apply = baseline at the party floor; must NOT credit anything.
+	CombatSim.apply_session({"act": 4, "stage": 7, "wave": 1, "wave_fill": 0.0})
+	assert_eq(GameState.gold, gold0, "first apply baselines — no back-pay on join")
+	assert_eq(GameState.xp, xp0, "first apply does not credit xp")
+
+	# The leader clears three shared waves; the follower banks them at the party floor.
+	CombatSim.apply_session({"act": 4, "stage": 7, "wave": 4, "wave_fill": 0.0})
+	assert_gt(GameState.gold, gold0, "advancing shared waves credits gold")
+	assert_gt(GameState.xp, xp0, "advancing shared waves credits xp")
+	assert_gt(GameState.max_stage, max0, "deepest-reached advances toward the party floor")
+
+	# Re-applying the SAME position must not double-credit.
+	var goldA := GameState.gold
+	CombatSim.apply_session({"act": 4, "stage": 7, "wave": 4, "wave_fill": 40.0})
+	assert_eq(GameState.gold, goldA, "no forward progress → no extra credit")
+
+	CombatSim.set_follow_mode(false)
+
+
+func test_apply_session_does_not_credit_when_not_following() -> void:
+	# Guard: the reward path is gated on follow_mode, so a stray apply_session on a
+	# leader/solo client (follow_mode false) never mints currency.
+	GameState.reset_to_defaults()
+	CombatSim.follow_mode = false
+	CombatSim._delve_credited_index = 1
+	var gold0 := GameState.gold
+	CombatSim.apply_session({"act": 4, "stage": 7, "wave": 5, "wave_fill": 0.0})
+	assert_eq(GameState.gold, gold0, "no crediting when not in follow mode")

@@ -68,6 +68,12 @@ var _boss_shield_on: bool = false  # tracks the shield window for telegraphs
 ## or persist. The leader + solo players keep follow_mode = false.
 var follow_mode: bool = false
 
+## Follower reward cursor (Stage 5.3): the global wave index this client has
+## already credited while following. -1 means "needs a baseline" — set on the
+## first apply_session of a follow so joining a deep delve doesn't back-pay the
+## whole floor; reset whenever follow mode ends.
+var _delve_credited_index: int = -1
+
 
 func _ready() -> void:
 	_rng.seed = 0x6D2B79F5  # fixed seed: deterministic flavor rolls
@@ -367,6 +373,31 @@ func apply_session(sess: Dictionary) -> void:
 	if _wave_kind != "normal":
 		EventBus.sim_boss_hp.emit(clampf(1.0 - wave_damage / _boss_threshold(), 0.0, 1.0))
 	EventBus.sim_wave_progress.emit(wave_fill())
+	_credit_followed_progress()
+
+
+## Stage 5.3 — credit a follower for the shared waves cleared since the last poll
+## (at the PARTY floor, with this player's own gold_find/xp_gain), and advance
+## "deepest reached". Baselines on the first apply of a follow so joining a deep
+## delve doesn't back-pay the whole floor; the burst clamp guards a stale cursor.
+## The follower's own grind position (GameState.act/stage) is untouched — only
+## gold/xp/max_stage move, and /v1/sync's party-floor grace lets these land.
+func _credit_followed_progress() -> void:
+	if not follow_mode:
+		return
+	var wps := Balance.inum("enemy.waves_per_stage", 5)
+	var s_index := Balance.stage_index(act, stage)
+	var cursor := s_index * wps + (wave - 1)
+	if _delve_credited_index < 0:
+		_delve_credited_index = cursor  # baseline; no back-pay on join
+		return
+	if cursor <= _delve_credited_index:
+		return  # no forward progress this beat (or leader reset)
+	var cleared := mini(cursor - _delve_credited_index, wps * 6)  # bound a burst
+	_delve_credited_index = cursor
+	GameState.add_gold(wave_gold_reward(s_index) * cleared)
+	GameState.add_xp(wave_xp_reward(s_index) * cleared)
+	GameState.max_stage = maxi(GameState.max_stage, act * 100 + stage)
 
 
 ## Become the delve LEADER continuing from the shared session position (host
@@ -375,6 +406,7 @@ func apply_session(sess: Dictionary) -> void:
 ## as "backward", stalling the whole delve.
 func adopt_as_leader(sess: Dictionary) -> void:
 	follow_mode = false
+	_delve_credited_index = -1  # leaving follow mode; re-baseline if I follow again
 	act = int(sess.get("act", act))
 	stage = int(sess.get("stage", stage))
 	wave = int(sess.get("wave", wave))
@@ -391,6 +423,7 @@ func set_follow_mode(on: bool) -> void:
 	if on == follow_mode:
 		return
 	follow_mode = on
+	_delve_credited_index = -1  # entering or leaving follow → re-baseline the cursor
 	if not on:
 		act = GameState.act
 		stage = GameState.stage
