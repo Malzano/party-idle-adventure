@@ -40,6 +40,13 @@ const PARALLAX := [0.18, 0.45, 1.0]     # far → near layer scroll factors
 const CHEST_MAX := 2
 const CHEST_LIFE := 25.0
 
+# --- environmental scenery: props drift past the party (behind the units) ---
+const _PROP_KINDS: Array[String] = ["pillar", "tree", "brazier", "rubble", "rock", "tree", "pillar"]
+const _PROP_SIZES := {
+	"pillar": Vector2(86, 158), "brazier": Vector2(56, 84),
+	"rubble": Vector2(94, 60), "tree": Vector2(94, 152), "rock": Vector2(72, 54),
+}
+
 # --- hero attacks (presentation only; never feeds the sim) ---
 const FOCUS_RECOMPUTE_INTERVAL := 0.15
 const FIRE_INTERVAL := 0.55             # cosmetic attack period at 1× speed
@@ -73,6 +80,8 @@ var _pulses: Array[Dictionary] = []
 
 # entities
 var _bg_layers: Array[Dictionary] = []    # {node, factor}
+var _prop_holder: Control
+var _props: Array[Dictionary] = []        # {node, x, lane, rate} — scenery drifting past
 var _hero_units: Array[Control] = []
 var _enemies: Array[Dictionary] = []      # {node, sprite, bar, state, elite, x, lane, start_x, engage_x, speed, hp_pct}
 var _projectiles: Array[Dictionary] = []  # {node, from, to, t, dur, impact, target, spec}
@@ -178,6 +187,14 @@ func _build() -> void:
 		var layer := _ParallaxLayer.new(kinds[i], GROUND_Y)
 		_bg_holder.add_child(layer)
 		_bg_layers.append({"node": layer, "factor": PARALLAX[i]})
+
+	# Scenery: environmental props that drift past the party (behind the units).
+	_prop_holder = Control.new()
+	_prop_holder.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_prop_holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_prop_holder)
+	for i in 7:
+		_spawn_prop(_rng.randf_range(0.25, 1.7))
 
 	# Units (heroes + enemies + chests), depth-sorted by feet y.
 	_units_holder = Control.new()
@@ -1074,9 +1091,16 @@ func _scroll_parallax(delta: float, spd: float) -> void:
 		var node := layer["node"] as _ParallaxLayer
 		node.scroll_x += SCROLL_SPEED * float(layer["factor"]) * spd * delta
 		node.queue_redraw()
+	var drift_x := (SCROLL_SPEED / maxf(1.0, size.x)) * spd * delta
+	# Scenery props drift past at lane-based rates (parallax depth) and WRAP back
+	# to the right when they scroll off — never freed, so no per-frame-cast risk.
+	for pr in _props:
+		pr["x"] = float(pr["x"]) - drift_x * float(pr["rate"])
+		if float(pr["x"]) < DESPAWN_X - 0.05:
+			pr["x"] = float(pr["x"]) + _rng.randf_range(1.6, 2.2)
+		_pos_ground(pr["node"], float(pr["x"]), int(pr["lane"]))
 	# Chests are ground objects: they drift left with the near layer and are gone
 	# once they scroll off behind the party.
-	var drift_x := (SCROLL_SPEED / maxf(1.0, size.x)) * spd * delta
 	var gone: Array = []
 	for ch in _chests:
 		ch["x"] = float(ch["x"]) - drift_x
@@ -1086,6 +1110,59 @@ func _scroll_parallax(delta: float, spd: float) -> void:
 	for ch in gone:
 		ch["opening"] = true
 		_despawn_chest(ch, false)
+
+
+## Spawn one piece of drifting scenery at fraction [param x].
+func _spawn_prop(x: float) -> void:
+	var kind := _PROP_KINDS[_rng.randi_range(0, _PROP_KINDS.size() - 1)]
+	var lane := _rng.randi_range(0, LANES.size() - 1)
+	var node := _make_prop(kind, lane)
+	_prop_holder.add_child(node)
+	var lane_t := float(lane) / float(maxi(1, LANES.size() - 1))
+	_props.append({"node": node, "x": x, "lane": lane, "rate": lerpf(0.55, 1.05, lane_t)})
+	_pos_ground(node, x, lane)
+
+
+## A scenery prop (sprite from props.dungeon, lane-scaled for depth). Braziers
+## get a flame glow that pulses on the battlefield clock.
+func _make_prop(kind: String, lane: int) -> Control:
+	var lane_t := float(lane) / float(maxi(1, LANES.size() - 1))
+	var base: Vector2 = _PROP_SIZES.get(kind, Vector2(72, 92))
+	var sz := base * lerpf(0.72, 1.16, lane_t)
+	var unit := Control.new()
+	unit.size = sz
+	unit.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	unit.modulate = Color(1, 1, 1, lerpf(0.5, 0.95, lane_t))  # far props read hazier
+
+	var shadow := _Shadow.new(0.5)
+	shadow.size = Vector2(sz.x * 0.7, 13)
+	shadow.position = Vector2(sz.x * 0.5 - shadow.size.x * 0.5, sz.y - 8.0)
+	unit.add_child(shadow)
+
+	var sprite := PixelSlot.new(kind, false, "props.dungeon", kind)
+	sprite.size = sz
+	sprite.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	unit.add_child(sprite)
+
+	if kind == "brazier":
+		var border := Panel.new()
+		var bsb := StyleBoxFlat.new()
+		bsb.draw_center = false
+		bsb.set_border_width_all(1)
+		bsb.border_color = Palette.EMBER_DEEP
+		bsb.set_corner_radius_all(3)
+		bsb.shadow_color = Palette.with_alpha(Palette.EMBER, 0.35 * Palette.GLOW)
+		bsb.shadow_size = int(20 * Palette.GLOW)
+		border.add_theme_stylebox_override("panel", bsb)
+		border.size = sz
+		border.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		unit.add_child(border)
+		var flame := _Flame.new()
+		flame.size = Vector2(sz.x * 0.6, sz.y * 0.36)
+		flame.position = Vector2(sz.x * 0.5 - flame.size.x * 0.5, -6.0)
+		unit.add_child(flame)
+		_pulses.append({"node": flame, "period": 1.8, "delay": _rng.randf(), "min": 0.5, "max": 1.0})
+	return unit
 
 
 # =========================================================================
@@ -1206,10 +1283,10 @@ class _ParallaxLayer:
 		match kind:
 			"far":
 				_tile = 300.0
-				_col = Color(0.06, 0.05, 0.045, 0.55)
+				_col = Color(0.10, 0.08, 0.07, 0.6)
 			"mid":
 				_tile = 360.0
-				_col = Color(0.04, 0.035, 0.03, 0.7)
+				_col = Color(0.07, 0.055, 0.045, 0.8)
 			_:
 				_tile = 130.0
 				_col = Color(0.0, 0.0, 0.0, 0.4)
@@ -1364,3 +1441,27 @@ class _Streak:
 		draw_polygon(
 			PackedVector2Array([Vector2(0, 0), Vector2(w, 0), Vector2(w, h), Vector2(0, h)]),
 			PackedColorArray([solid, clear, clear, solid]))
+
+
+## Brazier flame glow (alpha pulsed by the battlefield clock via _pulses).
+class _Flame:
+	extends Control
+
+	func _init() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _ready() -> void:
+		resized.connect(queue_redraw)
+
+	func _draw() -> void:
+		var c := Vector2(size.x * 0.5, size.y * 0.7)
+		var rx := size.x * 0.5
+		var ry := size.y * 0.6
+		if rx < 1.0:
+			return
+		var steps := 8
+		var a := 0.85 / float(steps)
+		draw_set_transform(c, 0.0, Vector2(1.0, ry / rx))
+		for i in steps:
+			draw_circle(Vector2.ZERO, rx * (1.0 - float(i) / float(steps)), Palette.with_alpha(Palette.EMBER_BRIGHT, a))
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
