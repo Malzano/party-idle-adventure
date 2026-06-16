@@ -142,6 +142,39 @@ func test_on_enemy_killed_drops_focus_first() -> void:
 	assert_true((bf._focus as Dictionary).is_empty(), "focus cleared → retargets next frame")
 
 
+func test_kill_with_no_engaged_foe_is_deferred() -> void:
+	var bf := _bf()
+	await get_tree().process_frame
+	bf.set_process(false)
+	# Initial spawns are all approaching — a sim kill must NOT snipe one mid-runway.
+	for e in bf._enemies:
+		e["state"] = "approach"
+	bf._pending_kills = 0
+	bf._on_enemy_killed()
+	assert_eq(bf._pending_kills, 1, "a kill with no engaged foe is held, not applied to an approacher")
+	for e in bf._enemies:
+		assert_ne(String(e["state"]), "dying", "no approacher was sniped")
+	# Once a foe engages, the held kill drains onto it.
+	bf._enemies[0]["state"] = "engaged"
+	assert_true(bf._kill_engaged_victim(), "the held kill lands on the engaged foe")
+	assert_eq(String(bf._enemies[0]["state"]), "dying", "the engaged foe dies at the clash")
+
+
+func test_in_combat_freezes_travel_state() -> void:
+	var bf := _bf()
+	await get_tree().process_frame
+	bf.set_process(false)
+	for e in bf._enemies:
+		e["state"] = "approach"
+	assert_false(bf._in_combat(), "approaching foes only → the party is still traveling")
+	bf._enemies[0]["state"] = "engaged"
+	assert_true(bf._in_combat(), "an engaged foe → in combat (background + hero walk freeze)")
+	# A boss also counts as combat.
+	bf._enemies[0]["state"] = "approach"
+	EventBus.sim_boss_started.emit("miniboss", "Marrow Knight", "miniboss", 6000.0)
+	assert_true(bf._in_combat(), "a boss on the field → in combat")
+
+
 func test_focus_handles_empty_lineup() -> void:
 	var bf := _bf()
 	await get_tree().process_frame

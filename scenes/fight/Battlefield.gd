@@ -28,8 +28,8 @@ const CLASH_X := 0.36                   # enemies stop here to fight (close to t
 const SPAWN_X := 1.10                   # enter from off the right edge
 const DESPAWN_X := -0.12                # culled once scrolled off the left
 const LANES: Array[float] = [-0.085, 0.0, 0.085]  # y offsets (fraction of height): far→near
-const APPROACH_SPEED := 0.55            # rect-widths/sec at 1×: foes RUSH to the clash so they
-                                        # cluster + die at the hero, not picked off mid-runway
+const APPROACH_SPEED := 0.22            # rect-widths/sec at 1×: a reasonable walk-in (kills are
+                                        # deferred until a foe engages, so it needn't rush)
 const MELEE_RANGE := 0.08               # x past CLASH a melee target must be within
 
 # --- forward-travel parallax (replaces the iso scroll) ---
@@ -96,6 +96,8 @@ var _focus: Dictionary = {}               # the hero's target: a reference into 
 var _focus_accum: float = 0.0
 var _fire_accum: float = 0.0
 var _boss_entry: Dictionary = {}          # the single on-field boss token during a boss wave
+var _pending_kills: int = 0               # sim kills that arrived before any foe engaged (held)
+var _kill_drain: float = 0.0              # paces the held-kill drain onto engaged foes
 
 
 func _ready() -> void:
@@ -123,14 +125,21 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_t += delta
+	# The party WALKS until it meets enemies, then STOPS to fight: while traveling
+	# the background scrolls + the hero strides; in combat both freeze.
+	var traveling := not _in_combat()
 	# Looping motion: stride/lunge/idle bobs on sprites + opacity pulses.
 	for b in _bobs:
 		var n := b["node"] as Control
 		var wv := 0.5 - 0.5 * cos(TAU * (_t - float(b["delay"])) / float(b["period"]))
 		match String(b["kind"]):
-			"stride":
-				n.position = (b["base"] as Vector2) + Vector2(0.0, -5.0 * wv)
-				n.rotation_degrees = lerpf(-1.4, 1.4, wv)
+			"stride":  # the hero's walk — only while traveling; stands still in combat
+				if traveling:
+					n.position = (b["base"] as Vector2) + Vector2(0.0, -5.0 * wv)
+					n.rotation_degrees = lerpf(-1.4, 1.4, wv)
+				else:
+					n.position = b["base"]
+					n.rotation_degrees = 0.0
 			"lunge":
 				n.position = (b["base"] as Vector2) + Vector2(0.0, 3.0 * wv)
 			_:
@@ -145,8 +154,18 @@ func _process(delta: float) -> void:
 	if size.x < 4.0:
 		return
 	var spd := float(CombatSim.speed)
-	_scroll_parallax(delta, spd)
-	_update_enemies(delta, spd)
+	# Forward travel freezes while fighting (the party has stopped to clash).
+	if traveling:
+		_scroll_parallax(delta, spd)
+	_update_enemies(delta, spd)  # foes keep walking in to join the fight
+	# Sim kills that arrived before a foe engaged are held, then drained onto
+	# engaged foes so deaths always land at the clash, never mid-runway.
+	if _pending_kills > 0:
+		_kill_drain += delta * spd
+		if _kill_drain >= 0.3:
+			_kill_drain = 0.0
+			if _kill_engaged_victim():
+				_pending_kills -= 1
 	# Hero focusing: re-pick the nearest target on a throttle or when it's lost.
 	_focus_accum += delta
 	if _focus_accum >= FOCUS_RECOMPUTE_INTERVAL or not _focus_valid():
@@ -452,12 +471,30 @@ func _update_enemy_visual(e: Dictionary) -> void:
 	unit.modulate = Color(1, 1, 1, lerpf(0.7, 1.0, lane_t) * lerpf(0.62, 1.0, approach_t))
 
 
-## A sim kill landed: drop the focused/most-worn engaged token (elite last) with
-## a flatten-and-fade. NO mid-wave respawn — the field refills only on a wave
-## advance, so each wave is cleared before the next marches in.
+## True while the party has met enemies and stopped to fight (an engaged foe or
+## a boss on the field). Travel (background scroll + hero stride) freezes here.
+func _in_combat() -> bool:
+	if not _boss_entry.is_empty():
+		return true
+	for e in _enemies:
+		if String(e["state"]) == "engaged":
+			return true
+	return false
+
+
+## A sim kill landed. Drop an ENGAGED foe (focus first, else most-worn, elite
+## last). If nothing has engaged yet, HOLD the kill (deferred) rather than snipe
+## an approacher mid-runway — _process drains held kills onto foes as they
+## arrive, so deaths always land at the clash. NO mid-wave respawn.
 func _on_enemy_killed() -> void:
+	if not _kill_engaged_victim():
+		_pending_kills += 1
+
+
+## Kill one engaged foe (focus first, else most-worn, elite last). Returns false
+## if none is engaged (nothing to kill yet).
+func _kill_engaged_victim() -> bool:
 	var victim: Dictionary = {}
-	# The hero kills what it's hitting: drop the focused token first.
 	if _focus_valid() and String(_focus["state"]) == "engaged":
 		victim = _focus
 	if victim.is_empty():
@@ -472,19 +509,11 @@ func _on_enemy_killed() -> void:
 			if v_better:
 				victim = e
 	if victim.is_empty():
-		# Nothing engaged yet — take the closest approacher (smallest x).
-		var best_x := INF
-		for e in _enemies:
-			if String(e["state"]) != "approach":
-				continue
-			if float(e["x"]) < best_x:
-				best_x = float(e["x"])
-				victim = e
-	if victim.is_empty():
-		return
+		return false
 	if is_same(victim, _focus):
 		_focus = {}  # focus died → retarget next frame
 	_kill_entry(victim)
+	return true
 
 
 ## Flatten-and-fade a token, then free it. Idempotent (safe for overlapping
@@ -518,6 +547,7 @@ func _on_sim_wave_advanced(_wave: int) -> void:
 		if String(e["state"]) != "dying" and not is_same(e, _boss_entry):
 			_kill_entry(e)
 	_respawn_at.clear()
+	_pending_kills = 0  # held kills from the cleared wave don't carry over
 	if Balance.wave_kind(CombatSim.act, CombatSim.stage, CombatSim.wave) != "normal":
 		return  # the boss token spawns from sim_boss_started
 	var n := Balance.inum("enemy.per_wave", 8)
