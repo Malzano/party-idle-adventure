@@ -258,7 +258,7 @@ func _rebuild_mine() -> void:
 	var members: Array = party["members"]
 	for m_v in members:
 		_mine_body.add_child(_member_row(m_v))
-	for _i in range(members.size(), 4):
+	for _i in range(members.size(), BackendClient.PARTY_CAP):
 		_mine_body.add_child(_recruiting_row())
 
 	var leave := Style.make_button("LEAVE PARTY", "ghost", 12)
