@@ -458,13 +458,13 @@ func poll_announcements() -> void:
 
 
 # =========================================================================
-# Party (/v1/party/*) — 4-player groups, presence via the sync heartbeat.
+# Party (/v1/party/*) — 3-player groups, presence via the sync heartbeat.
 # GameState.party mirrors the server's PartyView; mock mode simulates the
 # other players (GameContent.MOCK_DELVERS) and persists YOUR party in
 # user://netstate.json (client state — never in the authoritative save).
 # =========================================================================
 
-const PARTY_CAP := 4
+const PARTY_CAP := 3  # mirrors the server lib/party.ts
 const PRESENCE_TTL := 120  # seconds; mirrors the server's lib/party.ts
 
 var _mock_parties: Array = []        # open parties run by fake delvers

@@ -289,22 +289,31 @@ func _tick() -> void:
 		_vitals_dirty_ticks = 0
 		EventBus.sim_party_vitals.emit(party_hp, party_mana)
 
-	# Auto-loot drip.
-	_loot_cooldown -= 1.0
-	if _loot_cooldown <= 0.0:
-		_loot_cooldown = Balance.num("rewards.loot_interval_ticks", 21.0)
-		var entry: Array = GameContent.LOOT_FEED[_rng.randi_range(0, GameContent.LOOT_FEED.size() - 1)]
-		EventBus.sim_loot.emit(entry)
+## The activity log shows REAL events (stage clears, level-ups, bosses, special
+## finds) — emitted via _log from _on_wave_cleared. No more random flavor drip.
+func _log(verb: String, subject: String, rarity: String) -> void:
+	var who := GameState.player_name if GameState.player_name != "" else "You"
+	EventBus.sim_loot.emit([who, verb, subject, rarity])
+
+
+## A special item is a GUARANTEED, cap-safe gold cache flavored by the item name
+## (a real equippable special would need a server-issued grant — future work).
+func _grant_special(s_index: int, name: String) -> void:
+	GameState.add_gold(int(Balance.wave_gold(s_index) * Balance.num("rewards.special_item_gold_mult", 40.0)))
+	_log("found", name, "epic")
 
 
 func _on_wave_cleared() -> void:
-	if _wave_kind != "normal":
-		EventBus.sim_boss_defeated.emit(_wave_kind)
+	var cleared_kind := _wave_kind
+	if cleared_kind != "normal":
+		EventBus.sim_boss_defeated.emit(cleared_kind)
+		_log("vanquished", Balance.boss_name(cleared_kind, Balance.floor_index(act, stage)),
+			"mythic" if cleared_kind == "boss" else "epic")
 	# No carryover: every wave (the _reset_wave calls below zero wave_damage)
 	# clears in a whole number of ticks, so the live sim and simulate_offline
 	# stay identical. Boss waves pay a reward multiplier for the longer fight.
 	var s_index := Balance.stage_index(act, stage)
-	var rmult := Balance.boss_reward_mult(_wave_kind)
+	var rmult := Balance.boss_reward_mult(cleared_kind)
 	GameState.add_gold(int(wave_gold_reward(s_index) * rmult))
 	var lvl_before := GameState.player_level
 	GameState.add_xp(int(wave_xp_reward(s_index) * rmult))
@@ -313,8 +322,18 @@ func _on_wave_cleared() -> void:
 	# loadout change). Fires at most once per wave.
 	if GameState.player_level != lvl_before:
 		_recompute_stats()
+		_log("reached", "Level %d" % GameState.player_level, "rare")
+	# Wave-level special grants on THIS wave; the stage-level special grants once
+	# on the stage clear (below) so it isn't paid out every wave.
+	var wsp := String(Balance.wave_def(act, stage, wave).get("special_item", ""))
+	if wsp != "":
+		_grant_special(s_index, wsp)
 	var waves_per_stage := Balance.inum("enemy.waves_per_stage", 5)
 	if wave >= waves_per_stage:
+		var ssp := String(Balance.stage_def(act, stage).get("special_item", ""))
+		if ssp != "":
+			_grant_special(s_index, ssp)
+		_log("cleared", "%s  (%s)" % [stage_name, stage_label()], "uncommon")
 		wave = 1
 		GameState.daily_stages += 1
 		EventBus.quests_changed.emit()

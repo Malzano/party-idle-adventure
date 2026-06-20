@@ -229,7 +229,7 @@ func _rebuild_mine() -> void:
 		_build_forge_form()
 		return
 
-	_count_lbl.text = "%d/4" % int(party["member_count"])
+	_count_lbl.text = "%d/3" % int(party["member_count"])
 	var name_row := HBoxContainer.new()
 	name_row.add_theme_constant_override("separation", 8)
 	name_row.add_child(Style.display_label(String(party["name"]), 20, Palette.GOLD_BRIGHT))
@@ -446,7 +446,7 @@ func _party_row(p: Dictionary) -> Control:
 	var nrow := HBoxContainer.new()
 	nrow.add_theme_constant_override("separation", 8)
 	nrow.add_child(Style.display_label(String(p["name"]), 16, Palette.TX))
-	nrow.add_child(Style.pixel_label("%d/4" % int(p["member_count"]), 9, Palette.R_UNCOMMON))
+	nrow.add_child(Style.pixel_label("%d/3" % int(p["member_count"]), 9, Palette.R_UNCOMMON))
 	meta.add_child(nrow)
 
 	# Member minis: class-colored initials + online dots.

@@ -1022,6 +1022,19 @@ func _open_chest(entry: Dictionary) -> void:
 				_chest_floater(at, String(item["n"]), Palette.rarity_color(String(item["r"])), 17)
 			else:
 				_chest_floater(at, "Bag full → +%s gold" % Style.group_int(int(reward["gold"])), Palette.GOLD_BRIGHT, 15)
+	# Mirror the real chest reward into the right-side activity log.
+	var who := GameState.player_name if GameState.player_name != "" else "You"
+	match String(reward["kind"]):
+		"gold":
+			EventBus.sim_loot.emit([who, "looted", "+%s gold" % Style.group_int(int(reward["gold"])), "common"])
+		"materials":
+			EventBus.sim_loot.emit([who, "looted", "+%d iron ingots" % int(reward["iron"]), "uncommon"])
+		"item":
+			var it: Dictionary = reward["item"]
+			if bool(reward["banked"]):
+				EventBus.sim_loot.emit([who, "looted", String(it["n"]), String(it["r"])])
+			else:
+				EventBus.sim_loot.emit([who, "looted", "+%s gold" % Style.group_int(int(reward["gold"])), "common"])
 	_despawn_chest(entry, true)
 
 

@@ -21,6 +21,7 @@ const _ICON_SOULSTONE := "res://assets/icons/soulstone.svg"
 
 var _stage_val: Label
 var _stage_name_lbl: Label
+var _special_lbl: Label
 var _wave_lbl: Label
 var _wave_bar: StatBar
 var _pips: Array = []
@@ -160,7 +161,12 @@ func _build_wave_bar() -> void:
 	stage_col.add_child(srow)
 	_stage_name_lbl = Style.display_label(CombatSim.stage_name, 12, Palette.GOLD, true)
 	stage_col.add_child(_stage_name_lbl)
+	# Special-item reward chip: shown when the current stage/wave defines one.
+	_special_lbl = Style.pixel_label("", 10, Palette.R_EPIC)
+	_special_lbl.visible = false
+	stage_col.add_child(_special_lbl)
 	row.add_child(stage_col)
+	_refresh_special()
 
 	# Wave label + Party DPS over the XP-gold progress bar.
 	var prog := VBoxContainer.new()
@@ -292,6 +298,7 @@ func _build_mythic_ribbon() -> void:
 func _on_mythic_announced(player: String, item: String) -> void:
 	_ribbon_queue.append([player, item])
 	_play_next_announcement()
+	_push_loot([player, "unearthed", item, "mythic"], true)  # also log it
 
 
 func _play_next_announcement() -> void:
@@ -332,7 +339,7 @@ func _build_party_finder() -> void:
 	col.add_theme_constant_override("separation", 0)
 	panel.add_child(col)
 
-	# Head: icon · PARTY FINDER · 4/4.
+	# Head: icon · PARTY FINDER · 3/3.
 	var head := PanelContainer.new()
 	head.add_theme_stylebox_override("panel", Style.head_box())
 	var hrow := HBoxContainer.new()
@@ -345,7 +352,7 @@ func _build_party_finder() -> void:
 	hsp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hsp.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hrow.add_child(hsp)
-	var online := Style.pixel_label("4/4", 10, Palette.R_UNCOMMON)
+	var online := Style.pixel_label("3/3", 10, Palette.R_UNCOMMON)
 	online.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	hrow.add_child(online)
 	head.add_child(hrow)
@@ -391,7 +398,7 @@ func _build_party_finder() -> void:
 		finder.add_theme_stylebox_override(st, gsb)
 	finder.pressed.connect(func() -> void: WindowManager.open(WindowManager.WIN_PARTY))
 	var relabel := func() -> void:
-		finder.text = ("PARTY · %d/4" % int(GameState.party.get("member_count", 1))) \
+		finder.text = ("PARTY · %d/3" % int(GameState.party.get("member_count", 1))) \
 			if GameState.in_party() else "FIND PARTY"
 	EventBus.party_changed.connect(relabel)
 	relabel.call()
@@ -591,9 +598,10 @@ func _build_loot_ticker() -> void:
 	pad.add_child(_loot_list)
 	col.add_child(pad)
 
-	# Seed with the first feed entries (matches the design's initial state).
-	for i in 4:
-		_push_loot(GameContent.LOOT_FEED[i], false)
+	# The log fills with REAL events (stage clears, level-ups, bosses, finds) as
+	# they happen — seed a single start line instead of canned flavor.
+	var who := GameState.player_name if GameState.player_name != "" else "You"
+	_push_loot([who, "entered", CombatSim.stage_name, "uncommon"], false)
 
 
 func _push_loot(entry: Array, animate: bool) -> void:
@@ -1150,6 +1158,16 @@ func _on_wave_progress(fill: float) -> void:
 func _on_wave_changed(wave: int) -> void:
 	_wave_lbl.text = "Wave %d / %d" % [wave, Balance.inum("enemy.waves_per_stage", 5)]
 	_refresh_pips(wave)
+	_refresh_special()
+
+
+## Show "🎁 <item>" when the current stage/wave defines a special-item reward.
+func _refresh_special() -> void:
+	if _special_lbl == null:
+		return
+	var sp := Balance.stage_special_item(CombatSim.act, CombatSim.stage, CombatSim.wave)
+	_special_lbl.text = "🎁 " + sp
+	_special_lbl.visible = sp != ""
 
 
 func _on_boss_started(_id: String, boss_name: String, tier: String, _max_hp: float) -> void:

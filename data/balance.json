@@ -28,7 +28,9 @@
     "offline_cap_hours": 12,
     "offline_item_waves_per_item": 15,
     "miniboss_reward_mult": 4.0,
-    "boss_reward_mult": 10.0
+    "boss_reward_mult": 10.0,
+    "special_item_gold_mult": 40.0,
+    "comment_special": "Clearing a stage/wave that defines a special_item (stages.json) grants a guaranteed gold cache of wave_gold(s_index) * this, flavored by the item name in the log. Gold (not a bag item) so it stays under the server anti-cheat caps — a real equippable special needs a server-issued grant flow (future)."
   },
 
   "energy": {
