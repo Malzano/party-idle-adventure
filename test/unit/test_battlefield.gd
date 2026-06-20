@@ -321,10 +321,10 @@ func test_normal_wave_advance_stages_a_full_batch() -> void:
 	CombatSim.act = 1
 	CombatSim.stage = 1
 	CombatSim.wave = 2  # a normal wave (sub-stage 1, not a boss)
-	bf._respawn_at.clear()
+	bf._spawn_queue.clear()
 	bf._on_sim_wave_advanced(2)
-	assert_eq(bf._respawn_at.size(), Balance.inum("enemy.per_wave", 8),
-		"a normal wave advance stages a full fresh batch of minions")
+	assert_eq(bf._spawn_queue.size(), Balance.wave_monster_count(1, 1, 2),
+		"a normal wave advance stages this wave's full monster lineup")
 	for e in bf._enemies:
 		assert_eq(String(e["state"]), "dying", "the previous wave's minions are cleared first")
 
@@ -336,21 +336,39 @@ func test_boss_wave_advance_does_not_stage_trash() -> void:
 	CombatSim.act = 1
 	CombatSim.stage = 10  # floor-boss sub-stage
 	CombatSim.wave = Balance.inum("enemy.waves_per_stage", 5)  # the boss wave
-	bf._respawn_at.clear()
+	bf._spawn_queue.clear()
 	bf._on_sim_wave_advanced(CombatSim.wave)
-	assert_eq(bf._respawn_at.size(), 0, "a boss wave refills no trash (the boss token spawns separately)")
+	assert_eq(bf._spawn_queue.size(), 0, "a boss wave refills no trash (the boss token spawns separately)")
 
 
 func test_kill_does_not_respawn_mid_wave() -> void:
 	var bf := _bf()
 	await get_tree().process_frame
 	bf.set_process(false)
-	bf._respawn_at.clear()
+	bf._spawn_queue.clear()
 	bf._enemies[0]["state"] = "engaged"
 	bf._focus = bf._enemies[0]
 	bf._on_enemy_killed()
-	assert_eq(bf._respawn_at.size(), 0,
+	assert_eq(bf._spawn_queue.size(), 0,
 		"no mid-wave respawn — the field refills only when the wave advances")
+
+
+# --- Data-driven stage definitions (auto-generated defaults) -----------------
+
+func test_wave_monster_count_default_and_boss() -> void:
+	assert_eq(Balance.wave_monster_count(1, 1, 1), Balance.inum("enemy.monsters_per_wave", 5),
+		"a normal wave fields the default monster count")
+	var wps := Balance.inum("enemy.waves_per_stage", 5)
+	assert_eq(Balance.wave_monster_count(1, 10, wps), 1, "a floor-boss wave is a single token")
+
+
+func test_wave_plan_assembles_named_monsters_with_times() -> void:
+	var plan := GameContent.wave_plan(1, 1, 1)
+	assert_eq(plan.size(), Balance.wave_monster_count(1, 1, 1), "one plan entry per monster")
+	assert_true((plan[0] as Dictionary).has("name") and (plan[0] as Dictionary).has("at"),
+		"entries carry a name + spawn time")
+	var wps := Balance.inum("enemy.waves_per_stage", 5)
+	assert_true(GameContent.wave_plan(1, 10, wps).is_empty(), "a boss wave stages no trash plan")
 
 
 # --- Boss token: HP mirrors the sim, not our cosmetic hits --------------------

@@ -49,6 +49,7 @@ var _loot_cooldown: float = 21.0
 var _energy_accum: float = 0.0
 var _vitals_dirty_ticks: int = 0
 var _kills_emitted: int = 0
+var _wave_count: int = 8       # individual monsters in the current normal wave
 var _rng := RandomNumberGenerator.new()
 
 ## Boss-wave state (set by _reset_wave; "normal" the rest of the time). The
@@ -85,7 +86,7 @@ func _ready() -> void:
 	# SaveManager (earlier in autoload order) has loaded the profile by now.
 	act = GameState.act
 	stage = GameState.stage
-	stage_name = GameContent.STAGE_NAMES[(stage - 1) % GameContent.STAGE_NAMES.size()]
+	stage_name = _stage_theme()
 	GameState.check_daily_reset()
 	_recompute_stats()
 	_maybe_relic_unlock()  # baseline the milestone count (no reprice on first)
@@ -144,6 +145,10 @@ func _reset_wave() -> void:
 	_boss_add_hp = 0.0
 	_boss_shield_on = false
 	_kills_emitted = 0
+	# How many individual monsters this wave fields (data-driven per stage; boss
+	# waves return 1). The wave HP pool is split evenly across them and the
+	# progress bar tracks monsters killed / this count.
+	_wave_count = Balance.wave_monster_count(act, stage, wave)
 	if _wave_kind != "normal":
 		wave_pool *= Balance.boss_hp_mult(_wave_kind)
 		_boss_kit = Balance.boss_kit(_wave_kind)
@@ -164,17 +169,22 @@ func _boss_threshold() -> float:
 	return wave_pool * (1.0 + Balance.boss_enrage_factor(_boss_kit, _wave_elapsed)) + _boss_add_hp
 
 
+## The current stage's display name: the authored theme from stages.json if any,
+## else the rotating default from GameContent.
+func _stage_theme() -> String:
+	var authored := Balance.stage_theme(act, stage)
+	if authored != "":
+		return authored
+	return GameContent.STAGE_NAMES[(stage - 1) % GameContent.STAGE_NAMES.size()]
+
+
 func wave_fill() -> float:
-	# Solo / party-leader normal waves: the bar tracks the SLOWER of damage and
-	# the elapsed minimum, so it reaches 100% exactly when the wave clears (not
-	# the instant the pool is out-DPSed). Followers don't tick _wave_elapsed —
-	# their fill is the leader's broadcast value reconstructed in apply_session,
-	# so they keep the plain damage-based read.
+	# Solo / party-leader normal waves: the bar tracks MONSTERS KILLED / total, so
+	# it steps up each time a monster dies (not a smooth time-based crawl).
+	# Followers don't track kills locally — their fill is the leader's broadcast
+	# value reconstructed in apply_session, so they keep the damage-based read.
 	if _wave_kind == "normal" and not follow_mode:
-		var min_secs := Balance.num("enemy.min_wave_seconds", 12.0)
-		var dmg_frac := (wave_damage / wave_pool) if wave_pool > 0.0 else 1.0
-		var time_frac := (_wave_elapsed / min_secs) if min_secs > 0.0 else 1.0
-		return clampf(minf(dmg_frac, time_frac) * 100.0, 0.0, 100.0)
+		return clampf(float(_kills_emitted) / float(maxi(1, _wave_count)) * 100.0, 0.0, 100.0)
 	return clampf(wave_damage / _boss_threshold() * 100.0, 0.0, 100.0)
 
 
@@ -222,22 +232,16 @@ func _tick() -> void:
 	if _wave_kind == "normal":
 		dmg = party_dps / TICK_RATE
 		wave_damage += dmg
-		# Pacing floor: a wave never clears faster than min_wave_seconds, so even
-		# an overpowered party watches the wave play out. simulate_offline mirrors
-		# this with the same max(min, dps-time) so away-gains never diverge.
-		var min_secs := Balance.num("enemy.min_wave_seconds", 12.0)
-		# Each wave is per_wave enemies; drop a token whenever the SLOWER of
-		# (damage done, elapsed minimum) crosses the next enemy's share — so the
-		# last minion falls exactly as the wave clears (the next wave only starts
-		# once the field is cleared).
-		var per_wave := Balance.inum("enemy.per_wave", 8)
+		# The wave is _wave_count individual monsters sharing the HP pool evenly;
+		# a monster dies each time cumulative damage crosses its 1/count share, so
+		# kills (and the progress bar) are driven purely by damage dealt — the wave
+		# length is therefore monster-count x time-to-kill, with NO fixed minimum.
 		var dmg_frac := (wave_damage / wave_pool) if wave_pool > 0.0 else 1.0
-		var time_frac := (_wave_elapsed / min_secs) if min_secs > 0.0 else 1.0
-		var kills_due := mini(per_wave, int(minf(dmg_frac, time_frac) * float(per_wave)))
+		var kills_due := mini(_wave_count, int(dmg_frac * float(_wave_count)))
 		while _kills_emitted < kills_due:
 			_kills_emitted += 1
 			EventBus.sim_enemy_killed.emit()
-		cleared = wave_damage >= wave_pool and _wave_elapsed >= min_secs
+		cleared = wave_damage >= wave_pool
 	else:
 		# Boss wave: party DPS is modulated by the kit's skills (shield/debuff
 		# windows), the boss may regen, and an adds wave can bump the threshold.
@@ -348,7 +352,7 @@ func _advance_stage() -> void:
 	GameState.act = act
 	GameState.stage = stage
 	GameState.max_stage = maxi(GameState.max_stage, act * 100 + stage)
-	stage_name = GameContent.STAGE_NAMES[(stage - 1) % GameContent.STAGE_NAMES.size()]
+	stage_name = _stage_theme()
 	_reset_wave()
 	EventBus.sim_stage_changed.emit(stage_label(), stage_name)
 	_maybe_relic_unlock()
@@ -364,7 +368,7 @@ func retreat() -> void:
 	stage = maxi(1, stage - 1)
 	GameState.stage = stage
 	wave = 1
-	stage_name = GameContent.STAGE_NAMES[(stage - 1) % GameContent.STAGE_NAMES.size()]
+	stage_name = _stage_theme()
 	_reset_wave()
 	EventBus.sim_stage_changed.emit(stage_label(), stage_name)
 	EventBus.sim_wave_changed.emit(wave)
@@ -391,7 +395,7 @@ func apply_session(sess: Dictionary) -> void:
 		act = a
 		stage = st
 		wave = wv
-		stage_name = GameContent.STAGE_NAMES[(stage - 1) % GameContent.STAGE_NAMES.size()]
+		stage_name = _stage_theme()
 		_reset_wave()  # sets _wave_kind / wave_pool, emits the boss banner if boss
 		EventBus.sim_stage_changed.emit(stage_label(), stage_name)
 		EventBus.sim_wave_changed.emit(wave)
@@ -436,7 +440,7 @@ func adopt_as_leader(sess: Dictionary) -> void:
 	act = int(sess.get("act", act))
 	stage = int(sess.get("stage", stage))
 	wave = int(sess.get("wave", wave))
-	stage_name = GameContent.STAGE_NAMES[(stage - 1) % GameContent.STAGE_NAMES.size()]
+	stage_name = _stage_theme()
 	_reset_wave()
 	wave_damage = clampf(float(sess.get("wave_fill", 0.0)), 0.0, 100.0) / 100.0 * _boss_threshold()
 	EventBus.sim_stage_changed.emit(stage_label(), stage_name)
@@ -454,7 +458,7 @@ func set_follow_mode(on: bool) -> void:
 		act = GameState.act
 		stage = GameState.stage
 		wave = 1
-		stage_name = GameContent.STAGE_NAMES[(stage - 1) % GameContent.STAGE_NAMES.size()]
+		stage_name = _stage_theme()
 		_reset_wave()
 		EventBus.sim_stage_changed.emit(stage_label(), stage_name)
 		EventBus.sim_wave_changed.emit(wave)
@@ -501,11 +505,10 @@ func simulate_offline(seconds: int) -> Dictionary:
 		var pool := Balance.wave_pool(s_index)
 		var wave_time: float
 		if kind == "normal":
-			# Tick-quantize so offline matches the live sim's whole-tick clears,
-			# and floor it at the SAME minimum the live tick enforces (the wave
-			# clears at max(min_secs, dps-time) in both paths → identical waves).
-			var min_secs := Balance.num("enemy.min_wave_seconds", 12.0)
-			wave_time = maxf(ceilf(min_secs * TICK_RATE) / TICK_RATE, ceilf(pool / dps * TICK_RATE) / TICK_RATE)
+			# Tick-quantize so offline matches the live sim's whole-tick clears.
+			# Wave length is now purely DPS-driven (monster count x time-to-kill),
+			# no fixed minimum — the live tick clears the same way (damage >= pool).
+			wave_time = ceilf(pool / dps * TICK_RATE) / TICK_RATE
 		else:
 			pool *= Balance.boss_hp_mult(kind)
 			wave_time = _boss_clear_secs(pool, Balance.boss_kit(kind), dps)
@@ -600,7 +603,7 @@ func collect_offline() -> void:
 	GameState.act = act
 	GameState.stage = stage
 	GameState.max_stage = maxi(GameState.max_stage, act * 100 + stage)
-	stage_name = GameContent.STAGE_NAMES[(stage - 1) % GameContent.STAGE_NAMES.size()]
+	stage_name = _stage_theme()
 	_reset_wave()
 	EventBus.sim_stage_changed.emit(stage_label(), stage_name)
 	EventBus.sim_wave_changed.emit(wave)

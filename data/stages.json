@@ -1,0 +1,21 @@
+{
+  "comment": "Per-stage authoring. Key = stage label 'ACT-STAGE' (e.g. '1-1', '2-7'). ANY stage not listed here auto-generates from the floor enemy roster + the difficulty curve, so the whole game works with this file empty. Add an entry to hand-craft a stage. Fields per stage: { theme: string (the stage name shown in the HUD), special_item: string (optional reward note for the whole stage), waves: [ per-wave object ] (optional; index 0 = wave 1). Per-wave object: { count: int (how many monsters this wave), monsters: [ {type: string name, at: float seconds} ] (optional explicit lineup + spawn time; overrides count), special_item: string (optional, this wave) }. Boss/mini-boss waves (final wave of sub-stage 5/10) ignore count — they spawn the single boss token. Tuning defaults (monsters_per_wave, spawn_stagger) live in balance.json -> enemy.",
+  "_example_1-1": {
+    "theme": "The Sunken Reliquary",
+    "special_item": "Reliquary Key",
+    "waves": [
+      { "count": 4 },
+      { "count": 4 },
+      { "count": 5 },
+      { "count": 5 },
+      { "count": 6, "monsters": [
+        { "type": "Hollow Ghoul", "at": 0.0 },
+        { "type": "Hollow Ghoul", "at": 0.6 },
+        { "type": "Crypt Rat", "at": 1.2 },
+        { "type": "Crypt Rat", "at": 1.8 },
+        { "type": "Crypt Rat", "at": 2.4 },
+        { "type": "Bonepicker Brute", "at": 3.2 }
+      ], "special_item": "Cracked Femur" }
+    ]
+  }
+}

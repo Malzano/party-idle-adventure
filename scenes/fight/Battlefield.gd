@@ -49,14 +49,14 @@ const _PROP_SIZES := {
 
 # --- hero attacks (presentation only; never feeds the sim) ---
 const FOCUS_RECOMPUTE_INTERVAL := 0.15
-const FIRE_INTERVAL := 0.55             # cosmetic attack period at 1× speed
+const FIRE_INTERVAL := 1.0              # ~1 attack/second at 1× speed (level-1 feel)
 const MAX_PROJECTILES := 24             # hard cap (bounds 4×-speed bursts)
 
-# --- coherence: the cosmetic HP drain is budgeted by HIT COUNT, not party_dps,
-# so it stays in lockstep with the sim's 8-kills-per-wave cadence. ~10–11 attacks
-# vs 8 kills per wave → ~1.3 hits/kill → drain enough that 1–2 hits empty the bar;
-# floored ≥5% until the authoritative kill lands (never kill ahead of the sim). ---
-const HP_DRAIN_PER_HIT := 0.62
+# --- coherence: the cosmetic HP drain is budgeted by HIT COUNT (not party_dps),
+# calibrated so a monster takes ~3 hits at the ~1 attack/sec cadence — matching
+# the sim's ~3s-per-monster kill pace at level 1. Floored ≥5% until the
+# authoritative sim kill lands (the cosmetic bar never kills ahead of the sim). ---
+const HP_DRAIN_PER_HIT := 0.34
 const HP_FLOOR := 5.0
 const DMG_FRAC_LO := 0.30
 const DMG_FRAC_HI := 0.50
@@ -86,7 +86,7 @@ var _hero_units: Array[Control] = []
 var _enemies: Array[Dictionary] = []      # {node, sprite, bar, state, elite, x, lane, start_x, engage_x, speed, hp_pct}
 var _projectiles: Array[Dictionary] = []  # {node, from, to, t, dur, impact, target, spec}
 var _chests: Array[Dictionary] = []       # {node, glow, x, lane, life, opening}
-var _respawn_at: Array[float] = []        # _t deadlines for the staggered batch
+var _spawn_queue: Array[Dictionary] = []  # pending {at: _t deadline, plan: {name, elite}}
 var _resort_accum: float = 0.0
 var _next_chest_at: float = 8.0
 var _lane_rr: int = 0                      # round-robin lane assignment
@@ -174,9 +174,9 @@ func _process(delta: float) -> void:
 	_update_attack_cadence(delta, spd)
 	_update_projectiles(delta, spd)
 	# Staggered batch spawns queued by _on_sim_wave_advanced.
-	while not _respawn_at.is_empty() and _respawn_at[0] <= _t:
-		_respawn_at.pop_front()
-		_spawn_enemy(false)
+	while not _spawn_queue.is_empty() and float(_spawn_queue[0]["at"]) <= _t:
+		var q: Dictionary = _spawn_queue.pop_front()
+		_spawn_enemy(false, q["plan"])
 	if _t >= _next_chest_at:
 		_next_chest_at = _t + _rng.randf_range(20.0, 40.0)
 		if _chests.size() < CHEST_MAX:
@@ -242,9 +242,9 @@ func _build() -> void:
 	_spawn_party_heroes()
 	EventBus.lineup_changed.connect(_spawn_party_heroes, CONNECT_DEFERRED)
 
-	# Open the field with a full wave already marching in at staggered depth.
-	for i in Balance.inum("enemy.per_wave", 8):
-		_spawn_enemy(true)
+	# Open the field with the current wave's lineup already marching in.
+	for entry in GameContent.wave_plan(CombatSim.act, CombatSim.stage, CombatSim.wave):
+		_spawn_enemy(true, entry)
 
 
 # =========================================================================
@@ -324,18 +324,25 @@ func _hero_screen_center() -> Vector2:
 
 ## Spawn one foe at the right edge in a lane; it walks left to its engage slot.
 ## [param initial] foes fast-forward part-way in so the field opens populated.
-func _spawn_enemy(initial: bool) -> void:
-	var has_elite := false
-	for e in _enemies:
-		if bool(e["elite"]) and String(e["state"]) != "dying":
-			has_elite = true
-			break
-	var elite := (not has_elite) and _boss_entry.is_empty()  # no cosmetic elite while a real boss holds the field
-	var lunge := (not elite) and _rng.randf() < 0.45
-	# Floor-themed names: floor 1 = weak early creatures; deeper floors swap in.
+## [param plan] (from GameContent.wave_plan) picks the name + elite flag; an empty
+## plan falls back to a random roster pick (used by tests / safety).
+func _spawn_enemy(initial: bool, plan: Dictionary = {}) -> void:
 	var roster := GameContent.enemy_roster_for_floor(Balance.floor_index(CombatSim.act, CombatSim.stage))
 	var trash: Array = roster["trash"]
-	var enemy_name := String(roster["elite"]) if elite else String(trash[_rng.randi_range(0, trash.size() - 1)])
+	var elite: bool
+	var enemy_name: String
+	if plan.has("name"):
+		enemy_name = String(plan["name"])
+		elite = bool(plan.get("elite", false)) and _boss_entry.is_empty()
+	else:
+		var has_elite := false
+		for e in _enemies:
+			if bool(e["elite"]) and String(e["state"]) != "dying":
+				has_elite = true
+				break
+		elite = (not has_elite) and _boss_entry.is_empty()
+		enemy_name = String(roster["elite"]) if elite else String(trash[_rng.randi_range(0, trash.size() - 1)])
+	var lunge := (not elite) and _rng.randf() < 0.45
 
 	var lane := 1 if elite else _lane_rr % LANES.size()
 	_lane_rr += 1
@@ -383,7 +390,7 @@ func _make_enemy_node(enemy_name: String, elite: bool, lunge: bool) -> Control:
 		"type": ("Elite · Stage %s" if elite else "Stage %s") % CombatSim.stage_label(),
 		"rarity": "epic" if elite else "common",
 		"stats": [
-			["HP", Style.group_int(int(CombatSim.base_wave_pool() / Balance.inum("enemy.per_wave", 8) * (2.0 if elite else 1.0)))],
+			["HP", Style.group_int(int(CombatSim.base_wave_pool() / float(maxi(1, CombatSim._wave_count))))],
 			["Range", "Closing"],
 		],
 	})
@@ -546,13 +553,14 @@ func _on_sim_wave_advanced(_wave: int) -> void:
 	for e in _enemies.duplicate():
 		if String(e["state"]) != "dying" and not is_same(e, _boss_entry):
 			_kill_entry(e)
-	_respawn_at.clear()
+	_spawn_queue.clear()
 	_pending_kills = 0  # held kills from the cleared wave don't carry over
 	if Balance.wave_kind(CombatSim.act, CombatSim.stage, CombatSim.wave) != "normal":
 		return  # the boss token spawns from sim_boss_started
-	var n := Balance.inum("enemy.per_wave", 8)
-	for i in n:
-		_respawn_at.append(_t + float(i) * 0.18)
+	# Stage the data-driven monster lineup (count + types + spawn times) for this
+	# wave; each entry marches in at its authored/auto time.
+	for entry in GameContent.wave_plan(CombatSim.act, CombatSim.stage, CombatSim.wave):
+		_spawn_queue.append({"at": _t + float(entry.get("at", 0.0)), "plan": entry})
 
 
 # =========================================================================

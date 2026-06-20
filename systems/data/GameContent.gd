@@ -159,6 +159,35 @@ static func enemy_roster_for_floor(floor_i: int) -> Dictionary:
 	return ENEMY_ROSTER[(maxi(1, floor_i) - 1) % ENEMY_ROSTER.size()]
 
 
+## The monster lineup for a NORMAL wave: an ordered list of {name, elite, at}.
+## Uses the authored def's explicit monsters when present, else fills the wave's
+## monster count from the floor roster (the first one an elite on bigger waves),
+## trickling in at the spawn stagger. Boss waves return [] (the boss token
+## spawns separately). The battlefield kills them front-to-back; the sim's kill
+## cadence (sim_enemy_killed) stays the authority.
+static func wave_plan(act: int, stage: int, wave: int) -> Array:
+	var plan: Array = []
+	if Balance.wave_kind(act, stage, wave) != "normal":
+		return plan
+	var roster := enemy_roster_for_floor(Balance.floor_index(act, stage))
+	var trash: Array = roster["trash"]
+	var elite_name := String(roster["elite"])
+	var wd := Balance.wave_def(act, stage, wave)
+	if wd.has("monsters") and typeof(wd["monsters"]) == TYPE_ARRAY:
+		for m in (wd["monsters"] as Array):
+			var md: Dictionary = m
+			var nm := String(md.get("type", trash[0]))
+			plan.append({"name": nm, "elite": nm == elite_name, "at": float(md.get("at", 0.0))})
+		return plan
+	var count := Balance.wave_monster_count(act, stage, wave)
+	var stagger := Balance.spawn_stagger()
+	for i in count:
+		var is_elite := i == 0 and count >= 4  # an elite leads the bigger waves
+		var nm := elite_name if is_elite else String(trash[i % trash.size()])
+		plan.append({"name": nm, "elite": is_elite, "at": float(i) * stagger})
+	return plan
+
+
 # --- Attack / projectile specs per class: ranged classes fire a projectile,
 # melee classes lunge. Built to be overridden by gear/skill later. ------------
 const PROJECTILE_SPECS := {

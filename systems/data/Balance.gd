@@ -6,11 +6,14 @@ extends RefCounted
 
 const PATH := "res://data/balance.json"
 const BOSS_PATH := "res://data/bosses.json"
+const STAGES_PATH := "res://data/stages.json"
 
 static var _data: Dictionary = {}
 static var _loaded := false
 static var _bosses: Dictionary = {}
 static var _bosses_loaded := false
+static var _stages: Dictionary = {}
+static var _stages_loaded := false
 
 
 static func _ensure() -> void:
@@ -64,12 +67,29 @@ static func inum(path: String, default: int) -> int:
 	return int(value(path, default))
 
 
+static func _ensure_stages() -> void:
+	if _stages_loaded:
+		return
+	_stages_loaded = true
+	if not FileAccess.file_exists(STAGES_PATH):
+		return  # absent is fine — every stage auto-generates
+	var file := FileAccess.open(STAGES_PATH, FileAccess.READ)
+	var parsed: Variant = JSON.parse_string(file.get_as_text())
+	file.close()
+	if typeof(parsed) == TYPE_DICTIONARY:
+		_stages = parsed
+	else:
+		push_error("Balance: %s is malformed JSON — stages auto-generate." % STAGES_PATH)
+
+
 ## Test seam: force-reload (e.g. after writing a temp balance file).
 static func reset_cache() -> void:
 	_loaded = false
 	_data = {}
 	_bosses_loaded = false
 	_bosses = {}
+	_stages_loaded = false
+	_stages = {}
 
 
 ## Live-ops overrides from GET /v1/config: deep-merge section dictionaries
@@ -159,6 +179,58 @@ static func wave_kind(act: int, stage: int, wave: int) -> String:
 	if sub == inum("enemy.miniboss_substage", 5):
 		return "miniboss"
 	return "normal"
+
+
+# --- Data-driven stage definitions (data/stages.json) -----------------------
+# A stage label "ACT-STAGE" may hand-author { theme, special_item, waves:[…] }.
+# Anything undefined auto-generates from the curve, so the file can be empty.
+
+## Raw authored def for a stage, or {} if it auto-generates.
+static func stage_def(act: int, stage: int) -> Dictionary:
+	_ensure_stages()
+	var key := "%d-%d" % [act, stage]
+	var d: Variant = _stages.get(key, {})
+	return d if typeof(d) == TYPE_DICTIONARY else {}
+
+
+## The authored per-wave object (index = wave-1), or {} if none.
+static func wave_def(act: int, stage: int, wave: int) -> Dictionary:
+	var waves: Variant = stage_def(act, stage).get("waves", [])
+	if typeof(waves) == TYPE_ARRAY and wave >= 1 and wave <= (waves as Array).size():
+		var w: Variant = waves[wave - 1]
+		return w if typeof(w) == TYPE_DICTIONARY else {}
+	return {}
+
+
+## How many individual monsters a NORMAL wave fields. Boss/mini-boss waves are
+## a single token, so they return 1. Authored count wins; else the default.
+static func wave_monster_count(act: int, stage: int, wave: int) -> int:
+	if wave_kind(act, stage, wave) != "normal":
+		return 1
+	var wd := wave_def(act, stage, wave)
+	if wd.has("monsters") and typeof(wd["monsters"]) == TYPE_ARRAY:
+		return maxi(1, (wd["monsters"] as Array).size())
+	if wd.has("count"):
+		return maxi(1, int(wd["count"]))
+	return maxi(1, inum("enemy.monsters_per_wave", 5))
+
+
+## Seconds between successive monsters marching in (cosmetic trickle).
+static func spawn_stagger() -> float:
+	return num("enemy.spawn_stagger", 0.5)
+
+
+## Authored theme name for a stage, or "" to fall back to the rotating defaults.
+static func stage_theme(act: int, stage: int) -> String:
+	return String(stage_def(act, stage).get("theme", ""))
+
+
+## Optional special-item note for a wave (falls back to the stage-level note).
+static func stage_special_item(act: int, stage: int, wave: int) -> String:
+	var wd := wave_def(act, stage, wave)
+	if String(wd.get("special_item", "")) != "":
+		return String(wd["special_item"])
+	return String(stage_def(act, stage).get("special_item", ""))
 
 
 ## HP-pool multiplier for a boss wave (1.0 for "normal").

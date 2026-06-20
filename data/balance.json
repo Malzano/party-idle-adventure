@@ -7,8 +7,9 @@
     "waves_per_stage": 5,
     "stages_per_act": 50,
     "per_wave": 8,
-    "min_wave_seconds": 12.0,
-    "comment_min_wave": "Pacing floor (GAME-time seconds, i.e. at 1x speed). A normal wave never clears faster than this no matter how hard the party out-DPSes the pool, so every wave is a visible fight and the per_wave minions march in and die over the minimum. 5 waves x 12s = 60s/sub-stage at 1x = 30s/sub-stage at the default 2x speed; 4x = 15s. simulate_offline floors wave time at the same value so away-gains match the live sim exactly. Boss waves are exempt (already long via boss_hp_mult + boss kit timing).",
+    "monsters_per_wave": 5,
+    "spawn_stagger": 0.5,
+    "comment_monsters": "monsters_per_wave = how many individual monsters a NORMAL wave spawns by default (a stage def in stages.json can override per wave). The wave HP pool (wave_pool) is split evenly across them, so each monster has wave_pool/count HP and the hero kills them front-to-back; the progress bar tracks monsters killed / total. spawn_stagger = seconds between each monster marching in (cosmetic trickle). Wave length is now driven by monster count x time-to-kill (NO fixed minimum) — calibrated so a level-1 delver takes ~3 hits (~3s) per floor-1 monster at ~1 attack/sec (1x speed). per_wave is legacy (kept for old refs).",
     "comment_floors": "stages_per_act (50) is FROZEN — it is the global stage-index multiplier read by the server (caps/leaderboard/chests). substages_per_floor groups the flat 1..50 stage counter into floors for boss cadence (10 substages = 1 floor → 5 floors per act). Mini-boss on the final wave of substage 5, floor boss on the final wave of substage 10.",
     "substages_per_floor": 10,
     "miniboss_substage": 5,
@@ -87,7 +88,7 @@
     "comment": "party_dps = character.base_dps[class] * (1 + all_damage + half_coef*(melee+spell+fire+attack_speed)) * party_aura_mult * level_growth^(player_level - level_ref).",
     "half_coef": 0.5,
     "level_ref": 47,
-    "level_growth": 1.22,
+    "level_growth": 1.27,
     "level_comment": "DPS scales with character level. level_ref is the calibration anchor (the old demo character): at that level the multiplier is 1.0 so base_dps keeps its demo-tuned value and the deep-floor curve is unchanged. A fresh level-1 delver is intentionally weak for floor 1-1 (its tiny wave pool would otherwise vanish in one tick); power grows ~1.22x/level so the party levels into the deeper floors instead of out-running them."
   },
 
