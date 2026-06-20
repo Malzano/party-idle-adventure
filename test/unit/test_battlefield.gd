@@ -355,11 +355,13 @@ func test_kill_does_not_respawn_mid_wave() -> void:
 
 # --- Data-driven stage definitions (auto-generated defaults) -----------------
 
-func test_wave_monster_count_default_and_boss() -> void:
-	assert_eq(Balance.wave_monster_count(1, 1, 1), Balance.inum("enemy.monsters_per_wave", 5),
-		"a normal wave fields the default monster count")
+func test_wave_monster_count_authored_default_and_boss() -> void:
+	assert_eq(Balance.wave_monster_count(1, 1, 1), 4, "authored Floor 1-1 wave 1 = 4 monsters (stages.json)")
+	assert_eq(Balance.wave_monster_count(2, 1, 1), Balance.inum("enemy.monsters_per_wave", 5),
+		"an un-authored stage auto-generates the default monster count")
 	var wps := Balance.inum("enemy.waves_per_stage", 5)
 	assert_eq(Balance.wave_monster_count(1, 10, wps), 1, "a floor-boss wave is a single token")
+	assert_eq(Balance.stage_theme(1, 1), "Reliquary Steps", "authored theme is read from stages.json")
 
 
 func test_wave_plan_assembles_named_monsters_with_times() -> void:

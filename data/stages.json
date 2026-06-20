@@ -1,21 +1,49 @@
 {
-  "comment": "Per-stage authoring. Key = stage label 'ACT-STAGE' (e.g. '1-1', '2-7'). ANY stage not listed here auto-generates from the floor enemy roster + the difficulty curve, so the whole game works with this file empty. Add an entry to hand-craft a stage. Fields per stage: { theme: string (the stage name shown in the HUD), special_item: string (optional reward note for the whole stage), waves: [ per-wave object ] (optional; index 0 = wave 1). Per-wave object: { count: int (how many monsters this wave), monsters: [ {type: string name, at: float seconds} ] (optional explicit lineup + spawn time; overrides count), special_item: string (optional, this wave) }. Boss/mini-boss waves (final wave of sub-stage 5/10) ignore count — they spawn the single boss token. Tuning defaults (monsters_per_wave, spawn_stagger) live in balance.json -> enemy.",
-  "_example_1-1": {
-    "theme": "The Sunken Reliquary",
-    "special_item": "Reliquary Key",
+  "comment": "Per-stage authoring. Key = stage label 'ACT-STAGE' (e.g. '1-1', '2-7'). ANY stage not listed here auto-generates from the floor enemy roster + the difficulty curve, so the whole game works with this file empty. Add an entry to hand-craft a stage. Fields per stage: { theme: string (the stage name shown in the HUD), special_item: string (optional reward note for the whole stage), waves: [ per-wave object ] (optional; index 0 = wave 1). Per-wave object: { count: int (how many monsters this wave), monsters: [ {type: string name, at: float seconds} ] (optional explicit lineup + spawn time; overrides count), special_item: string (optional, this wave) }. Boss/mini-boss waves (final wave of sub-stage 5/10) ignore count/monsters — they spawn the single boss token, so a boss sub-stage only lists its first 4 normal waves. Tuning defaults (monsters_per_wave, spawn_stagger) live in balance.json -> enemy. Floor 1 below is the worked example; floors 2+ auto-generate.",
+
+  "1-1": { "theme": "Reliquary Steps",
+    "waves": [ {"count": 4}, {"count": 4}, {"count": 4}, {"count": 5}, {"count": 5} ] },
+
+  "1-2": { "theme": "The Ossuary Path",
+    "waves": [ {"count": 4}, {"count": 5}, {"count": 5}, {"count": 5}, {"count": 6} ] },
+
+  "1-3": { "theme": "Drowned Vestibule", "special_item": "Waterlogged Relic",
+    "waves": [ {"count": 5}, {"count": 5}, {"count": 5}, {"count": 6}, {"count": 6} ] },
+
+  "1-4": { "theme": "Gravewater Hall",
+    "waves": [ {"count": 5}, {"count": 5}, {"count": 6}, {"count": 6}, {"count": 6} ] },
+
+  "1-5": { "theme": "The Marrow Gate", "special_item": "Marrow Sigil",
+    "waves": [ {"count": 5}, {"count": 5}, {"count": 6}, {"count": 6} ] },
+
+  "1-6": { "theme": "Sunken Reliquary",
+    "waves": [ {"count": 5}, {"count": 6}, {"count": 6}, {"count": 6}, {"count": 6} ] },
+
+  "1-7": { "theme": "Crypt of Whispers", "special_item": "Whispering Charm",
     "waves": [
-      { "count": 4 },
-      { "count": 4 },
-      { "count": 5 },
-      { "count": 5 },
-      { "count": 6, "monsters": [
-        { "type": "Hollow Ghoul", "at": 0.0 },
-        { "type": "Hollow Ghoul", "at": 0.6 },
-        { "type": "Crypt Rat", "at": 1.2 },
-        { "type": "Crypt Rat", "at": 1.8 },
-        { "type": "Crypt Rat", "at": 2.4 },
-        { "type": "Bonepicker Brute", "at": 3.2 }
-      ], "special_item": "Cracked Femur" }
-    ]
-  }
+      {"count": 6}, {"count": 6}, {"count": 6}, {"count": 6},
+      {"count": 7, "monsters": [
+        {"type": "Crypt Rat", "at": 0.0}, {"type": "Crypt Rat", "at": 0.4},
+        {"type": "Crypt Rat", "at": 0.8}, {"type": "Hollow Ghoul", "at": 1.4},
+        {"type": "Crypt Rat", "at": 1.8}, {"type": "Hollow Ghoul", "at": 2.4},
+        {"type": "Hollow Ghoul", "at": 3.0}
+      ]}
+    ] },
+
+  "1-8": { "theme": "The Pale Threshold",
+    "waves": [ {"count": 6}, {"count": 6}, {"count": 6}, {"count": 7}, {"count": 7} ] },
+
+  "1-9": { "theme": "Warden's Approach",
+    "waves": [
+      {"count": 6}, {"count": 6}, {"count": 7}, {"count": 7},
+      {"count": 7, "monsters": [
+        {"type": "Bonepicker Brute", "at": 0.0}, {"type": "Hollow Ghoul", "at": 0.8},
+        {"type": "Hollow Ghoul", "at": 1.4}, {"type": "Crypt Rat", "at": 2.0},
+        {"type": "Hollow Ghoul", "at": 2.6}, {"type": "Crypt Rat", "at": 3.2},
+        {"type": "Hollow Ghoul", "at": 3.8}
+      ]}
+    ] },
+
+  "1-10": { "theme": "The Bone Warden's Throne", "special_item": "Bone Warden's Crown",
+    "waves": [ {"count": 6}, {"count": 6}, {"count": 7}, {"count": 7} ] }
 }
