@@ -1,0 +1,10 @@
+{
+	"id": "bg.reliquary",
+	"kind": "bg",
+	"sprites": {
+		"far": "far.png",
+		"mid": "mid.png",
+		"near": "near.png",
+		"floor": "floor.png"
+	}
+}

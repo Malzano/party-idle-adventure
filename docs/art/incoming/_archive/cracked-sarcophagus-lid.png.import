@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bb1rw7a1ivqxl"
-path="res://.godot/imported/idle.png-95b432547c5c207eab63f1360d3c0ab7.ctex"
+uid="uid://bg3m127o70a8g"
+path="res://.godot/imported/cracked-sarcophagus-lid.png-b8782255aaf290308ac0a3163483c411.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/core/enemy.skeleton/idle.png"
-dest_files=["res://.godot/imported/idle.png-95b432547c5c207eab63f1360d3c0ab7.ctex"]
+source_file="res://docs/art/incoming/_archive/cracked-sarcophagus-lid.png"
+dest_files=["res://.godot/imported/cracked-sarcophagus-lid.png-b8782255aaf290308ac0a3163483c411.ctex"]
 
 [params]
 

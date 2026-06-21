@@ -1,26 +1,10 @@
 {
-	"anims": {
-		"idle": {
-			"dirs": [
-				"se"
-			],
-			"fps": 3,
-			"frames": 2,
-			"loop": true,
-			"sheet": "idle.png"
-		},
-		"walk": {
-			"dirs": [
-				"se"
-			],
-			"fps": 7,
-			"frames": 4,
-			"loop": true,
-			"sheet": "walk.png"
-		}
-	},
-	"frame_h": 44,
-	"frame_w": 32,
 	"id": "enemy.skeleton",
-	"kind": "enemy"
+	"kind": "enemy",
+	"frame_w": 512,
+	"frame_h": 236,
+	"anims": {
+		"idle": { "dirs": ["se"], "fps": 1, "frames": 1, "loop": true, "sheet": "fig.png" },
+		"walk": { "dirs": ["se"], "fps": 1, "frames": 1, "loop": true, "sheet": "fig.png" }
+	}
 }

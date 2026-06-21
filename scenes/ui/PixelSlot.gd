@@ -18,6 +18,7 @@ const _BORDER := Color(0.588, 0.51, 0.353, 0.32)
 @export var sprite_key: String = ""
 
 var _label: Label
+var _has_art: bool = false
 
 
 func _init(p_label: String = "", p_lit: bool = false, p_bundle: String = "", p_key: String = "") -> void:
@@ -41,6 +42,7 @@ func _ready() -> void:
 			rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			add_child(rect)
 			rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+			_has_art = true
 			return
 	if label_text != "":
 		_label = Style.pixel_label(label_text.to_upper(), 8, Palette.TX_MUTE)
@@ -54,6 +56,9 @@ func _ready() -> void:
 
 
 func _draw() -> void:
+	# Real art is present → no placeholder checker/border behind it.
+	if _has_art:
+		return
 	var light := _LIT_LIGHT if lit else _LIGHT
 	# 16px checker (two 8px tones per tile).
 	var tile := 8.0

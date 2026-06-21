@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bpdgwdgdux8tc"
-path="res://.godot/imported/walk.png-10cd671a30ea4c5e4f33c5444d5b1856.ctex"
+uid="uid://brim0glgt8dgr"
+path="res://.godot/imported/diseased-crypt-rat.png-8d0b3eae390a6aa1e96f942aebd0fc6e.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/core/enemy.skeleton/walk.png"
-dest_files=["res://.godot/imported/walk.png-10cd671a30ea4c5e4f33c5444d5b1856.ctex"]
+source_file="res://docs/art/incoming/_archive/diseased-crypt-rat.png"
+dest_files=["res://.godot/imported/diseased-crypt-rat.png-8d0b3eae390a6aa1e96f942aebd0fc6e.ctex"]
 
 [params]
 

@@ -1,7 +1,13 @@
 {
 	"id": "class.rogue",
 	"kind": "hero",
+	"frame_w": 512,
+	"frame_h": 495,
 	"sprites": {
 		"fig": "fig.png"
+	},
+	"anims": {
+		"idle": { "dirs": ["se"], "fps": 1, "frames": 1, "loop": true, "sheet": "fig.png" },
+		"walk": { "dirs": ["se"], "fps": 1, "frames": 1, "loop": true, "sheet": "fig.png" }
 	}
 }

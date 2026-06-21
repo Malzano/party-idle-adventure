@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://c5xuy84ttty1u"
-path="res://.godot/imported/idle.png-2e9df255f1da64c64e31916c5f27e418.ctex"
+uid="uid://n6855yjj537o"
+path="res://.godot/imported/crypt-treasure-chest.png-ca63cf382acfb7cfc5855d6249deca14.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/core/enemy.ghoul/idle.png"
-dest_files=["res://.godot/imported/idle.png-2e9df255f1da64c64e31916c5f27e418.ctex"]
+source_file="res://docs/art/incoming/_archive/crypt-treasure-chest.png"
+dest_files=["res://.godot/imported/crypt-treasure-chest.png-ca63cf382acfb7cfc5855d6249deca14.ctex"]
 
 [params]
 

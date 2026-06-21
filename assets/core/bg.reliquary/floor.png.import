@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bu7hmdm7sftrc"
-path="res://.godot/imported/walk.png-fa4c248fc4c7d48b867384824dff8629.ctex"
+uid="uid://py70jdkwlfxr"
+path="res://.godot/imported/floor.png-72de3613b2509074ef82d4c6d1374a96.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/core/enemy.ghoul/walk.png"
-dest_files=["res://.godot/imported/walk.png-fa4c248fc4c7d48b867384824dff8629.ctex"]
+source_file="res://assets/core/bg.reliquary/floor.png"
+dest_files=["res://.godot/imported/floor.png-72de3613b2509074ef82d4c6d1374a96.ctex"]
 
 [params]
 

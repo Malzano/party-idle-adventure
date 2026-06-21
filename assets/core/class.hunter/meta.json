@@ -1,7 +1,13 @@
 {
 	"id": "class.hunter",
 	"kind": "hero",
+	"frame_w": 364,
+	"frame_h": 512,
 	"sprites": {
 		"fig": "fig.png"
+	},
+	"anims": {
+		"idle": { "dirs": ["se"], "fps": 1, "frames": 1, "loop": true, "sheet": "fig.png" },
+		"walk": { "dirs": ["se"], "fps": 1, "frames": 1, "loop": true, "sheet": "fig.png" }
 	}
 }

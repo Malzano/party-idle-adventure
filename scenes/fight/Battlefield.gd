@@ -23,11 +23,12 @@ const _MAX_FLOATERS := 18
 
 # --- 2D layout (fractions of the rect) ---
 const GROUND_Y := 0.66                  # feet line for the center lane
+const FLOOR_SURF := 0.73                # bg.reliquary floor.png: walking-surface fraction (maps to GROUND_Y)
 const HERO_X := 0.20                    # the delver holds here
 const CLASH_X := 0.36                   # enemies stop here to fight (close to the hero)
 const SPAWN_X := 1.10                   # enter from off the right edge
 const DESPAWN_X := -0.12                # culled once scrolled off the left
-const LANES: Array[float] = [-0.085, 0.0, 0.085]  # y offsets (fraction of height): far→near
+const LANES: Array[float] = [-0.03, 0.0, 0.015]  # y offsets (fraction): ground units hug the floor line
 const APPROACH_SPEED := 0.22            # rect-widths/sec at 1×: a reasonable walk-in (kills are
                                         # deferred until a foe engages, so it needn't rush)
 const MELEE_RANGE := 0.08               # x past CLASH a melee target must be within
@@ -201,11 +202,23 @@ func _build() -> void:
 
 	var backdrop := _Backdrop.new(GROUND_Y)
 	_bg_holder.add_child(backdrop)
+	# Textured parallax when the art bundle is present; else the procedural bands.
+	var bg_bundle := "bg.reliquary"
+	var have_bg := AssetManager.has(bg_bundle)
 	var kinds := ["far", "mid", "near"]
 	for i in 3:
-		var layer := _ParallaxLayer.new(kinds[i], GROUND_Y)
+		var tex: Texture2D = AssetManager.get_texture(bg_bundle, kinds[i]) if have_bg else null
+		var layer := _ParallaxLayer.new(kinds[i], GROUND_Y, tex)
 		_bg_holder.add_child(layer)
 		_bg_layers.append({"node": layer, "factor": PARALLAX[i]})
+	# The walkable floor strip (its painted floor-line sits on GROUND_Y); scrolls
+	# with the near layer so the ground reads as moving under the party.
+	if have_bg:
+		var floor_tex: Texture2D = AssetManager.get_texture(bg_bundle, "floor")
+		if floor_tex != null:
+			var floor_layer := _ParallaxLayer.new("floor", GROUND_Y, floor_tex, FLOOR_SURF)
+			_bg_holder.add_child(floor_layer)
+			_bg_layers.append({"node": floor_layer, "factor": 1.0})
 
 	# Scenery: environmental props that drift past the party (behind the units).
 	_prop_holder = Control.new()
@@ -1326,10 +1339,14 @@ class _ParallaxLayer:
 	var scroll_x := 0.0
 	var _tile := 320.0
 	var _col := Color("0a0807")
+	var _tex: Texture2D = null
+	var _surf := 0.0  # >0: image walking-surface fraction to pin onto the ground line
 
-	func _init(p_kind: String, p_ground: float) -> void:
+	func _init(p_kind: String, p_ground: float, p_tex: Texture2D = null, p_surf: float = 0.0) -> void:
 		kind = p_kind
 		ground = p_ground
+		_tex = p_tex
+		_surf = p_surf
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 		match kind:
 			"far":
@@ -1351,6 +1368,9 @@ class _ParallaxLayer:
 		var h := size.y
 		if w < 2.0 or h < 2.0:
 			return
+		if _tex != null:
+			_draw_texture_tiled(w, h)
+			return
 		var gy := h * ground
 		var off := fposmod(scroll_x, _tile)
 		var x := -off - _tile
@@ -1363,6 +1383,29 @@ class _ParallaxLayer:
 				_:
 					_stones(x, gy)
 			x += _tile
+
+	## Tile the layer texture across the width at full height, so its painted
+	## floor-line (two-thirds down the image) lands on the battlefield ground line.
+	## Wrapped horizontally by scroll_x (fposmod), like the procedural bands.
+	func _draw_texture_tiled(w: float, h: float) -> void:
+		var ts := _tex.get_size()
+		if ts.x <= 0.0 or ts.y <= 0.0:
+			return
+		var sh := h     # drawn height
+		var ty := 0.0   # top y
+		if _surf > 0.0 and _surf < 1.0:
+			# Pin the image's walking-surface line onto the ground line and stretch
+			# the part below it down to the screen bottom (so the floor fills under).
+			sh = h * (1.0 - ground) / (1.0 - _surf)
+			ty = h * ground - _surf * sh
+		var tile := sh * ts.x / ts.y  # aspect-preserving width
+		if tile < 1.0:
+			return
+		var off := fposmod(scroll_x, tile)
+		var x := -off - tile
+		while x < w + tile:
+			draw_texture_rect(_tex, Rect2(x, ty, tile, sh), false)
+			x += tile
 
 	func _arch(cx: float, gy: float, h: float) -> void:
 		# Faint pointed-arch silhouette set back above the floor.
