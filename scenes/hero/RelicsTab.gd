@@ -237,13 +237,13 @@ func _vault_cell(r: Dictionary) -> Control:
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	cell.add_child(box)
 	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	var ps := PixelSlot.new("48²", true)
+	var ps := GearIcon.new("relic", Palette.rarity_color(rar))
 	cell.add_child(ps)
 	ps.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	ps.offset_left = 3
-	ps.offset_top = 3
-	ps.offset_right = -3
-	ps.offset_bottom = -3
+	ps.offset_left = 8
+	ps.offset_top = 8
+	ps.offset_right = -8
+	ps.offset_bottom = -8
 	Tip.attach(cell, {
 		"name": r["n"],
 		"type": "Relic · %s" % rar,

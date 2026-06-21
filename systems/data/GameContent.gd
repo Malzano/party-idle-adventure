@@ -1151,6 +1151,27 @@ static func bag_to_item(b: Dictionary) -> Dictionary:
 static func item_type_line(item: Dictionary) -> String:
 	return "%s · iLvl %d · %s" % [String(item["slot"]), int(item["ilvl"]), String(item["r"])]
 
+
+## Inventory-grid footprint (width × height in cells) for a gear item — the
+## Tetris-bag sizing: weapons run long, armour is large, jewellery is 1×1. A
+## two-handed main hand (maul/scourge/staff) is 2×4; a one-hander is 1×3.
+static func item_footprint(item: Dictionary) -> Vector2i:
+	match String(item.get("slot", "")):
+		"Helm": return Vector2i(2, 2)
+		"Body", "Chest": return Vector2i(2, 3)
+		"Gloves": return Vector2i(2, 2)
+		"Boots": return Vector2i(2, 2)
+		"Belt": return Vector2i(2, 1)
+		"Off Hand": return Vector2i(2, 3)
+		"Amulet": return Vector2i(1, 1)
+		"Ring", "Ring I", "Ring II": return Vector2i(1, 1)
+		"Main Hand":
+			var n := String(item.get("n", "")).to_lower()
+			if n.contains("maul") or n.contains("scourge") or n.contains("staff") or n.contains("greataxe"):
+				return Vector2i(2, 4)
+			return Vector2i(1, 3)
+	return Vector2i(1, 1)
+
 # =========================================================================
 # CHEST LOOT — mirror of the server's lib/itemGen.ts (mock mode only;
 # the deployed backend is authoritative). Keep in sync.

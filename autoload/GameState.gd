@@ -38,6 +38,11 @@ func choose_class(id: String, chosen_name: String) -> void:
 	player_class = String(cls["name"])
 	player_title = String(cls["title"])
 	player_name = chosen_name.strip_edges() if not chosen_name.strip_edges().is_empty() else "Delver"
+	# MOCK: stock the bag with the full item set so a new delver has gear to arrange
+	# and equip. The paperdoll still starts empty — the player drags pieces on.
+	if bag_equipment.is_empty():
+		for g in GameContent.GEAR_L + GameContent.GEAR_R:
+			bag_equipment.append(GameContent.gear_to_item(g))
 	EventBus.loadout_changed.emit()  # class bonuses reprice the party
 	EventBus.currencies_changed.emit()
 

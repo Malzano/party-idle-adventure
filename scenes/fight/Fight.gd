@@ -43,6 +43,9 @@ var _hud_box: HBoxContainer
 var _pf_slots: VBoxContainer
 
 var _loot_list: VBoxContainer
+var _loot_scroll: ScrollContainer
+var _loot_head: Button
+var _loot_open: bool = false
 var _speed_btns: Dictionary = {}
 var _tog_skill: Dictionary = {}
 var _tog_adv: Dictionary = {}
@@ -575,33 +578,61 @@ func _build_loot_ticker() -> void:
 	col.add_theme_constant_override("separation", 0)
 	panel.add_child(col)
 
-	var head := PanelContainer.new()
+	# Clickable header — collapses/expands the log dropdown (collapsed by default).
 	var hsb := StyleBoxFlat.new()
 	hsb.bg_color = Color(60.0 / 255.0, 50.0 / 255.0, 32.0 / 255.0, 0.22)
-	hsb.border_width_bottom = 1
-	hsb.border_color = Palette.IRON_EDGE
 	hsb.content_margin_left = 12
 	hsb.content_margin_right = 12
 	hsb.content_margin_top = 9
 	hsb.content_margin_bottom = 9
-	head.add_theme_stylebox_override("panel", hsb)
-	head.add_child(Style.display_label("AUTO-LOOT", 11, Palette.GOLD))
-	col.add_child(head)
+	_loot_head = Button.new()
+	_loot_head.focus_mode = Control.FOCUS_NONE
+	_loot_head.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	_loot_head.text = "AUTO-LOOT  ▸"
+	_loot_head.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	var hf := Fonts.display()
+	if hf != null:
+		_loot_head.add_theme_font_override("font", hf)
+	_loot_head.add_theme_font_size_override("font_size", Style.fs(11))
+	_loot_head.add_theme_color_override("font_color", Palette.GOLD)
+	_loot_head.add_theme_color_override("font_hover_color", Palette.GOLD_BRIGHT)
+	_loot_head.add_theme_color_override("font_pressed_color", Palette.GOLD)
+	for st in ["normal", "hover", "pressed", "focus"]:
+		_loot_head.add_theme_stylebox_override(st, hsb)
+	_loot_head.pressed.connect(_toggle_loot)
+	col.add_child(_loot_head)
 
+	# The log: hidden until opened, then ~5 rows tall with mouse-wheel scroll for more.
+	_loot_scroll = ScrollContainer.new()
+	_loot_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_loot_scroll.custom_minimum_size = Vector2(0, 132)
+	_loot_scroll.visible = false
 	var pad := MarginContainer.new()
 	pad.add_theme_constant_override("margin_left", 12)
 	pad.add_theme_constant_override("margin_right", 12)
 	pad.add_theme_constant_override("margin_top", 8)
 	pad.add_theme_constant_override("margin_bottom", 8)
+	pad.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_loot_list = VBoxContainer.new()
 	_loot_list.add_theme_constant_override("separation", 6)
+	_loot_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	pad.add_child(_loot_list)
-	col.add_child(pad)
+	_loot_scroll.add_child(pad)
+	col.add_child(_loot_scroll)
 
 	# The log fills with REAL events (stage clears, level-ups, bosses, finds) as
 	# they happen — seed a single start line instead of canned flavor.
 	var who := GameState.player_name if GameState.player_name != "" else "You"
 	_push_loot([who, "entered", CombatSim.stage_name, "uncommon"], false)
+
+
+## Toggle the auto-loot dropdown open/closed (the header button).
+func _toggle_loot() -> void:
+	_loot_open = not _loot_open
+	if _loot_scroll != null:
+		_loot_scroll.visible = _loot_open
+	if _loot_head != null:
+		_loot_head.text = "AUTO-LOOT  %s" % ("▾" if _loot_open else "▸")
 
 
 func _push_loot(entry: Array, animate: bool) -> void:
@@ -626,7 +657,7 @@ func _push_loot(entry: Array, animate: bool) -> void:
 		_loot_list.move_child(row, 0)
 		row.modulate = Color(1, 1, 1, 0.0)
 		call_deferred("_loot_slide_in", row)
-	while _loot_list.get_child_count() > 9:
+	while _loot_list.get_child_count() > 30:
 		var last := _loot_list.get_child(_loot_list.get_child_count() - 1)
 		_loot_list.remove_child(last)
 		last.queue_free()

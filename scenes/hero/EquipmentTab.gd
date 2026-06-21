@@ -583,18 +583,27 @@ func _gear_slot(slot_idx: int) -> Control:
 	cell.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 
 	if item_v == null:
-		# Empty slot: recessed box + slot-name hint.
+		# Empty slot: recessed box + a faint ghost glyph + slot-name hint.
 		var ebox := Panel.new()
 		ebox.add_theme_stylebox_override("panel", Style.slot_box())
 		ebox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		cell.add_child(ebox)
 		ebox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		var ghost := GearIcon.new(GearIcon.kind_for_slot(slot_name), Palette.GOLD_DIM, true)
+		cell.add_child(ghost)
+		ghost.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		ghost.offset_left = 18
+		ghost.offset_top = 10
+		ghost.offset_right = -18
+		ghost.offset_bottom = -26
 		var hint := Style.pixel_label(slot_name.to_upper(), 8, Palette.TX_FAINT)
 		hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		hint.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
 		hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		cell.add_child(hint)
-		hint.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		hint.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+		hint.offset_top = -16
+		hint.offset_bottom = -3
 		Tip.attach(cell, {
 			"name": slot_name,
 			"type": "Empty slot",
@@ -611,13 +620,13 @@ func _gear_slot(slot_idx: int) -> Control:
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	cell.add_child(box)
 	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	var ps := PixelSlot.new(slot_name, true)
+	var ps := GearIcon.new(GearIcon.kind_for_slot(slot_name), Palette.rarity_color(rar))
 	cell.add_child(ps)
 	ps.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	ps.offset_left = 4
-	ps.offset_top = 4
-	ps.offset_right = -4
-	ps.offset_bottom = -4
+	ps.offset_left = 14
+	ps.offset_top = 8
+	ps.offset_right = -14
+	ps.offset_bottom = -28
 	var il := Style.pixel_label(str(int(item["ilvl"])), 8, Palette.GOLD_BRIGHT)
 	il.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	il.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -814,13 +823,26 @@ func _inv_cell(it: Dictionary, bag_idx: int) -> Control:
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	cell.add_child(box)
 	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	var ps := PixelSlot.new("48²", true)
+	# Each item shows a glyph fitting its kind: equipment→slot, flask/meal/scroll,
+	# smithing→ingot, quest→key, etc.
+	var ps := GearIcon.new(GearIcon.kind_for_item(it, _inv_tab), Palette.rarity_color(rar))
 	cell.add_child(ps)
 	ps.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	ps.offset_left = 3
-	ps.offset_top = 3
-	ps.offset_right = -3
-	ps.offset_bottom = -3
+	ps.offset_left = 8
+	ps.offset_top = 6
+	ps.offset_right = -8
+	ps.offset_bottom = -8
+	# Small footprint badge: how many bag cells this piece needs (Tetris sizing).
+	if _inv_tab == "equipment" and String(it.get("slot", "")) != "":
+		var fp := GameContent.item_footprint(it)
+		var fp_lbl := Style.pixel_label("%d×%d" % [fp.x, fp.y], 8, Palette.GOLD_DIM)
+		fp_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		cell.add_child(fp_lbl)
+		fp_lbl.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+		fp_lbl.offset_left = 4
+		fp_lbl.offset_top = 3
+		fp_lbl.offset_right = 44
+		fp_lbl.offset_bottom = 16
 	if it.has("q"):
 		var qty := Style.pixel_label(str(int(it["q"])), 9, Color.WHITE)
 		qty.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -836,9 +858,12 @@ func _inv_cell(it: Dictionary, bag_idx: int) -> Control:
 	cell.mouse_exited.connect(func() -> void: box.add_theme_stylebox_override("panel", Style.inv_cell_box(rar, true)))
 	var stats: Array = []
 	if it.has("s"):
-		stats = it["s"]
+		stats = (it["s"] as Array).duplicate()
 	elif it.has("q"):
 		stats = [["Stack", "×%d" % int(it["q"])]]
+	if _inv_tab == "equipment" and String(it.get("slot", "")) != "":
+		var fp := GameContent.item_footprint(it)
+		stats.append(["Bag size", "%d×%d (%d cells)" % [fp.x, fp.y, fp.x * fp.y]])
 	var type_line: String
 	var flavor: String
 	if _inv_tab == "equipment":
@@ -1127,12 +1152,21 @@ class _DragCell:
 		p.size = Vector2(64, 64)
 		p.add_theme_stylebox_override("panel", Style.slot_box(rar, true))
 		p.modulate = Color(1, 1, 1, 0.85)
+		var ic := GearIcon.new(GearIcon.kind_for_slot(String(item.get("slot", ""))), Palette.rarity_color(rar))
+		p.add_child(ic)
+		ic.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		ic.offset_left = 10
+		ic.offset_top = 5
+		ic.offset_right = -10
+		ic.offset_bottom = -22
 		var nm := Style.pixel_label(String(item.get("n", "")), 8, Palette.rarity_color(rar))
 		nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		nm.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		nm.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
 		nm.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		p.add_child(nm)
-		nm.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		nm.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+		nm.offset_top = -18
 		nm.offset_left = 3
 		nm.offset_right = -3
+		nm.offset_bottom = -2
 		return p

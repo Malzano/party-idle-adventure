@@ -18,30 +18,50 @@ var _iron_have: Label
 var _dust_qty: Label
 var _dust_have: Label
 var _result_lbl: Label
+var _prev_stats: Array = []   # forged stats captured before an upgrade (for green deltas)
+var _show_delta := false      # after a successful upgrade, show new value + (+delta)
 
 
 func _init() -> void:
 	modal_title = "Crafting House"
-	modal_width = 900.0
+	modal_width = 1340.0
 	body_separation = 18
 	_rng.randomize()
 
 
 func _build_body(body: VBoxContainer) -> void:
-	body.add_child(_build_anvil())
-	body.add_child(_build_stats())
-	body.add_child(_build_cost())
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 20)
+	row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	body.add_child(row)
+
+	# Left: the forge station — source slot → result preview, stats, cost.
+	var left := VBoxContainer.new()
+	left.add_theme_constant_override("separation", 16)
+	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	left.size_flags_stretch_ratio = 1.5
+	row.add_child(left)
+	left.add_child(_build_anvil())
+	left.add_child(_build_stats())
+	left.add_child(_build_cost())
 	_result_lbl = Style.display_label("", 13, Palette.GOLD_BRIGHT, true)
 	_result_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_result_lbl.visible = false
-	body.add_child(_result_lbl)
+	left.add_child(_result_lbl)
+
+	# Right: every gear item the hero owns (catalog, like the bag).
+	row.add_child(_build_all_items())
+
 	EventBus.currencies_changed.connect(_refresh_all)
+	EventBus.equipment_changed.connect(_refresh_all)
 	_refresh_all()
 
 
 func _exit_tree() -> void:
 	if EventBus.currencies_changed.is_connected(_refresh_all):
 		EventBus.currencies_changed.disconnect(_refresh_all)
+	if EventBus.equipment_changed.is_connected(_refresh_all):
+		EventBus.equipment_changed.disconnect(_refresh_all)
 
 
 func _on_modal_key(keycode: Key) -> bool:
@@ -103,7 +123,7 @@ func _src_tip() -> Dictionary:
 
 
 ## 130² rarity-framed forge slot with an inset pixel sprite and a +N level tag.
-func _forge_slot(rar: String, sprite_label: String, tag: Label, tip: Variant) -> Control:
+func _forge_slot(rar: String, _sprite_label: String, tag: Label, tip: Variant) -> Control:
 	var slot := Control.new()
 	slot.custom_minimum_size = Vector2(130, 130)
 	slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -114,7 +134,7 @@ func _forge_slot(rar: String, sprite_label: String, tag: Label, tip: Variant) ->
 	slot.add_child(frame)
 	frame.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
-	var ps := PixelSlot.new(sprite_label, true)
+	var ps := GearIcon.new("sword", Palette.rarity_color(rar))
 	slot.add_child(ps)
 	ps.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ps.offset_left = 4
@@ -156,11 +176,17 @@ func _refresh_stats() -> void:
 	for child in _stats_col.get_children():
 		_stats_col.remove_child(child)
 		child.queue_free()
-	var growth := Balance.num("forge.stat_growth", 1.13)
-	for pair in PlayerStats.forged_weapon_stats():
-		var cur := String(pair[1])
-		_stats_col.add_child(_fs_row(String(pair[0]),
-			[[cur, Palette.TX], [" → %s" % _scale_text(cur, growth), Palette.R_UNCOMMON]]))
+	# Current forged stats in white; after a successful upgrade each line also
+	# shows the gain as a green (+delta) beside the new value.
+	var cur: Array = PlayerStats.forged_weapon_stats()
+	for i in cur.size():
+		var pair: Array = cur[i]
+		var parts: Array = [[String(pair[1]), Palette.TX]]
+		if _show_delta and i < _prev_stats.size():
+			var d := _delta_text(String((_prev_stats[i] as Array)[1]), String(pair[1]))
+			if d != "":
+				parts.append(["   %s" % d, Palette.R_UNCOMMON])
+		_stats_col.add_child(_fs_row(String(pair[0]), parts))
 	_stats_col.add_child(_fs_row("Success rate",
 		[["%d%%" % roundi(Balance.num("forge.success_rate", 0.82) * 100.0), Palette.CYAN_BRIGHT]]))
 
@@ -241,11 +267,12 @@ func _build_cost() -> Control:
 	return row
 
 
-func _material_item(sprite_label: String, lit: bool, tip: Dictionary) -> HBoxContainer:
+func _material_item(_sprite_label: String, _lit: bool, tip: Dictionary) -> HBoxContainer:
 	var item := HBoxContainer.new()
 	item.add_theme_constant_override("separation", 8)
 	item.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	var ps := PixelSlot.new(sprite_label, lit)
+	var kind := "ingot" if String(tip.get("name", "")).contains("Iron") else "gem"
+	var ps := GearIcon.new(kind, Palette.rarity_color(String(tip.get("rarity", "common"))))
 	ps.custom_minimum_size = Vector2(40, 40)
 	item.add_child(ps)
 	Tip.attach(item, tip)
@@ -260,13 +287,17 @@ func _material_item(sprite_label: String, lit: bool, tip: Dictionary) -> HBoxCon
 func _do_upgrade() -> void:
 	# Server-authoritative upgrade via the backend seam (mocked schema until
 	# the API is deployed; same response shape either way).
+	_prev_stats = PlayerStats.forged_weapon_stats()  # baseline for the green deltas
 	var res: Dictionary = await BackendClient.forge_upgrade()
 	if not bool(res["ok"]):
+		_show_delta = false
 		var err: Dictionary = res["data"].get("error", {})
 		_show_result(String(err.get("message", "Upgrade failed.")), Palette.HP)
 	elif bool(res["data"].get("success", false)):
+		_show_delta = true
 		_show_result("+%d achieved!" % int(res["data"]["forge_level"]), Palette.GOLD_BRIGHT)
 	else:
+		_show_delta = false
 		_show_result("The forge spits sparks — materials lost.", Palette.EMBER_HOT)
 	_refresh_all()
 
@@ -301,3 +332,89 @@ func _refresh_all() -> void:
 	_upgrade_btn.disabled = GameState.gold < gold_cost \
 		or GameState.iron_ingots < iron_cost \
 		or GameState.ember_dust < dust_cost
+
+
+## "(+N)" / "(+N–M)" / "(+N%)" gain from prev→new value text (empty if no gain).
+func _delta_text(old_text: String, new_text: String) -> String:
+	var range_re := RegEx.new()
+	range_re.compile(r"(\d+)\s*[–-]\s*(\d+)")
+	var ro := range_re.search(old_text)
+	var rn := range_re.search(new_text)
+	if ro != null and rn != null:
+		var dlo := int(rn.get_string(1)) - int(ro.get_string(1))
+		var dhi := int(rn.get_string(2)) - int(ro.get_string(2))
+		if dlo > 0 or dhi > 0:
+			return "(+%d–%d)" % [maxi(0, dlo), maxi(0, dhi)]
+		return ""
+	var num_re := RegEx.new()
+	num_re.compile(r"(\d+(?:\.\d+)?)(%?)")
+	var no := num_re.search(old_text)
+	var nn := num_re.search(new_text)
+	if no != null and nn != null:
+		var d := float(nn.get_string(1)) - float(no.get_string(1))
+		if d <= 0.0:
+			return ""
+		if nn.get_string(2) == "%":
+			return "(+%.1f%%)" % d
+		return "(+%d)" % int(round(d))
+	return ""
+
+
+## Right-side catalog of every gear item the hero owns (worn + bag), like the bag.
+func _build_all_items() -> Control:
+	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", Style.panel_box())
+	panel.custom_minimum_size = Vector2(380, 0)
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var pad := MarginContainer.new()
+	for m in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
+		pad.add_theme_constant_override(m, 14)
+	panel.add_child(pad)
+	var vc := VBoxContainer.new()
+	vc.add_theme_constant_override("separation", 10)
+	pad.add_child(vc)
+	vc.add_child(Style.display_label("ALL ITEMS", 13, Palette.GOLD))
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	vc.add_child(scroll)
+	var grid := GridContainer.new()
+	grid.columns = 4
+	grid.add_theme_constant_override("h_separation", 8)
+	grid.add_theme_constant_override("v_separation", 8)
+	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(grid)
+	for it_v in GameState.equipped:
+		if it_v != null:
+			grid.add_child(_item_cell(it_v))
+	for it in GameState.bag_equipment:
+		grid.add_child(_item_cell(it))
+	return panel
+
+
+## A compact, rarity-framed catalog cell (Equipment-inventory style).
+func _item_cell(item: Dictionary) -> Control:
+	var rar := String(item.get("r", "common"))
+	var cell := Control.new()
+	cell.custom_minimum_size = Vector2(76, 76)
+	cell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cell.mouse_default_cursor_shape = Control.CURSOR_HELP
+	var box := Panel.new()
+	box.add_theme_stylebox_override("panel", Style.inv_cell_box(rar, true))
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cell.add_child(box)
+	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var ic := GearIcon.new(GearIcon.kind_for_slot(String(item.get("slot", ""))), Palette.rarity_color(rar))
+	cell.add_child(ic)
+	ic.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	ic.offset_left = 8
+	ic.offset_top = 8
+	ic.offset_right = -8
+	ic.offset_bottom = -8
+	Tip.attach(cell, {
+		"name": item.get("n", ""),
+		"type": GameContent.item_type_line(item),
+		"rarity": rar,
+		"stats": item.get("s", []),
+	})
+	return cell

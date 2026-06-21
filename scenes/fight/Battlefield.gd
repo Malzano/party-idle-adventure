@@ -518,15 +518,15 @@ func _kill_engaged_victim() -> bool:
 	if _focus_valid() and String(_focus["state"]) == "engaged":
 		victim = _focus
 	if victim.is_empty():
+		# No focus → drop the front-most engaged foe (smallest x at the clash), so
+		# kills always land on the leading monster (elites engage a step back, so
+		# they fall last on their own).
+		var best_x := INF
 		for e in _enemies:
 			if String(e["state"]) != "engaged":
 				continue
-			if victim.is_empty():
-				victim = e
-				continue
-			var v_better := (bool(victim["elite"]) and not bool(e["elite"])) \
-				or ((bool(victim["elite"]) == bool(e["elite"])) and float(victim["hp_pct"]) > float(e["hp_pct"]))
-			if v_better:
+			if float(e["x"]) < best_x:
+				best_x = float(e["x"])
 				victim = e
 	if victim.is_empty():
 		return false
@@ -599,12 +599,31 @@ func _nearest_enemy() -> Dictionary:
 	return best
 
 
-## Sticky targeting: keep the current focus until it is invalid, else re-pick.
+## Lock the front-most foe and hit it until it dies, then move to the next. Keep
+## the current focus while it stays engaged (committed); otherwise grab the
+## front-most engaged foe (smallest x at the clash), or the nearest approacher
+## when nothing has reached the clash yet.
 func _retarget_focus() -> void:
-	if _focus_valid():
+	if _focus_valid() and String(_focus["state"]) == "engaged":
 		return
-	_focus = _nearest_enemy()
+	_focus = _front_most_enemy()
 	_face_hero_at_focus()
+
+
+## The foe the hero should be shooting: the front-most ENGAGED token (closest to
+## the hero at the clash line); if none has engaged yet, the nearest approacher.
+func _front_most_enemy() -> Dictionary:
+	var best: Dictionary = {}
+	var best_x := INF
+	for e in _enemies:
+		if String(e["state"]) != "engaged":
+			continue
+		if float(e["x"]) < best_x:
+			best_x = float(e["x"])
+			best = e
+	if not best.is_empty():
+		return best
+	return _nearest_enemy()
 
 
 ## Flip the hero sprite toward the focus. In the side view foes are always to the
