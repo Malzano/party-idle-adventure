@@ -14,7 +14,7 @@ const TICK_RATE := 10.0  # logical ticks per second
 const FLOATER_CHANCE_PER_TICK := 0.22
 const ENERGY_REGEN_SECONDS := 300.0  # fallback; Balance overrides
 
-var speed: int = 2:
+var speed: int = 1:
 	set(v):
 		speed = clampi(v, 1, 4)
 		EventBus.sim_speed_changed.emit(speed)

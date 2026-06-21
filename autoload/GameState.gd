@@ -93,18 +93,14 @@ var bag_equipment: Array = []
 const BAG_CAP := 30
 
 
-## Seed the paperdoll + bag from the design's static content (first run or
-## pre-equipment saves).
+## Seed an EMPTY paperdoll + bag (first run or pre-equipment saves). A fresh
+## level-1 delver starts with nothing equipped and earns all gear through play;
+## the paperdoll keeps one (null) cell per EQUIP_SLOTS so slot indexing is valid.
 func seed_default_equipment() -> void:
 	equipped = []
-	for g in GameContent.GEAR_L + GameContent.GEAR_R:
-		equipped.append(GameContent.gear_to_item(g))
+	for _i in GameContent.EQUIP_SLOTS.size():
+		equipped.append(null)
 	bag_equipment = []
-	for b in GameContent.BAG["equipment"]:
-		var item := GameContent.bag_to_item(b)
-		bag_equipment.append(item if not item.is_empty() else {
-			"n": String(b["n"]), "r": String(b["r"]), "slot": "", "ilvl": 1,
-			"s": (b.get("s", []) as Array).duplicate(true)})
 
 
 ## Equip bag[bag_idx] into paperdoll slot_idx (swapping any occupant back to

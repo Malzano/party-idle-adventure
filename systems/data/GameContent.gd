@@ -191,7 +191,7 @@ static func wave_plan(act: int, stage: int, wave: int) -> Array:
 # --- Attack / projectile specs per class: ranged classes fire a projectile,
 # melee classes lunge. Built to be overridden by gear/skill later. ------------
 const PROJECTILE_SPECS := {
-	"mage": {"ranged": true, "shape": "orb", "color_key": "cyan", "speed": 1.0, "trail": 0.45, "impact": "flash", "sparkle": true, "count": 1},
+	"mage": {"ranged": true, "shape": "orb", "color_key": "cyan", "speed": 0.467, "trail": 0.45, "impact": "flash", "sparkle": true, "count": 1},  # orb drifts 3× slower than the hunter's arrow (1.4 / 3)
 	"hunter": {"ranged": true, "shape": "arrow", "color_key": "ember", "speed": 1.4, "trail": 0.3, "impact": "flash", "sparkle": false, "count": 1},
 	"warrior": {"ranged": false, "shape": "lunge", "color_key": "ember", "speed": 1.0, "trail": 0.0, "impact": "none", "sparkle": false, "count": 1},
 	"rogue": {"ranged": false, "shape": "lunge", "color_key": "cyan", "speed": 1.2, "trail": 0.0, "impact": "none", "sparkle": false, "count": 1},

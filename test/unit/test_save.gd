@@ -103,6 +103,8 @@ func test_class_and_equipment_round_trip() -> void:
 	assert_eq(GameState.player_title, "the Twice-Hanged")
 	assert_true(GameState.has_profile(), "choosing a class creates the profile")
 
+	# A fresh delver starts with an empty paperdoll, so place a helm to unequip.
+	GameState.equipped[0] = GameContent.gear_to_item(GameContent.GEAR_L[0])
 	var bag_before := GameState.bag_equipment.size()
 	assert_true(GameState.unequip_to_bag(0), "helm unequips into the bag")
 	assert_null(GameState.equipped[0])
@@ -124,6 +126,7 @@ func test_class_and_equipment_round_trip() -> void:
 
 
 func test_equip_from_bag_respects_slot_rules() -> void:
+	GameState.equipped[0] = GameContent.gear_to_item(GameContent.GEAR_L[0])  # fresh paperdoll is empty
 	var bag_before := GameState.bag_equipment.size()
 	assert_true(GameState.unequip_to_bag(0))
 	var idx := GameState.bag_equipment.size() - 1
@@ -167,6 +170,7 @@ func test_total_summons_round_trip_and_legacy_migration() -> void:
 func test_equip_swap_keeps_bag_position() -> void:
 	# Unequip the helm, then equip it back while ANOTHER helm sits in the
 	# slot: the occupant must swap into the same bag position.
+	GameState.equipped[0] = GameContent.gear_to_item(GameContent.GEAR_L[0])  # fresh paperdoll is empty
 	assert_true(GameState.unequip_to_bag(0))
 	var idx := GameState.bag_equipment.size() - 1
 	var first: Dictionary = GameState.bag_equipment[idx]

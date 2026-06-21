@@ -25,11 +25,11 @@ const _MAX_FLOATERS := 18
 const GROUND_Y := 0.66                  # feet line for the center lane
 const FLOOR_SURF := 0.73                # bg.reliquary floor.png: walking-surface fraction (maps to GROUND_Y)
 const HERO_X := 0.20                    # the delver holds here
-const CLASH_X := 0.36                   # enemies stop here to fight (close to the hero)
+const CLASH_X := 0.28                   # enemies stop here to fight (right up against the hero at HERO_X)
 const SPAWN_X := 1.10                   # enter from off the right edge
 const DESPAWN_X := -0.12                # culled once scrolled off the left
 const LANES: Array[float] = [-0.03, 0.0, 0.015]  # y offsets (fraction): ground units hug the floor line
-const APPROACH_SPEED := 0.22            # rect-widths/sec at 1×: a reasonable walk-in (kills are
+const APPROACH_SPEED := 0.18            # rect-widths/sec at 1×: a calm, deliberate walk-in (kills are
                                         # deferred until a foe engages, so it needn't rush)
 const MELEE_RANGE := 0.08               # x past CLASH a melee target must be within
 
@@ -683,7 +683,13 @@ func _fire_projectile(spec: Dictionary) -> void:
 		p.rotation = (to - from).angle()
 	_proj_holder.add_child(p)
 	p.position = from - p.size * 0.5
-	var dur := clampf(0.34 / maxf(0.5, float(spec.get("speed", 1.0))), 0.14, 0.5)
+	# Constant visual speed: dur scales with the real hero→foe distance, so the bolt
+	# crosses pixels at a fixed rate whatever the range (near stops crawling, far
+	# stops streaking). Anchored to the clash-line gap so a shot at the line keeps
+	# today's pacing; spec.speed still sets the per-class rate (mage 3× slower).
+	var dist := from.distance_to(to)
+	var ref := maxf(1.0, (CLASH_X - HERO_X) * size.x)
+	var dur := clampf(0.34 / maxf(0.1, float(spec.get("speed", 1.0))) * (dist / ref), 0.06, 2.0)
 	_projectiles.append({"node": p, "from": from, "to": to, "t": 0.0, "dur": dur, "impact": String(spec.get("impact", "none")), "target": target, "spec": spec})
 
 

@@ -19,9 +19,14 @@ func after_all() -> void:
 
 
 func test_compute_returns_positive_party_dps() -> void:
+	# The fresh paperdoll is empty; equip the demo loadout so gear aggregation
+	# (and gear_power) is exercised.
+	var demo: Array = GameContent.GEAR_L + GameContent.GEAR_R
+	for i in demo.size():
+		GameState.equipped[i] = GameContent.gear_to_item(demo[i])
 	PlayerStats.invalidate()
 	var profile := PlayerStats.compute()
-	assert_gt(float(profile["party_dps"]), 0.0, "default loadout must produce real DPS")
+	assert_gt(float(profile["party_dps"]), 0.0, "an equipped loadout must produce real DPS")
 	assert_ne(String(profile["dps_label"]), "", "dps label should be formatted")
 	assert_gt(float(profile["total_power"]), 0.0)
 	assert_gt(float(profile["gear_power"]), 0.0)
