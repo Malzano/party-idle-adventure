@@ -412,6 +412,18 @@ func _build_party_finder() -> void:
 		"flavor": "Group with other delvers; presence syncs while the party fights.",
 	})
 	actions.add_child(finder)
+
+	var survival := Style.make_button("⚔ SURVIVAL", "ember", 10)
+	survival.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	survival.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	survival.pressed.connect(func() -> void: WindowManager.open(WindowManager.WIN_SURVIVAL))
+	Tip.attach(survival, {
+		"name": "Survival Mode",
+		"type": "Bullet-hell · V",
+		"rarity": "legendary",
+		"flavor": "Take your equipped gear into a vampire-survivors gauntlet. (Mock for now.)",
+	})
+	actions.add_child(survival)
 	col.add_child(bpad)
 
 	var rivets := _Rivets.new()

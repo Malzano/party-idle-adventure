@@ -1152,25 +1152,97 @@ static func item_type_line(item: Dictionary) -> String:
 	return "%s · iLvl %d · %s" % [String(item["slot"]), int(item["ilvl"]), String(item["r"])]
 
 
-## Inventory-grid footprint (width × height in cells) for a gear item — the
-## Tetris-bag sizing: weapons run long, armour is large, jewellery is 1×1. A
-## two-handed main hand (maul/scourge/staff) is 2×4; a one-hander is 1×3.
-static func item_footprint(item: Dictionary) -> Vector2i:
+## --- Tetris-bag shapes -------------------------------------------------------
+## Every equipment DEFINES a bag shape: the set of cells it occupies inside its
+## bounding box, so packing the bag is a real puzzle (drag-to-bag for Survival
+## mode). Bounding boxes match the old per-slot footprints; some shapes are
+## non-rectangular (boots = L, two-hander = blade + crossguard) so pieces
+## interlock. Cells are (col, row) offsets from the piece's top-left.
+const GEAR_SHAPES := {
+	"square2": [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1)],                                    # helm — 2×2 O
+	"body":    [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(0, 2), Vector2i(1, 2)],    # chest — 2×3 full
+	"gloves":  [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1)],                                                    # gloves — corner (2×2 bbox)
+	"boots":   [Vector2i(0, 0), Vector2i(0, 1), Vector2i(1, 1)],                                                    # boots — L (2×2 bbox)
+	"belt":    [Vector2i(0, 0), Vector2i(1, 0)],                                                                    # belt — I2 (2×1)
+	"offhand": [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(1, 2)],                    # shield (2×3 bbox)
+	"single":  [Vector2i(0, 0)],                                                                                    # ring / amulet — 1×1
+	"wpn1h":   [Vector2i(0, 0), Vector2i(0, 1), Vector2i(0, 2)],                                                    # one-hander — I3 (1×3)
+	"wpn2h":   [Vector2i(0, 0), Vector2i(0, 1), Vector2i(0, 2), Vector2i(0, 3), Vector2i(1, 1)],                    # two-hander — blade + crossguard (2×4 bbox)
+}
+
+
+## The defined shape NAME for an equipment (slot- and weapon-driven).
+static func slot_shape_name(item: Dictionary) -> String:
 	match String(item.get("slot", "")):
-		"Helm": return Vector2i(2, 2)
-		"Body", "Chest": return Vector2i(2, 3)
-		"Gloves": return Vector2i(2, 2)
-		"Boots": return Vector2i(2, 2)
-		"Belt": return Vector2i(2, 1)
-		"Off Hand": return Vector2i(2, 3)
-		"Amulet": return Vector2i(1, 1)
-		"Ring", "Ring I", "Ring II": return Vector2i(1, 1)
+		"Helm": return "square2"
+		"Body", "Chest": return "body"
+		"Gloves": return "gloves"
+		"Boots": return "boots"
+		"Belt": return "belt"
+		"Off Hand": return "offhand"
+		"Amulet": return "single"
+		"Ring", "Ring I", "Ring II": return "single"
 		"Main Hand":
 			var n := String(item.get("n", "")).to_lower()
 			if n.contains("maul") or n.contains("scourge") or n.contains("staff") or n.contains("greataxe"):
-				return Vector2i(2, 4)
-			return Vector2i(1, 3)
-	return Vector2i(1, 1)
+				return "wpn2h"
+			return "wpn1h"
+	return "single"
+
+
+## The occupied cells of an item's bag shape: explicit "shape" name if the item
+## defines one, else derived from its slot (so legacy/design gear works too).
+static func item_shape_cells(item: Dictionary) -> Array:
+	var nm := String(item.get("shape", ""))
+	if nm == "" or not GEAR_SHAPES.has(nm):
+		nm = slot_shape_name(item)
+	return (GEAR_SHAPES.get(nm, [Vector2i.ZERO]) as Array).duplicate()
+
+
+## Bounding-box footprint (width × height in cells) of the gear shape — bag tile
+## sizing + layout. A two-hander is 2×4; a one-hander 1×3; jewellery 1×1.
+static func item_footprint(item: Dictionary) -> Vector2i:
+	var w := 1
+	var h := 1
+	for c in item_shape_cells(item):
+		w = maxi(w, int(c.x) + 1)
+		h = maxi(h, int(c.y) + 1)
+	return Vector2i(w, h)
+
+
+## --- Bullet-hell (Survival) stat --------------------------------------------
+## Every equipment also DEFINES one Survival-only stat. It is stored apart from
+## the idle "s" stats (so it never leaks into idle power) and only feeds the
+## bullet-hell side mode. Vampire-survivors-flavoured affixes.
+const _BH_AFFIXES := ["Surge Damage", "Blast Area", "Projectile Speed", "Pickup Radius", "Fire Rate", "Dash Charge"]
+
+
+static func _bh_value(ilvl: int, power: float, seed_i: int) -> int:
+	return maxi(3, int(round((6.0 + float(ilvl) * 0.25) * power)) + (absi(seed_i) % 7))
+
+
+## The Survival stat rows for an item: explicit "bh" if present, else a
+## deterministic one derived from the item so all equipment has one.
+static func item_bullet_hell(item: Dictionary) -> Array:
+	if item.has("bh") and item["bh"] is Array and not (item["bh"] as Array).is_empty():
+		return (item["bh"] as Array).duplicate()
+	var nm := String(item.get("n", "?"))
+	var idx := absi(nm.hash()) % _BH_AFFIXES.size()
+	var power: float = float(_RARITY_POWER.get(String(item.get("r", "common")), 1.0))
+	return [[_BH_AFFIXES[idx], "+%d%%" % _bh_value(int(item.get("ilvl", 1)), power, nm.hash())]]
+
+
+## Tooltip stat rows: the idle "s" stats, then a Survival section, then extras.
+static func tip_stats(item: Dictionary, extra: Array = []) -> Array:
+	var out := (item.get("s", []) as Array).duplicate()
+	var bh := item_bullet_hell(item)
+	if not bh.is_empty():
+		out.append(["✦ Survival", ""])
+		for pair in bh:
+			out.append([String(pair[0]), String(pair[1])])
+	for e in extra:
+		out.append(e)
+	return out
 
 # =========================================================================
 # CHEST LOOT — mirror of the server's lib/itemGen.ts (mock mode only;
@@ -1251,7 +1323,10 @@ static func generate_item(ilvl: int, rarity: String, rng: RandomNumberGenerator)
 			var pv := roundi((float(pa[1]) + rng.randf() * (float(pa[2]) - float(pa[1]))) * power)
 			stats.append([pa[0], "+%d%%" % pv])
 
-	return {"n": item_name, "r": rarity, "slot": slot, "ilvl": ilvl, "s": stats}
+	var bh_idx := rng.randi_range(0, _BH_AFFIXES.size() - 1)
+	return {"n": item_name, "r": rarity, "slot": slot, "ilvl": ilvl, "s": stats,
+		"shape": slot_shape_name({"slot": slot, "n": item_name}),
+		"bh": [[_BH_AFFIXES[bh_idx], "+%d%%" % _bh_value(ilvl, power, rng.randi())]]}
 
 
 ## Default initial allocation: center + a short path outward (matches design).

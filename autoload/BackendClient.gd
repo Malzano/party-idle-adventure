@@ -381,6 +381,110 @@ func season() -> Dictionary:
 	return await _api("GET", "/v1/season", {})
 
 
+# =========================================================================
+# SURVIVAL (bullet-hell side mode)
+# =========================================================================
+
+## POST /v1/survival/complete-run — finalize a Survival run: records the score
+## on the survival leaderboard and the SERVER issues drops (accessories/rings)
+## into the bag. Mock (or a not-yet-deployed/erroring backend) rewards locally
+## so the mode always pays out — drops grow the bag, which is NOT bounded by the
+## summons anti-cheat (lib/caps.ts), so locally-added drops never trip a 422.
+func survival_complete(score: int, kills: int, stage: int, duration: float) -> Dictionary:
+	if mock:
+		return _survival_local(score, kills, stage, duration)
+	var res: Dictionary = await _api("POST", "/v1/survival/complete-run", {
+		"score": score, "kills": kills, "waves": stage,
+		"duration_seconds": int(duration), "class_id": GameState.class_id,
+	})
+	if not bool(res["ok"]):
+		return _survival_local(score, kills, stage, duration)  # backend down → local payout
+	var d: Dictionary = res["data"]
+	var banked: Array = []
+	for item_v in d.get("drops", []):
+		if GameState.add_bag_item(item_v):
+			banked.append(item_v)
+	if int(d.get("gold", 0)) > 0:
+		GameState.add_gold(int(d["gold"]))
+	res["data"]["drops"] = banked
+	return res
+
+
+## GET /v1/leaderboard?cat=survival — the Survival score board.
+func survival_leaderboard(scope: String = "global") -> Dictionary:
+	if mock:
+		return _survival_lb_mock(scope)
+	var res: Dictionary = await _api("GET", "/v1/leaderboard?cat=survival&scope=%s&limit=20" % scope, {})
+	if not bool(res["ok"]):
+		return _survival_lb_mock(scope)
+	return res
+
+
+## Local reward roll mirroring the server's complete-run (mock + fallback).
+func _survival_local(score: int, _kills: int, stage: int, _duration: float) -> Dictionary:
+	var drops := _survival_mock_drops(stage)
+	var banked: Array = []
+	for it in drops:
+		if GameState.add_bag_item(it):
+			banked.append(it)
+	var gold := score * 3
+	GameState.add_gold(gold)
+	var your := maxi(1, (GameState.global_rank if GameState.global_rank > 0 else _rng.randi_range(400, 8000)) - int(score / 40))
+	return _wrap(200, {"accepted": true, "your_rank": your, "new_best": true, "drops": banked, "gold": gold})
+
+
+## 1–3 drops biased toward accessories (rings/amulets/belts) at a richer rarity
+## curve than chests — the Survival "drop more accessories" payout.
+func _survival_mock_drops(stage: int) -> Array:
+	var s_index := Balance.stage_index(GameState.act, GameState.stage)
+	var ilvl := maxi(1, roundi(float(s_index) * 0.5 + float(stage) * 1.5 + 6.0))
+	var n := clampi(1 + int(stage / 3), 1, 3)
+	var out: Array = []
+	for _i in n:
+		out.append(_survival_gen_item(ilvl, _survival_rarity()))
+	return out
+
+
+func _survival_rarity() -> String:
+	var x := _rng.randf()
+	if x < 0.02:
+		return "mythic"
+	if x < 0.10:
+		return "legendary"
+	if x < 0.38:
+		return "epic"
+	return "rare"
+
+
+## Generate a drop, biased toward accessory slots (Ring/Amulet/Belt).
+func _survival_gen_item(ilvl: int, rarity: String) -> Dictionary:
+	for _i in 4:
+		var it := GameContent.generate_item(ilvl, rarity, _rng)
+		if String(it["slot"]) in ["Ring", "Amulet", "Belt"]:
+			return it
+		if _rng.randf() < 0.35:
+			return it
+	return GameContent.generate_item(ilvl, rarity, _rng)
+
+
+func _survival_lb_mock(scope: String) -> Dictionary:
+	var pool: Array = GameContent.PLAYERS.duplicate()
+	if scope == "guild":
+		pool = pool.filter(func(p: Dictionary) -> bool: return String(p["guild"]) == "ASH")
+	var entries: Array = []
+	for p in pool:
+		var pw := float((p as Dictionary).get("power", 0.0))
+		entries.append({"name": String((p as Dictionary)["name"]), "guild": String((p as Dictionary).get("guild", "")),
+			"score": int(pw * 9.0 + 1200.0), "you": bool((p as Dictionary).get("you", false))})
+	entries.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["score"]) > int(b["score"]))
+	var your_rank := 0
+	for i in entries.size():
+		if bool(entries[i]["you"]):
+			your_rank = i + 1
+			break
+	return _wrap(200, {"entries": entries, "your_rank": your_rank})
+
+
 ## POST /v1/chest/open — battlefield treasure chest. The server (or its mock
 ## mirror) rolls the loot; rewards are applied to GameState here, and mythic
 ## drops raise EventBus.mythic_announced. Response schema:
@@ -766,7 +870,12 @@ func _ensure_mock_parties() -> void:
 	var pool: Array = GameContent.MOCK_DELVERS.duplicate()
 	var names: Array = GameContent.MOCK_PARTY_NAMES.duplicate()
 	for i in 6:
-		var count := 1 + _rng.randi_range(0, 2)
+		# Deterministic 1-2 members so every seeded party is genuinely OPEN
+		# (< PARTY_CAP). A rolled count of PARTY_CAP would be born "full" and get
+		# filtered out of party_list, making the visible open-party count depend
+		# on the shared, unseeded _rng state — flaky across test order. Bot stats
+		# below stay randomized (cosmetic; they don't affect the open count).
+		var count := mini(PARTY_CAP - 1, 1 + (i % 2))
 		var members: Array = []
 		for _j in count:
 			if pool.is_empty():

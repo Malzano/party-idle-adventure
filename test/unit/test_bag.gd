@@ -40,20 +40,23 @@ func test_loads_loose_then_auto_sort_packs_without_overlap() -> void:
 	assert_eq(bag._placements.size(), 10, "auto-sort packs every piece")
 	assert_eq(bag._loose.size(), 0, "nothing is left loose")
 
+	# Shapes can be non-rectangular, so check the ACTUAL occupied cells (not the
+	# bounding box) — interlocking pieces may share each other's empty corners.
 	var seen := {}
 	var used := 0
+	var expected := 0
 	for p in bag._placements:
 		var pos: Vector2i = p["pos"]
-		var s: Vector2i = p["size"]
-		used += s.x * s.y
-		assert_true(pos.x >= 0 and pos.y >= 0 and pos.x + s.x <= bag.GRID_W and pos.y + s.y <= bag.GRID_H,
-			"placement stays inside the grid")
-		for dy in s.y:
-			for dx in s.x:
-				var key := Vector2i(pos.x + dx, pos.y + dy)
-				assert_false(seen.has(key), "no two pieces share a cell")
-				seen[key] = true
-	assert_eq(used, 37, "the full loadout occupies 37 cells")
+		var cells: Array = p["cells"]
+		expected += cells.size()
+		for c in cells:
+			var key := Vector2i(pos.x + int(c.x), pos.y + int(c.y))
+			assert_true(key.x >= 0 and key.y >= 0 and key.x < bag.GRID_W and key.y < bag.GRID_H,
+				"every occupied cell is inside the grid")
+			assert_false(seen.has(key), "no two pieces share a cell")
+			seen[key] = true
+			used += 1
+	assert_eq(used, expected, "occupied-cell count matches the pieces' shapes")
 
 
 func test_place_move_and_unplace_respect_occupancy() -> void:
@@ -98,3 +101,36 @@ func test_worn_items_are_listed_and_stowing_unequips() -> void:
 	assert_null(GameState.equipped[0], "the paperdoll slot is now empty")
 	assert_eq(bag._placements.size(), 1, "and the piece sits on the grid")
 	assert_eq(bag._loose.size(), 0, "and is no longer loose")
+
+
+func test_gear_defines_shapes_with_matching_footprints() -> void:
+	# Shapes can be non-rectangular (boots = L, two-hander = blade + crossguard)
+	# but their bounding boxes still equal the slot footprints.
+	var boots := {"slot": "Boots"}
+	assert_eq(GameContent.item_shape_cells(boots).size(), 3, "boots are an L (3 cells in a 2×2)")
+	assert_eq(GameContent.item_footprint(boots), Vector2i(2, 2))
+	var maul := {"slot": "Main Hand", "n": "Cindergrip Maul"}
+	assert_eq(GameContent.item_footprint(maul), Vector2i(2, 4))
+	assert_eq(GameContent.item_shape_cells(maul).size(), 5, "two-hander is blade + crossguard")
+	assert_eq(GameContent.item_shape_cells({"slot": "Ring"}).size(), 1, "a ring is 1 cell")
+
+
+func test_every_equipment_defines_a_survival_stat() -> void:
+	for g in GameContent.GEAR_L + GameContent.GEAR_R:
+		var it := GameContent.gear_to_item(g)
+		assert_false(GameContent.item_bullet_hell(it).is_empty(),
+			"%s has a Survival stat" % String(it.get("n", "")))
+	# Generated items carry an explicit bh + shape (and bh stays out of "s").
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 42
+	var gen := GameContent.generate_item(60, "epic", rng)
+	assert_true(gen.has("bh") and not (gen["bh"] as Array).is_empty(), "generated item stores a Survival stat")
+	assert_true(gen.has("shape"), "generated item stores its shape name")
+	for pair in (gen["s"] as Array):
+		assert_false(GameContent._BH_AFFIXES.has(String(pair[0])), "Survival affixes never leak into idle stats")
+	# tip_stats surfaces a Survival section.
+	var has_survival := false
+	for r in GameContent.tip_stats(gen):
+		if String(r[0]).contains("Survival"):
+			has_survival = true
+	assert_true(has_survival, "tooltip stats include a Survival section")

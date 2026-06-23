@@ -12,6 +12,7 @@ const WIN_HERO := "hero"
 const WIN_LEADERBOARD := "leaderboard"
 const WIN_PARTY := "party"
 const WIN_SETTINGS := "settings"
+const WIN_SURVIVAL := "survival"
 
 # Titlebars compose as "<title> — GameContent.GAME_TITLE" in _create().
 const _DEFS := {
@@ -43,6 +44,12 @@ const _DEFS := {
 		"title": "Options",
 		"scene": "res://scenes/settings/Settings.tscn",
 		"size": Vector2i(1180, 760),
+		"strip": false,
+	},
+	WIN_SURVIVAL: {
+		"title": "Survival — The Hollow Tide",
+		"scene": "res://scenes/survival/Survival.tscn",
+		"size": Vector2i(1600, 900),
 		"strip": false,
 	},
 }
@@ -189,5 +196,7 @@ class _PopupKeys:
 				WindowManager.open(WindowManager.WIN_LEADERBOARD)
 			KEY_P:
 				WindowManager.open(WindowManager.WIN_PARTY)
+			KEY_V:
+				WindowManager.open(WindowManager.WIN_SURVIVAL)
 			KEY_ESCAPE:
 				WindowManager.close(window_id)

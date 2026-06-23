@@ -7,8 +7,11 @@ extends Control
 ## Pieces can't overlap. Drag within the grid to rearrange, or back onto the
 ## right panel to take a piece off the grid.
 ##
-## Pieces own a footprint (GameContent.item_footprint). Grid layout is
-## session-local; unequipping (worn → grid) is a real, persisted change.
+## Pieces own a defined SHAPE (GameContent.item_shape_cells) — some are
+## non-rectangular, so they interlock. A top-right preview shows the drag shape
+## of whatever piece is hovered. Grid layout is session-local; unequipping
+## (worn → grid) is a real, persisted change. This bag is what feeds the
+## bullet-hell Survival side mode.
 
 const GRID_W := 7
 const GRID_H := 6
@@ -19,7 +22,8 @@ var _grid_host: Control
 var _tiles_holder: Control
 var _loose_grid: GridContainer
 var _cap_lbl: Label
-var _placements: Array = []   # [{item, pos:Vector2i, size:Vector2i}]
+var _preview: _ShapePreview
+var _placements: Array = []   # [{item, pos:Vector2i, size:Vector2i, cells:Array}]
 var _loose: Array = []        # [{item, equipped:bool, slot:int}] — the right list
 var _occ: Array = []          # GRID_H rows × GRID_W bools
 var _suppress_reload := false
@@ -46,6 +50,15 @@ func _ready() -> void:
 	body.add_child(_build_grid_panel())
 	body.add_child(_build_loose_panel())
 
+	# Floating drag-shape preview, top-right of the tab.
+	_preview = _ShapePreview.new()
+	add_child(_preview)
+	_preview.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_preview.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	_preview.offset_top = 6
+	_preview.offset_right = -6
+	_preview.visible = false
+
 	EventBus.equipment_changed.connect(_on_equipment_changed)
 	_reload()
 
@@ -62,6 +75,28 @@ func _tile_px(size: Vector2i) -> Vector2:
 	return Vector2(size.x * CELL + (size.x - 1) * GAP, size.y * CELL + (size.y - 1) * GAP)
 
 
+# --- hover preview (top-right) ----------------------------------------------
+
+func _preview_shape(item: Dictionary) -> void:
+	if _preview != null:
+		_preview.show_item(item)
+
+
+func _preview_clear() -> void:
+	if _preview != null:
+		_preview.visible = false
+
+
+func _drag_ghost(item: Dictionary) -> Control:
+	var fp := GameContent.item_footprint(item)
+	var holder := Control.new()
+	holder.custom_minimum_size = _tile_px(fp)
+	holder.size = holder.custom_minimum_size
+	holder.modulate = Color(1, 1, 1, 0.8)
+	_Paint.cells(holder, item, CELL, GAP)
+	return holder
+
+
 # --- panels -----------------------------------------------------------------
 
 func _build_header() -> Control:
@@ -70,7 +105,7 @@ func _build_header() -> Control:
 	var title := Style.display_label("BAG", 22, Palette.GOLD_BRIGHT)
 	title.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(title)
-	var sub := Style.body_label("Drag pieces onto the grid — worn pieces come off when stowed", 13, Palette.TX_MUTE)
+	var sub := Style.body_label("Pack pieces by shape — worn pieces come off when stowed. This loadout powers Survival.", 13, Palette.TX_MUTE)
 	sub.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(sub)
 	var spacer := Control.new()
@@ -164,7 +199,7 @@ func _resize_square_loose() -> void:
 			ctl.custom_minimum_size = Vector2(0, cw)
 
 
-# --- occupancy + packing ----------------------------------------------------
+# --- occupancy + packing (cell-mask based) ----------------------------------
 
 func _clear_occ() -> void:
 	_occ.clear()
@@ -175,26 +210,26 @@ func _clear_occ() -> void:
 		_occ.append(r)
 
 
-func _mark(pos: Vector2i, size: Vector2i, val: bool) -> void:
-	for dy in size.y:
-		for dx in size.x:
-			_occ[pos.y + dy][pos.x + dx] = val
+func _mark(pos: Vector2i, cells: Array, val: bool) -> void:
+	for c in cells:
+		_occ[pos.y + int(c.y)][pos.x + int(c.x)] = val
 
 
-func _fits(pos: Vector2i, size: Vector2i) -> bool:
-	if pos.x < 0 or pos.y < 0 or pos.x + size.x > GRID_W or pos.y + size.y > GRID_H:
-		return false
-	for dy in size.y:
-		for dx in size.x:
-			if bool(_occ[pos.y + dy][pos.x + dx]):
-				return false
+func _fits(pos: Vector2i, cells: Array) -> bool:
+	for c in cells:
+		var x := pos.x + int(c.x)
+		var y := pos.y + int(c.y)
+		if x < 0 or y < 0 or x >= GRID_W or y >= GRID_H:
+			return false
+		if bool(_occ[y][x]):
+			return false
 	return true
 
 
-func _first_fit(size: Vector2i) -> Vector2i:
-	for gy in range(GRID_H - size.y + 1):
-		for gx in range(GRID_W - size.x + 1):
-			if _fits(Vector2i(gx, gy), size):
+func _first_fit(cells: Array) -> Vector2i:
+	for gy in GRID_H:
+		for gx in GRID_W:
+			if _fits(Vector2i(gx, gy), cells):
 				return Vector2i(gx, gy)
 	return Vector2i(-1, -1)
 
@@ -222,7 +257,7 @@ func _reload() -> void:
 
 
 ## Auto-sort: pack the BAG pieces (placed + loose, never the worn ones) into the
-## grid, largest-first. Worn pieces stay in the right list.
+## grid, largest-first (by occupied-cell count). Worn pieces stay in the right list.
 func _auto_sort() -> void:
 	var bag_items: Array = []
 	for p in _placements:
@@ -234,19 +269,17 @@ func _auto_sort() -> void:
 		else:
 			bag_items.append(e["item"])
 	bag_items.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-		var fa := GameContent.item_footprint(a)
-		var fb := GameContent.item_footprint(b)
-		return fa.x * fa.y > fb.x * fb.y)
+		return GameContent.item_shape_cells(a).size() > GameContent.item_shape_cells(b).size())
 	_clear_occ()
 	_placements.clear()
 	for it in bag_items:
-		var size := GameContent.item_footprint(it)
-		var pos := _first_fit(size)
+		var cells := GameContent.item_shape_cells(it)
+		var pos := _first_fit(cells)
 		if pos.x < 0:
 			keep_loose.append({"item": it, "equipped": false, "slot": -1})
 			continue
-		_mark(pos, size, true)
-		_placements.append({"item": it, "pos": pos, "size": size})
+		_mark(pos, cells, true)
+		_placements.append({"item": it, "pos": pos, "size": GameContent.item_footprint(it), "cells": cells})
 	_loose = keep_loose
 	_rebuild_tiles()
 	_rebuild_loose()
@@ -258,8 +291,7 @@ func _update_cap() -> void:
 		return
 	var used := 0
 	for p in _placements:
-		var s: Vector2i = p["size"]
-		used += s.x * s.y
+		used += (p["cells"] as Array).size()
 	_cap_lbl.text = "%d / %d cells used" % [used, GRID_W * GRID_H]
 
 
@@ -269,10 +301,10 @@ func _can_place(pidx: int, target: Vector2i) -> bool:
 	if pidx < 0 or pidx >= _placements.size():
 		return false
 	var p: Dictionary = _placements[pidx]
-	var size: Vector2i = p["size"]
-	_mark(p["pos"], size, false)
-	var ok := _fits(target, size)
-	_mark(p["pos"], size, true)
+	var cells: Array = p["cells"]
+	_mark(p["pos"], cells, false)
+	var ok := _fits(target, cells)
+	_mark(p["pos"], cells, true)
 	return ok
 
 
@@ -280,10 +312,10 @@ func _try_move(pidx: int, target: Vector2i) -> bool:
 	if not _can_place(pidx, target):
 		return false
 	var p: Dictionary = _placements[pidx]
-	var size: Vector2i = p["size"]
-	_mark(p["pos"], size, false)
+	var cells: Array = p["cells"]
+	_mark(p["pos"], cells, false)
 	p["pos"] = target
-	_mark(target, size, true)
+	_mark(target, cells, true)
 	_rebuild_tiles()
 	return true
 
@@ -291,7 +323,7 @@ func _try_move(pidx: int, target: Vector2i) -> bool:
 func _can_place_loose(lidx: int, target: Vector2i) -> bool:
 	if lidx < 0 or lidx >= _loose.size():
 		return false
-	return _fits(target, GameContent.item_footprint(_loose[lidx]["item"]))
+	return _fits(target, GameContent.item_shape_cells(_loose[lidx]["item"]))
 
 
 func _try_place_loose(lidx: int, target: Vector2i) -> bool:
@@ -299,7 +331,7 @@ func _try_place_loose(lidx: int, target: Vector2i) -> bool:
 		return false
 	var entry: Dictionary = _loose[lidx]
 	var it: Dictionary = entry["item"]
-	var size := GameContent.item_footprint(it)
+	var cells := GameContent.item_shape_cells(it)
 	# Worn piece → stowing it means taking it off (a real, persisted unequip).
 	if bool(entry["equipped"]):
 		_suppress_reload = true
@@ -308,8 +340,8 @@ func _try_place_loose(lidx: int, target: Vector2i) -> bool:
 		if not ok:
 			return false
 	_loose.remove_at(lidx)
-	_mark(target, size, true)
-	_placements.append({"item": it, "pos": target, "size": size})
+	_mark(target, cells, true)
+	_placements.append({"item": it, "pos": target, "size": GameContent.item_footprint(it), "cells": cells})
 	_rebuild_tiles()
 	_rebuild_loose()
 	_update_cap()
@@ -321,7 +353,7 @@ func _unplace(pidx: int) -> void:
 	if pidx < 0 or pidx >= _placements.size():
 		return
 	var p: Dictionary = _placements[pidx]
-	_mark(p["pos"], p["size"], false)
+	_mark(p["pos"], p["cells"], false)
 	_loose.append({"item": p["item"], "equipped": false, "slot": -1})
 	_placements.remove_at(pidx)
 	_rebuild_tiles()
@@ -364,42 +396,31 @@ func _rebuild_loose() -> void:
 	call_deferred("_resize_square_loose")
 
 
-## Shared visual: rarity-framed box + glyph + footprint badge (+ optional name).
-static func _decorate(node: Control, item: Dictionary, show_name: bool) -> void:
-	var rar := String(item.get("r", "common"))
-	var box := Panel.new()
-	box.add_theme_stylebox_override("panel", Style.slot_box(rar, true))
-	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	node.add_child(box)
-	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	var ic := GearIcon.new(GearIcon.kind_for_slot(String(item.get("slot", ""))), Palette.rarity_color(rar))
-	node.add_child(ic)
-	ic.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	ic.offset_left = 10
-	ic.offset_top = 10
-	ic.offset_right = -10
-	ic.offset_bottom = (-24 if show_name else -10)
-	var fp := GameContent.item_footprint(item)
-	var fp_lbl := Style.pixel_label("%d×%d" % [fp.x, fp.y], 8, Palette.GOLD_DIM)
-	fp_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	node.add_child(fp_lbl)
-	fp_lbl.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
-	fp_lbl.offset_left = 4
-	fp_lbl.offset_top = 3
-	fp_lbl.offset_right = 40
-	fp_lbl.offset_bottom = 16
-	if show_name:
-		var nm := Style.pixel_label(String(item.get("n", "")), 8, Palette.rarity_color(rar))
-		nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		nm.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
-		nm.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		nm.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		node.add_child(nm)
-		nm.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-		nm.offset_top = -22
-		nm.offset_left = 4
-		nm.offset_right = -4
-		nm.offset_bottom = -4
+# ===========================================================================
+## Shape painter: one rarity-framed cell per occupied cell + a centered glyph
+## over the bounding box. Non-rectangular shapes show their real silhouette.
+class _Paint:
+	extends RefCounted
+
+	static func cells(node: Control, item: Dictionary, cell_px: float, gap: float) -> void:
+		var rar := String(item.get("r", "common"))
+		var col := Palette.rarity_color(rar)
+		for c in GameContent.item_shape_cells(item):
+			var p := Panel.new()
+			p.add_theme_stylebox_override("panel", Style.slot_box(rar, true))
+			p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			node.add_child(p)
+			p.position = Vector2(int(c.x) * (cell_px + gap), int(c.y) * (cell_px + gap))
+			p.size = Vector2(cell_px, cell_px)
+		var fp := GameContent.item_footprint(item)
+		var ic := GearIcon.new(GearIcon.kind_for_slot(String(item.get("slot", ""))), col)
+		ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		node.add_child(ic)
+		var bw := float(fp.x) * cell_px + float(fp.x - 1) * gap
+		var bh := float(fp.y) * cell_px + float(fp.y - 1) * gap
+		var g := minf(bw, bh) * 0.78
+		ic.position = Vector2((bw - g) * 0.5, (bh - g) * 0.5)
+		ic.size = Vector2(g, g)
 
 
 # ===========================================================================
@@ -446,15 +467,21 @@ class _BagTile:
 	func build() -> void:
 		mouse_filter = Control.MOUSE_FILTER_STOP
 		mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-		bag._decorate(self, item, size_cells.x >= 2)
+		_Paint.cells(self, item, bag.CELL, bag.GAP)
 		var fp := GameContent.item_footprint(item)
+		var fp_lbl := Style.pixel_label("%d×%d" % [fp.x, fp.y], 8, Palette.GOLD_DIM)
+		fp_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(fp_lbl)
+		fp_lbl.position = Vector2(4, 3)
 		Tip.attach(self, {
 			"name": item.get("n", ""),
 			"type": GameContent.item_type_line(item),
 			"rarity": String(item.get("r", "")),
-			"stats": (item.get("s", []) as Array) + [["Bag size", "%d×%d" % [fp.x, fp.y]]],
+			"stats": GameContent.tip_stats(item, [["Bag size", "%d×%d" % [fp.x, fp.y]]]),
 			"flavor": "Drag to rearrange, or onto the right panel to take it out.",
 		})
+		mouse_entered.connect(func() -> void: bag._preview_shape(item))
+		mouse_exited.connect(func() -> void: bag._preview_clear())
 
 	func _get_drag_data(at: Vector2) -> Variant:
 		var step: float = bag.CELL + bag.GAP
@@ -462,7 +489,8 @@ class _BagTile:
 		grab.x = clampi(grab.x, 0, size_cells.x - 1)
 		grab.y = clampi(grab.y, 0, size_cells.y - 1)
 		Tip.hide_now(self)
-		set_drag_preview(bag._drag_ghost(item, size))
+		bag._preview_clear()
+		set_drag_preview(bag._drag_ghost(item))
 		return {"src": "grid", "pidx": pidx, "grab": grab}
 
 	# Drops landing on a placed piece convert to grid space and reuse grid logic.
@@ -482,8 +510,8 @@ class _LooseCell:
 	var item: Dictionary = {}
 	var equipped := false
 
-	# Styled like the Equipment inventory cell: compact square, inv_cell_box frame,
-	# glyph, top-left footprint badge, hover highlight — plus the EQUIPPED tag.
+	# Compact square: inv_cell_box frame, glyph, top-left footprint badge, hover
+	# highlight + the EQUIPPED tag. Hovering shows the real shape in the preview.
 	func build() -> void:
 		mouse_filter = Control.MOUSE_FILTER_STOP
 		mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
@@ -518,20 +546,24 @@ class _LooseCell:
 			tag.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 			tag.offset_top = -14
 			tag.offset_bottom = -3
-		mouse_entered.connect(func() -> void: box.add_theme_stylebox_override("panel", Style.inv_cell_box(rar, true, true)))
-		mouse_exited.connect(func() -> void: box.add_theme_stylebox_override("panel", Style.inv_cell_box(rar, true)))
+		mouse_entered.connect(func() -> void:
+			box.add_theme_stylebox_override("panel", Style.inv_cell_box(rar, true, true))
+			bag._preview_shape(item))
+		mouse_exited.connect(func() -> void:
+			box.add_theme_stylebox_override("panel", Style.inv_cell_box(rar, true))
+			bag._preview_clear())
 		Tip.attach(self, {
 			"name": item.get("n", ""),
 			"type": GameContent.item_type_line(item),
 			"rarity": rar,
-			"stats": (item.get("s", []) as Array) + [["Bag size", "%d×%d" % [fp.x, fp.y]]],
+			"stats": GameContent.tip_stats(item, [["Bag size", "%d×%d" % [fp.x, fp.y]]]),
 			"flavor": "Worn — drag onto the grid to take it off." if equipped else "Drag onto the grid to place it.",
 		})
 
 	func _get_drag_data(_at: Vector2) -> Variant:
 		Tip.hide_now(self)
-		var size: Vector2 = bag._tile_px(GameContent.item_footprint(item))
-		set_drag_preview(bag._drag_ghost(item, size))
+		bag._preview_clear()
+		set_drag_preview(bag._drag_ghost(item))
 		return {"src": "loose", "lidx": lidx, "grab": Vector2i.ZERO}
 
 
@@ -549,19 +581,55 @@ class _LooseDrop:
 		bag._unplace(int((data as Dictionary)["pidx"]))
 
 
-## A translucent footprint-sized ghost shown under the cursor while dragging.
-static func _drag_ghost(item: Dictionary, px: Vector2) -> Control:
-	var rar := String(item.get("r", "common"))
-	var p := Panel.new()
-	p.custom_minimum_size = px
-	p.size = px
-	p.add_theme_stylebox_override("panel", Style.slot_box(rar, true))
-	p.modulate = Color(1, 1, 1, 0.8)
-	var ic := GearIcon.new(GearIcon.kind_for_slot(String(item.get("slot", ""))), Palette.rarity_color(rar))
-	p.add_child(ic)
-	ic.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	ic.offset_left = 10
-	ic.offset_top = 10
-	ic.offset_right = -10
-	ic.offset_bottom = -10
-	return p
+# ===========================================================================
+## Top-right preview of the hovered piece's drag shape — a small grid of its
+## cells plus name + bag size, so you read the shape before dragging it.
+class _ShapePreview:
+	extends PanelContainer
+
+	const PCELL := 20.0
+	const PGAP := 3.0
+	var _shape_host: Control
+	var _name_lbl: Label
+	var _size_lbl: Label
+
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color("15110d")
+		sb.set_border_width_all(1)
+		sb.border_color = Palette.IRON_EDGE
+		sb.set_corner_radius_all(4)
+		sb.content_margin_left = 12
+		sb.content_margin_right = 12
+		sb.content_margin_top = 9
+		sb.content_margin_bottom = 9
+		add_theme_stylebox_override("panel", sb)
+		var box := VBoxContainer.new()
+		box.add_theme_constant_override("separation", 6)
+		add_child(box)
+		box.add_child(Style.pixel_label("DRAG SHAPE", 9, Palette.GOLD_DIM))
+		var center := CenterContainer.new()
+		center.custom_minimum_size = Vector2(2 * (PCELL + PGAP) + 40, 4 * (PCELL + PGAP))
+		box.add_child(center)
+		_shape_host = Control.new()
+		_shape_host.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		center.add_child(_shape_host)
+		_name_lbl = Style.body_label("", 12, Palette.TX)
+		_name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		box.add_child(_name_lbl)
+		_size_lbl = Style.pixel_label("", 8, Palette.TX_MUTE)
+		_size_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		box.add_child(_size_lbl)
+
+	func show_item(item: Dictionary) -> void:
+		for c in _shape_host.get_children():
+			c.queue_free()
+		var fp := GameContent.item_footprint(item)
+		_shape_host.custom_minimum_size = Vector2(fp.x * (PCELL + PGAP) - PGAP, fp.y * (PCELL + PGAP) - PGAP)
+		_shape_host.size = _shape_host.custom_minimum_size
+		_Paint.cells(_shape_host, item, PCELL, PGAP)
+		_name_lbl.text = String(item.get("n", ""))
+		_name_lbl.add_theme_color_override("font_color", Palette.rarity_color(String(item.get("r", "common"))))
+		_size_lbl.text = "%d×%d  ·  %d cells" % [fp.x, fp.y, GameContent.item_shape_cells(item).size()]
+		visible = true
