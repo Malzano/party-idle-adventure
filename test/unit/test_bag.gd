@@ -85,6 +85,21 @@ func test_place_move_and_unplace_respect_occupancy() -> void:
 	assert_eq(bag._loose.size(), 2, "and returns to the loose list")
 
 
+func test_right_click_auto_places_loose_piece() -> void:
+	GameState.bag_equipment.clear()
+	GameState.bag_equipment.append(GameContent.gear_to_item(GameContent.GEAR_L[0]))  # Helm 2x2
+	var bag = _BagTab.new()
+	add_child_autofree(bag)
+	bag._reload()
+	assert_eq(bag._loose.size(), 1)
+	assert_eq(bag._placements.size(), 0)
+	# Right-click insert: drops into the first run that fits.
+	assert_true(bag._place_loose_auto(0), "auto-places into the first free run")
+	assert_eq(bag._placements.size(), 1)
+	assert_eq(bag._loose.size(), 0)
+	assert_eq(Vector2i(bag._placements[0]["pos"]), Vector2i(0, 0), "lands at the first cell")
+
+
 func test_worn_items_are_listed_and_stowing_unequips() -> void:
 	GameState.bag_equipment.clear()
 	GameState.equipped[0] = GameContent.gear_to_item(GameContent.GEAR_L[0])  # wear a Helm

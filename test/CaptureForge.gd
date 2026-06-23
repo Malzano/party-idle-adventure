@@ -1,7 +1,7 @@
 extends Control
-## Dev utility: open the Crafting House (ForgeModal) and simulate a successful
-## upgrade so the stat lines show new values + green (+delta). Run WINDOWED:
-##   godot --path . res://test/CaptureForge.tscn
+## Dev utility: open the Crafting House, select the worn weapon into the anvil,
+## and simulate a successful upgrade so the stat lines show new values + green
+## (+delta). Run WINDOWED:  godot --path . res://test/CaptureForge.tscn
 
 
 func _ready() -> void:
@@ -16,10 +16,8 @@ func _ready() -> void:
 	GameState.choose_class("warrior", "Iconsmith")
 	GameState.equipped[5] = GameContent.gear_to_item(GameContent.GEAR_R[0])  # Main Hand (Maul)
 	GameState.equipped[0] = GameContent.gear_to_item(GameContent.GEAR_L[0])  # Helm
-	GameState.forge_level = 7
-	GameState.gold = 999999
-	GameState.iron_ingots = 99
-	GameState.ember_dust = 99
+	# Gold + materials come from choose_class's mock seed — the Upgrade button
+	# should be enabled without setting them here.
 	PlayerStats.invalidate()
 
 	var forge := preload("res://scenes/camp/ForgeModal.gd").new()
@@ -27,14 +25,9 @@ func _ready() -> void:
 	call_deferred("_snap", forge)
 
 
-func _snap(forge: Control) -> void:
-	await get_tree().create_timer(0.6).timeout
-	# Simulate a successful +7 → +8 upgrade so the green deltas render.
-	forge._prev_stats = PlayerStats.forged_weapon_stats()
-	GameState.forge_level += 1
-	forge._show_delta = true
-	forge.call("_refresh_all")
-	await get_tree().create_timer(0.4).timeout
+func _snap(_forge: Control) -> void:
+	# Capture the just-opened state: the anvil slot must start EMPTY (drop target).
+	await get_tree().create_timer(0.7).timeout
 	await RenderingServer.frame_post_draw
 	var img := get_viewport().get_texture().get_image()
 	img.save_png("res://_shots/forge.png")
