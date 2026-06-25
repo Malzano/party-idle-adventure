@@ -11,7 +11,7 @@ var _coll_count: Label
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_PASS
-	_sel = clampi(GameState.active_pet, 0, GameContent.PETS.size() - 1)
+	_sel = GameState.active_pet  # the grid highlight tracks the worn companion
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 18)
 	add_child(row)
@@ -25,6 +25,7 @@ func _ready() -> void:
 
 
 func _on_loadout_changed() -> void:
+	_sel = GameState.active_pet  # keep the grid highlight on the worn companion
 	_rebuild_collection()
 	_refresh_active()
 
@@ -55,18 +56,21 @@ func _refresh_active() -> void:
 	for child in _active_body.get_children():
 		_active_body.remove_child(child)
 		child.queue_free()
-	var pet: Dictionary = GameContent.PETS[_sel]
+	# The panel mirrors what's actually worn — empty when nothing is equipped.
+	var idx := GameState.active_pet
+	if idx < 0 or idx >= GameContent.PETS.size() or not GameContent.pet_owned(idx):
+		_build_empty_active()
+		return
+	var pet: Dictionary = GameContent.PETS[idx]
 	var rar := String(pet["r"])
 	var rc := Palette.rarity_color(rar)
-	var owned := GameContent.pet_owned(_sel)
-	var is_active := _sel == GameState.active_pet and owned
 
 	# .pa-portrait — 190px rarity-bordered pixel slot.
 	var holder := Control.new()
 	holder.custom_minimum_size = Vector2(190, 190)
 	holder.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var ps := PixelSlot.new("160²\n%s" % String(pet["n"]), true)
+	var ps := GearIcon.new("pet", rc)
 	holder.add_child(ps)
 	ps.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var border := Panel.new()
@@ -109,28 +113,48 @@ func _refresh_active() -> void:
 	stats_col.add_child(_pa_stat("Cooldown", "12s", Palette.TX))
 	_active_body.add_child(stats_col)
 
-	# State row: equipped / set-active / locked.
-	if is_active:
-		var on := Style.body_label("● Currently Active", 13, Palette.R_UNCOMMON)
-		on.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		_active_body.add_child(on)
-	elif owned:
-		var btn := Style.make_button("Set Active", "ember")
-		btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-		btn.pressed.connect(_on_set_active)
-		_active_body.add_child(btn)
-	else:
-		var need := GameContent.pet_unlock_need(_sel)
-		var text := "Not yet tamed"
-		if need > 0:
-			text = "Follows after %d summons (%d/%d)" % [need, GameState.total_summons, need]
-		var locked := Style.display_label(text, 13, Palette.TX_MUTE, true)
-		locked.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		_active_body.add_child(locked)
+	# Worn — live badge + an Unequip control (the only state shown here now).
+	var on := Style.body_label("● Currently Active", 13, Palette.R_UNCOMMON)
+	on.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_active_body.add_child(on)
+	var off_btn := Style.make_button("Unequip", "ghost")
+	off_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	off_btn.pressed.connect(_on_unequip)
+	_active_body.add_child(off_btn)
 
 
-func _on_set_active() -> void:
-	GameState.set_active_pet(_sel)
+## Nothing worn — a faded ghost slot inviting a pick from the collection.
+func _build_empty_active() -> void:
+	var holder := Control.new()
+	holder.custom_minimum_size = Vector2(190, 190)
+	holder.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var ghost := GearIcon.new("pet", Palette.GOLD_DIM, true)
+	holder.add_child(ghost)
+	ghost.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var border := Panel.new()
+	var b_sb := StyleBoxFlat.new()
+	b_sb.draw_center = false
+	b_sb.set_border_width_all(2)
+	b_sb.border_color = Palette.IRON_EDGE
+	b_sb.set_corner_radius_all(6)
+	border.add_theme_stylebox_override("panel", b_sb)
+	border.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	holder.add_child(border)
+	border.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_active_body.add_child(holder)
+	var nm := Style.display_label("No Companion", 22, Palette.TX_MUTE, true)
+	nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_active_body.add_child(nm)
+	var hint := Style.body_label("Pick a companion from the collection →", 13, Palette.TX_DIM)
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_active_body.add_child(hint)
+
+
+## Take the companion off — no pet equipped (its aura + the field pet go away).
+func _on_unequip() -> void:
+	GameState.set_active_pet(-1)
 
 
 func _pa_stat(label_text: String, value_text: String, value_color: Color) -> Control:
@@ -237,7 +261,7 @@ func _pc_cell(index: int) -> Control:
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	inner.add_child(box)
 	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	var ps := PixelSlot.new("64²" if owned else "?", owned)
+	var ps := GearIcon.new("pet", Palette.rarity_color(rar))
 	inner.add_child(ps)
 	ps.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ps.offset_left = 4
@@ -252,7 +276,7 @@ func _pc_cell(index: int) -> Control:
 		inner.add_child(lock)
 		lock.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
-	# .pc-cell.sel — ember outline, offset 2.
+	# .pc-cell.sel — ember outline marks the worn companion (_sel == active_pet).
 	var mark := SelOutline.new()
 	mark.visible = index == _sel
 	cell.add_child(mark)
@@ -276,15 +300,13 @@ func _pc_cell(index: int) -> Control:
 
 func _on_cell_input(event: InputEvent, index: int) -> void:
 	var mb := event as InputEventMouseButton
-	if mb != null and mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
-		_select(index)
-
-
-func _select(index: int) -> void:
-	_sel = index
-	for i in _marks.size():
-		_marks[i].visible = i == _sel
-	_refresh_active()
+	if mb == null or not mb.pressed or not GameContent.pet_owned(index):
+		return  # locked companions can't be worn (the cell tooltip shows the unlock)
+	# Left-click equips; right-click toggles (equip, or unequip if already worn).
+	if mb.button_index == MOUSE_BUTTON_LEFT:
+		GameState.set_active_pet(index)
+	elif mb.button_index == MOUSE_BUTTON_RIGHT:
+		GameState.set_active_pet(-1 if index == GameState.active_pet else index)
 
 
 # =========================================================================

@@ -145,3 +145,22 @@ func test_forge_level_raises_total_power() -> void:
 	PlayerStats.invalidate()
 	var power_after := float(PlayerStats.compute()["total_power"])
 	assert_gt(power_after, power_before, "forge upgrade must raise total power")
+
+
+func test_pet_aura_applies_only_while_worn() -> void:
+	# Equip gear so there's a real armour base, then a worn pet's "+12% Armour"
+	# aura raises it — and unequipping the pet (active_pet = -1) removes it cleanly.
+	var demo: Array = GameContent.GEAR_L + GameContent.GEAR_R
+	for i in demo.size():
+		GameState.equipped[i] = GameContent.gear_to_item(demo[i])
+	GameState.active_pet = 3  # Tomb Beetle (owned by default) — "+12% Armour"
+	PlayerStats.invalidate()
+	var armour_worn := float(PlayerStats.compute()["derived"]["armour"])
+	GameState.active_pet = -1  # take the companion off entirely
+	PlayerStats.invalidate()
+	var profile := PlayerStats.compute()
+	var armour_bare := float(profile["derived"]["armour"])
+	assert_gt(float(profile["total_power"]), 0.0, "a pet-less delver still computes a valid profile")
+	assert_gt(armour_bare, 0.0, "geared delver keeps its base armour")
+	assert_lt(armour_bare, armour_worn, "the pet's +Armour aura applies only while worn")
+	GameState.active_pet = 0

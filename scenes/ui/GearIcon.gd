@@ -137,6 +137,15 @@ func _draw() -> void:
 		"ingot":  # metal bar (smithing material)
 			_fill([P.call(0.2, 0.46), P.call(0.8, 0.46), P.call(0.72, 0.66), P.call(0.28, 0.66)], col, edge)
 			_fill([P.call(0.28, 0.46), P.call(0.72, 0.46), P.call(0.64, 0.38), P.call(0.36, 0.38)], col.lightened(0.12), edge)
+		"pet":  # companion creature — round body, ears, tail
+			draw_circle(P.call(0.5, 0.56), 0.28 * s, col)
+			_fill([P.call(0.36, 0.34), P.call(0.32, 0.15), P.call(0.49, 0.31)], col, edge)
+			_fill([P.call(0.64, 0.34), P.call(0.68, 0.15), P.call(0.51, 0.31)], col, edge)
+			_fill([P.call(0.74, 0.64), P.call(0.92, 0.5), P.call(0.92, 0.65), P.call(0.78, 0.77)], col, edge)
+			if not ghost:
+				draw_circle(P.call(0.43, 0.52), 0.032 * s, cut)
+				draw_circle(P.call(0.57, 0.52), 0.032 * s, cut)
+				draw_circle(P.call(0.5, 0.62), 0.026 * s, cut)
 		_:  # "gem" / crafting material
 			_fill([P.call(0.5, 0.22), P.call(0.74, 0.46), P.call(0.5, 0.8), P.call(0.26, 0.46)], col, edge)
 			if not ghost:
