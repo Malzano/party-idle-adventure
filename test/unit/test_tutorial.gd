@@ -10,6 +10,7 @@ const _WIRED := [
 	"res://autoload/TutorialOverlay.gd",
 	"res://scenes/ui/TutorialLayer.gd",
 	"res://scenes/fight/Fight.gd",
+	"res://scenes/fight/Battlefield.gd",
 	"res://scenes/hero/Hero.gd",
 	"res://scenes/hero/EquipmentTab.gd",
 	"res://scenes/hero/BagTab.gd",

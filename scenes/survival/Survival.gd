@@ -84,9 +84,10 @@ func _start_run() -> void:
 ##   _world3d.set_model("enemy_grunt",   load("res://assets/models/ghoul.glb"))
 ##   _world3d.set_model("boss",          load("res://assets/models/marrow_knight.glb"))
 ## Keys: class_<id>, enemy_swarmer/grunt/brute, boss, shot, gem. Model forward = -Z,
-## origin at the feet.
+## origin at the feet. Just drop res://assets/models/<key>.glb and re-import —
+## auto_load_models picks it up; no code edit needed.
 func _register_models() -> void:
-	pass
+	_world3d.auto_load_models()
 
 
 ## Drive the 2.5D world from the sim each frame (positions only; the sim is

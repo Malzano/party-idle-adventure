@@ -189,3 +189,32 @@ func test_scene_builds_and_ticks() -> void:
 		s._process(0.05)
 	assert_not_null(s._sim, "the scene owns a live sim")
 	assert_true(s._sim.alive, "delver survives the brief smoke window")
+
+
+func test_combat3dview_swaps_placeholder_for_registered_model() -> void:
+	# Proves the model pipeline end-to-end in Godot: a registered PackedScene
+	# replaces the tinted placeholder primitive under the pooled ground-anchor —
+	# exactly what set_model / auto_load_models do once a real .glb is dropped in
+	# res://assets/models/ (the Blender export target).
+	var view := Combat3DView.new()
+	add_child_autofree(view)
+	await get_tree().process_frame  # _ready builds the SubViewport 3D world
+	# Un-registered kind → tinted placeholder primitive.
+	var ph := view.node("enemy", 0, "enemy_grunt")
+	assert_eq(ph.get_child_count(), 1, "the anchor carries exactly one visual")
+	assert_true(ph.get_child(0) is MeshInstance3D, "an unskinned kind shows a primitive mesh")
+	# Register a stand-in model, fetch the kind → our model skins it instead.
+	var stand_in := Node3D.new()
+	stand_in.name = "DelverModel"
+	var ps := PackedScene.new()
+	ps.pack(stand_in)
+	stand_in.free()
+	view.set_model("class_warrior", ps)
+	var n := view.node("hero", 0, "class_warrior")
+	assert_eq(String(n.get_child(0).name), "DelverModel", "the registered model skins the anchor, not a placeholder")
+	# Both camera framings aim without error (Survival top-down / Fight side-on).
+	view.set_camera_mode("side")
+	view.focus(Vector2(640.0, 360.0))
+	view.set_camera_mode("topdown")
+	view.focus(Vector2(640.0, 360.0))
+	assert_eq(view.camera_mode, "topdown", "camera mode toggles cleanly between the two scenes")

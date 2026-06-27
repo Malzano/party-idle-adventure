@@ -33,6 +33,15 @@ const APPROACH_SPEED := 0.18            # rect-widths/sec at 1×: a calm, delibe
                                         # deferred until a foe engages, so it needn't rush)
 const MELEE_RANGE := 0.08               # x past CLASH a melee target must be within
 
+# --- 2.5D render (Combat3DView): the combatants become 3D models on a tilted
+# side-camera grid. The 2D entity/kill/wave/focus logic is UNTOUCHED — it stays
+# the coherent sim readout; _pos_ground just projects the (x,lane) world point
+# through the 3D camera, so the 2D overlays (HP bars, damage numbers, projectiles,
+# clickable chests) land on the 3D models. Set false for the pure-2D side-scroller. ---
+const USE_3D := true
+const BF_BAND := 1400.0                 # x-fraction → sim-px across the side band (world X)
+const BF_DEPTH := 150.0                 # lane → sim-px of depth (world Z; near lane toward camera)
+
 # --- forward-travel parallax (replaces the iso scroll) ---
 const SCROLL_SPEED := 150.0             # near-layer px/s at 1× speed
 const PARALLAX := [0.18, 0.45, 1.0]     # far → near layer scroll factors
@@ -74,6 +83,7 @@ var _bg_holder: Control
 var _units_holder: Control
 var _proj_holder: Control
 var _floater_holder: Control
+var _world3d: Combat3DView   # the 2.5D world (null when USE_3D is off)
 
 # per-frame registries — any node freed early MUST leave these the same instant
 var _bobs: Array[Dictionary] = []
@@ -187,6 +197,9 @@ func _process(delta: float) -> void:
 	if _resort_accum >= 0.2:
 		_resort_accum = 0.0
 		_resort_depth()
+	# 2.5D: drive the 3D models from the (now-current) entity positions.
+	if _world3d != null:
+		_render3d_fight()
 
 
 # =========================================================================
@@ -194,6 +207,16 @@ func _process(delta: float) -> void:
 # =========================================================================
 
 func _build() -> void:
+	# 2.5D: a tilted side-camera 3D world sits BEHIND the 2D HUD/overlays. The grid
+	# + environment replace the parallax; the combatants render as 3D models.
+	if USE_3D:
+		_world3d = Combat3DView.new()
+		_world3d.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		_world3d.set_camera_mode("side")
+		add_child(_world3d)
+		_world3d.auto_load_models()
+		_world3d.focus(_bf_world(0.42, 1))
+
 	# Background: a static cavern backdrop + 3 scrolling parallax layers.
 	_bg_holder = Control.new()
 	_bg_holder.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -227,6 +250,10 @@ func _build() -> void:
 	add_child(_prop_holder)
 	for i in 7:
 		_spawn_prop(_rng.randf_range(0.25, 1.7))
+	# 3D grid + environment stand in for the 2D backdrop/parallax/props.
+	if _world3d != null:
+		_bg_holder.visible = false
+		_prop_holder.visible = false
 
 	# Units (heroes + enemies + chests), depth-sorted by feet y.
 	_units_holder = Control.new()
@@ -286,6 +313,8 @@ func _spawn_party_heroes() -> void:
 		_units_holder.add_child(hero)
 		_hero_units.append(hero)
 		_attach_pet(hero)  # active companion trots along behind
+		if _world3d != null:
+			_hide_2d_body(hero)
 	_request_relayout()
 
 
@@ -432,6 +461,8 @@ func _spawn_enemy(initial: bool, plan: Dictionary = {}) -> void:
 	_enemies.append(entry)
 	_update_enemy_visual(entry)
 	_pos_ground(unit, x, lane)
+	if _world3d != null:
+		_hide_2d_body(unit)
 
 
 ## Build the enemy token (sprite facing LEFT / bar / glow / streak / shadow / tip);
@@ -983,6 +1014,8 @@ func _spawn_boss_token(boss_name: String, tier: String) -> Dictionary:
 	_enemies.append(entry)
 	_pos_ground(unit, bx, 1)
 	_bobs.append({"node": sprite, "base": Vector2.ZERO, "kind": "approach", "period": 2.4, "delay": 0.0})
+	if _world3d != null:
+		_hide_2d_body(unit)
 	return entry
 
 
@@ -1122,8 +1155,10 @@ func _open_chest(entry: Dictionary) -> void:
 
 
 func _chest_screen_point(entry: Dictionary) -> Vector2:
-	var y := GROUND_Y + LANES[int(entry["lane"])]
-	return Vector2(size.x * float(entry["x"]), size.y * y - _CHEST_SIZE.y)
+	# Top-center of the chest wherever it sits — its node is placed by _pos_ground,
+	# so this inherits the 2D or projected-3D placement.
+	var n := entry["node"] as Control
+	return n.position + Vector2(n.size.x * 0.5, 0.0)
 
 
 ## Opened: burst (flash + squash). Expired/missed: sink and fade. Idempotent —
@@ -1304,9 +1339,69 @@ func _make_prop(kind: String, lane: int) -> Control:
 # =========================================================================
 
 ## Anchor a node's feet on the ground line of [param lane] at fraction [param x].
+## In 2.5D the ground point is the projection of the (x, lane) world position
+## through the 3D camera, so the 2D node (HP bar / chest / floater anchor) lands
+## exactly on its 3D model; otherwise the flat 2D layout is used.
 func _pos_ground(node: Control, x: float, lane: int) -> void:
+	if _world3d != null and size.x >= 4.0:
+		var gp := _world3d.project(_bf_world(x, lane))
+		node.position = gp - Vector2(node.size.x * 0.5, node.size.y)
+		return
 	var y := GROUND_Y + LANES[clampi(lane, 0, LANES.size() - 1)]
 	node.position = Vector2(size.x * x - node.size.x * 0.5, size.y * y - node.size.y)
+
+
+# =========================================================================
+# 2.5D world (Combat3DView): combatants as 3D models on a side-camera grid
+# =========================================================================
+
+## Map the side-scroller's (x fraction, lane) to a sim world position: x spreads
+## along the band (world X, hero at 0); lane gives depth (world Z, near lane toward
+## the camera). Fed to Combat3DView.to3 / .project / .focus so 2D + 3D agree.
+func _bf_world(x: float, lane: int) -> Vector2:
+	return Vector2((x - HERO_X) * BF_BAND, float(lane - 1) * BF_DEPTH)
+
+
+## The 3D model key for an enemy entry (boss / elite / trash).
+func _enemy_kind3d(e: Dictionary) -> String:
+	if is_same(e, _boss_entry):
+		return "boss"
+	if bool(e.get("elite", false)):
+		return "enemy_brute"
+	return "enemy_grunt"
+
+
+## Place the 3D combatants (hero + every enemy, incl. the boss) at their world
+## positions, facing across the band. Pooled + trimmed by Combat3DView; the 2D
+## bodies are hidden, so only the bars / numbers / chests remain on top.
+func _render3d_fight() -> void:
+	var v := _world3d
+	var party := GameContent.active_party()
+	for i in _hero_units.size():
+		var cls := "class_warrior"
+		if i < party.size():
+			cls = "class_" + String((party[i] as Dictionary).get("class_id", "warrior"))
+		var hn := v.node("hero", i, cls)
+		hn.position = v.to3(_bf_world(HERO_X, 1))
+		hn.look_at(hn.position + Vector3(1.0, 0.0, 0.0), Vector3.UP)  # face the foes (+X)
+	v.trim("hero", _hero_units.size())
+	for i in _enemies.size():
+		var e: Dictionary = _enemies[i]
+		var en := v.node("enemy", i, _enemy_kind3d(e))
+		en.position = v.to3(_bf_world(float(e["x"]), int(e["lane"])))
+		en.look_at(en.position + Vector3(-1.0, 0.0, 0.0), Vector3.UP)  # face the hero (-X)
+	v.trim("enemy", _enemies.size())
+
+
+## In 2.5D, hide a unit's 2D body (sprite / shadow / ring / glow / pet) but keep
+## its HP bar — the 3D model is the body; the bar floats above it.
+func _hide_2d_body(unit: Control) -> void:
+	for c in unit.get_children():
+		if c is StatBar:
+			continue
+		var ci := c as CanvasItem
+		if ci != null:
+			ci.visible = false
 
 
 func _proj_color(key: String) -> Color:

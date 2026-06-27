@@ -19,6 +19,9 @@ const MSCALE := 0.02
 const CAM_HEIGHT := 15.0
 const CAM_BACK := 11.0
 
+## "topdown" (Survival — Crownfall/Diablo) or "side" (Fight — 2.5D side-scroller).
+var camera_mode := "topdown"
+
 var _sv: SubViewport
 var _world: Node3D
 var _cam: Camera3D
@@ -74,10 +77,29 @@ func _ready() -> void:
 	_world.add_child(_cam)
 
 
+## Every entity kind the renderers ask for — drop res://assets/models/<key>.glb
+## to skin it (else a tinted placeholder shows).
+const MODEL_KEYS := [
+	"class_warrior", "class_mage", "class_hunter", "class_rogue",
+	"enemy_swarmer", "enemy_grunt", "enemy_brute", "boss", "shot", "gem", "chest",
+]
+
+
 ## Register a real model (PackedScene from a .glb) for an entity kind. Its forward
 ## should be -Z and its origin at the feet; then it just works with the pooling.
 func set_model(kind: String, scene: PackedScene) -> void:
 	_models[kind] = scene
+
+
+## Auto-register any res://assets/models/<key>.glb that exists, so dropping a
+## correctly-named .glb (then re-importing) makes it appear in-game — no code edit.
+func auto_load_models(dir := "res://assets/models/") -> void:
+	for k in MODEL_KEYS:
+		var path: String = dir + k + ".glb"
+		if ResourceLoader.exists(path):
+			var res: Resource = load(path)
+			if res is PackedScene:
+				set_model(k, res)
 
 
 ## Map a sim 2D position onto the ground plane (y = 0).
@@ -85,11 +107,30 @@ func to3(p: Vector2) -> Vector3:
 	return Vector3(p.x * MSCALE, 0.0, p.y * MSCALE)
 
 
-## Aim the tilted camera at a sim position (follows the delver).
+## Aim the camera at a sim position. "topdown" follows the delver from high and
+## behind (Survival); "side" sits low and to the +Z side for a 2.5D side-scroller
+## band (Fight) — pass the clash point, not the moving hero.
 func focus(world2d: Vector2) -> void:
 	var t := to3(world2d)
-	_cam.position = t + Vector3(0.0, CAM_HEIGHT, CAM_BACK)
+	if camera_mode == "side":
+		_cam.position = t + Vector3(0.0, 6.0, 17.0)
+	else:
+		_cam.position = t + Vector3(0.0, CAM_HEIGHT, CAM_BACK)
 	_cam.look_at(t, Vector3.UP)
+
+
+## Switch camera framing: "topdown" (Survival) or "side" (Fight).
+func set_camera_mode(mode: String) -> void:
+	camera_mode = mode
+
+
+## Project a sim world position to a screen point in this container's local space
+## (== the host scene's local space; the container is full-rect). Lets a 2D overlay
+## — an HP bar, a damage number, a clickable chest — sit exactly on its 3D entity.
+func project(world2d: Vector2) -> Vector2:
+	if _cam == null:
+		return Vector2.ZERO
+	return _cam.unproject_position(to3(world2d))
 
 
 ## A pooled ground-anchor Node3D for entity [param index] of [param group],
