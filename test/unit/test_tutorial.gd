@@ -14,6 +14,7 @@ const _WIRED := [
 	"res://scenes/hero/EquipmentTab.gd",
 	"res://scenes/hero/BagTab.gd",
 	"res://systems/survival/SurvivalSim.gd",
+	"res://scenes/combat3d/Combat3DView.gd",
 	"res://scenes/survival/Survival.gd",
 	"res://scenes/survival/SurvivalDraft.gd",
 	"res://scenes/survival/SurvivalGameOver.gd",

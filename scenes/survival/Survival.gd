@@ -10,7 +10,11 @@ const _Sim := preload("res://systems/survival/SurvivalSim.gd")
 const _Draft := preload("res://scenes/survival/SurvivalDraft.gd")
 const _GameOver := preload("res://scenes/survival/SurvivalGameOver.gd")
 
+## Render the world in 2.5D (tilted 3D Combat3DView) vs the flat 2D fallback.
+const USE_3D := true
+
 var _sim: SurvivalSim
+var _world3d: Combat3DView   # set when USE_3D — the 2.5D world (HUD stays 2D on top)
 var _arena: _Arena
 var _player_sprite: UnitSprite
 var _font: Font
@@ -42,18 +46,26 @@ func _ready() -> void:
 	add_child(bg)
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
-	_arena = _Arena.new()
-	_arena.host = self
-	_arena.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(_arena)
-	_arena.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	if USE_3D:
+		# 2.5D world (tilted camera + 3D entities). The HUD/minimap/modals built
+		# below sit on top as 2D Control. Models drop in via _register_models().
+		_world3d = Combat3DView.new()
+		add_child(_world3d)
+		_world3d.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		_register_models()
+	else:
+		_arena = _Arena.new()
+		_arena.host = self
+		_arena.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(_arena)
+		_arena.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
-	_player_sprite = UnitSprite.new(GameContent.hero_bundle("self"), "DELVER", true)
-	_player_sprite.size = Vector2(62, 80)  # small delver on a huge map
-	_player_sprite.pivot_offset = _player_sprite.size * 0.5
-	_player_sprite.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(_player_sprite)
-	_player_sprite.play("walk")
+		_player_sprite = UnitSprite.new(GameContent.hero_bundle("self"), "DELVER", true)
+		_player_sprite.size = Vector2(62, 80)  # small delver on a huge map
+		_player_sprite.pivot_offset = _player_sprite.size * 0.5
+		_player_sprite.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(_player_sprite)
+		_player_sprite.play("walk")
 
 	_build_hud()
 	_start_run()
@@ -67,6 +79,38 @@ func _start_run() -> void:
 	_rebuild_chips()
 
 
+## Drop real 3D models here once you have them (else tinted placeholders show):
+##   _world3d.set_model("class_warrior", load("res://assets/models/warrior.glb"))
+##   _world3d.set_model("enemy_grunt",   load("res://assets/models/ghoul.glb"))
+##   _world3d.set_model("boss",          load("res://assets/models/marrow_knight.glb"))
+## Keys: class_<id>, enemy_swarmer/grunt/brute, boss, shot, gem. Model forward = -Z,
+## origin at the feet.
+func _register_models() -> void:
+	pass
+
+
+## Drive the 2.5D world from the sim each frame (positions only; the sim is
+## unchanged). Pooled 3D nodes are reused/hidden so the swarm is cheap.
+func _render3d() -> void:
+	var v := _world3d
+	v.focus(_sim.player)
+	var pn := v.node("player", 0, "class_" + GameState.class_id)
+	pn.position = v.to3(_sim.player)
+	var heading := Vector3(cos(_sim.aim), 0.0, sin(_sim.aim))
+	pn.look_at(pn.position + heading, Vector3.UP)
+	for i in _sim.enemies.size():
+		var e: Dictionary = _sim.enemies[i]
+		var ek := "boss" if String(e.get("kind", "")) == "boss" else "enemy_" + String(e.get("kind", "grunt"))
+		v.node("enemy", i, ek).position = v.to3(e["pos"])
+	v.trim("enemy", _sim.enemies.size())
+	for i in _sim.shots.size():
+		v.node("shot", i, "shot").position = v.to3(_sim.shots[i]["pos"])
+	v.trim("shot", _sim.shots.size())
+	for i in _sim.gems.size():
+		v.node("gem", i, "gem").position = v.to3(_sim.gems[i]["pos"])
+	v.trim("gem", _sim.gems.size())
+
+
 func _process(delta: float) -> void:
 	if _sim == null:
 		return
@@ -76,10 +120,13 @@ func _process(delta: float) -> void:
 
 	# Camera follows the delver: keep the sprite screen-centred (design centre
 	# 960×540); the arena draws the world offset around it. Face the locked target.
-	_player_sprite.position = Vector2(960.0, 540.0) - _player_sprite.size * 0.5
-	_player_sprite.scale.x = -1.0 if cos(_sim.aim) < 0.0 else 1.0
+	if _world3d != null:
+		_render3d()
+	else:
+		_player_sprite.position = Vector2(960.0, 540.0) - _player_sprite.size * 0.5
+		_player_sprite.scale.x = -1.0 if cos(_sim.aim) < 0.0 else 1.0
+		_arena.queue_redraw()
 	_refresh_hud()
-	_arena.queue_redraw()
 	if _minimap != null:
 		_minimap.queue_redraw()
 
