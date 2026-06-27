@@ -348,6 +348,16 @@ func _try_place_loose(lidx: int, target: Vector2i) -> bool:
 	return true
 
 
+## Right-click insert: drop the loose piece into the first spot its shape fits.
+func _place_loose_auto(lidx: int) -> bool:
+	if lidx < 0 or lidx >= _loose.size():
+		return false
+	var pos := _first_fit(GameContent.item_shape_cells(_loose[lidx]["item"]))
+	if pos.x < 0:
+		return false
+	return _try_place_loose(lidx, pos)
+
+
 ## Take a placed piece off the grid and back into the loose (bag) list.
 func _unplace(pidx: int) -> void:
 	if pidx < 0 or pidx >= _placements.size():
@@ -493,6 +503,13 @@ class _BagTile:
 		set_drag_preview(bag._drag_ghost(item))
 		return {"src": "grid", "pidx": pidx, "grab": grab}
 
+	# Right-click takes the piece off the grid (back to the loose list).
+	func _gui_input(event: InputEvent) -> void:
+		var mb := event as InputEventMouseButton
+		if mb != null and mb.pressed and mb.button_index == MOUSE_BUTTON_RIGHT:
+			bag._unplace(pidx)
+			accept_event()
+
 	# Drops landing on a placed piece convert to grid space and reuse grid logic.
 	func _can_drop_data(at: Vector2, data: Variant) -> bool:
 		return bag._grid_host._can_drop_data(position + at, data)
@@ -565,6 +582,13 @@ class _LooseCell:
 		bag._preview_clear()
 		set_drag_preview(bag._drag_ghost(item))
 		return {"src": "loose", "lidx": lidx, "grab": Vector2i.ZERO}
+
+	# Right-click inserts the piece into the grid (worn pieces are stowed/unequipped).
+	func _gui_input(event: InputEvent) -> void:
+		var mb := event as InputEventMouseButton
+		if mb != null and mb.pressed and mb.button_index == MOUSE_BUTTON_RIGHT:
+			bag._place_loose_auto(lidx)
+			accept_event()
 
 
 # ===========================================================================

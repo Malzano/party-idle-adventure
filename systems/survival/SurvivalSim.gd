@@ -19,6 +19,9 @@ const MARGIN := 46.0
 ## Half-extent the delver may roam past the arena edges (the camera follows, so
 ## the world is effectively large; bounded only to avoid float drift).
 const ROAM := 2200.0
+## A bolt is culled once this far from the delver (off-screen). Bigger than the
+## enemy spawn ring (~1040–1360) so shots always reach foes before despawning.
+const SHOT_CULL := 1700.0
 const STAGE_SECONDS := 22.0
 const MAX_ENEMIES := 130
 ## Seconds before the first world boss, and between bosses after each kill.
@@ -437,7 +440,12 @@ func _advance_shots(delta: float) -> void:
 	for s in shots:
 		s["pos"] = (s["pos"] as Vector2) + (s["vel"] as Vector2) * delta
 		var p := s["pos"] as Vector2
-		if p.x < -80.0 or p.x > ARENA.x + 80.0 or p.y < -80.0 or p.y > ARENA.y + 80.0:
+		# Cull once a bolt flies well off-screen. The camera follows the player, so
+		# "off-screen" is measured FROM THE PLAYER — the old fixed-arena box made a
+		# roaming delver's shots spawn out of bounds and vanish instantly (the bolt
+		# is born at the player, who roams far past the 1920×1080 arena), so the
+		# hero looked like it stopped attacking the moment it left the arena.
+		if (p - player).length_squared() > SHOT_CULL * SHOT_CULL:
 			continue
 		var hits: Dictionary = s["hit"]
 		var dead := false

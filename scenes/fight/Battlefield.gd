@@ -254,6 +254,7 @@ func _build() -> void:
 			_pos_ground(u, HERO_X, 1))
 	_spawn_party_heroes()
 	EventBus.lineup_changed.connect(_spawn_party_heroes, CONNECT_DEFERRED)
+	EventBus.loadout_changed.connect(_refresh_pet, CONNECT_DEFERRED)  # active-pet swaps
 
 	# Open the field with the current wave's lineup already marching in.
 	for entry in GameContent.wave_plan(CombatSim.act, CombatSim.stage, CombatSim.wave):
@@ -284,6 +285,7 @@ func _spawn_party_heroes() -> void:
 		hero.set_meta("depth_bias", 40.0)  # heroes draw in front of same-lane foes
 		_units_holder.add_child(hero)
 		_hero_units.append(hero)
+		_attach_pet(hero)  # active companion trots along behind
 	_request_relayout()
 
 
@@ -324,6 +326,49 @@ func _make_hero(h: Dictionary, idx: int) -> Control:
 
 	unit.set_meta("sprite", sprite)
 	return unit
+
+
+## Active companion: a small pet glyph that trots along just behind the delver
+## (it strides right, so the pet trails to the LEFT, down on the ground line).
+func _attach_pet(hero_unit: Control) -> void:
+	var idx := GameState.active_pet
+	if idx < 0 or idx >= GameContent.PETS.size() or not GameContent.pet_owned(idx):
+		return
+	var pet: Dictionary = GameContent.PETS[idx]
+	var col := Palette.rarity_color(String(pet.get("r", "common")))
+	var psz := Vector2(52.0, 52.0)
+	var holder := Control.new()
+	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	holder.size = psz
+	holder.position = Vector2(-62.0, _HERO_SIZE.y - psz.y - 2.0)
+	hero_unit.add_child(holder)
+	hero_unit.set_meta("pet", holder)
+
+	var shadow := _Shadow.new(0.5)
+	shadow.size = Vector2(40.0, 12.0)
+	shadow.position = Vector2(psz.x * 0.5 - 20.0, psz.y - 9.0)
+	holder.add_child(shadow)
+
+	var ic := GearIcon.new("pet", col)
+	ic.size = psz
+	holder.add_child(ic)
+	# A little trotting bob (self-contained; the tween dies with the freed sprite).
+	var tw := ic.create_tween().set_loops()
+	tw.tween_property(ic, "position:y", -6.0, 0.3).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tw.tween_property(ic, "position:y", 0.0, 0.3).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+
+
+## Rebuild the companion when the active pet changes (loadout_changed).
+func _refresh_pet() -> void:
+	if _hero_units.is_empty():
+		return
+	var hero := _hero_units[0]
+	if hero.has_meta("pet"):
+		var old: Variant = hero.get_meta("pet")
+		if is_instance_valid(old):
+			(old as Node).queue_free()
+		hero.remove_meta("pet")
+	_attach_pet(hero)
 
 
 func _hero_screen_center() -> Vector2:

@@ -43,6 +43,10 @@ func choose_class(id: String, chosen_name: String) -> void:
 	if bag_equipment.is_empty():
 		for g in GameContent.GEAR_L + GameContent.GEAR_R:
 			bag_equipment.append(GameContent.gear_to_item(g))
+	# MOCK: starting gold + forge materials so crafting is testable from the start.
+	gold = maxi(gold, 100000)
+	iron_ingots = maxi(iron_ingots, 200)
+	ember_dust = maxi(ember_dust, 200)
 	EventBus.loadout_changed.emit()  # class bonuses reprice the party
 	EventBus.currencies_changed.emit()
 

@@ -32,6 +32,20 @@ func test_ranged_auto_fire_culls_enemies() -> void:
 	assert_gt(sim.kills, 0, "auto-fire culls enemies over 12s")
 
 
+func test_ranged_fire_still_hits_when_roamed_off_arena() -> void:
+	# Regression: a roaming delver leaves the 1920×1080 arena (ROAM=2200), so bolts
+	# are born past the old arena-box cull and used to vanish instantly — the hero
+	# looked like it stopped attacking the moment it walked off the arena.
+	var sim := SurvivalSim.new(PlayerStats.compute(), "hunter", 8181)
+	sim.max_hp = 1.0e9
+	sim.hp = sim.max_hp
+	_run(sim, 16.0, Vector2(1, 1))  # roam hard toward the lower-right corner
+	assert_true(sim.player.x > sim.ARENA.x or sim.player.y > sim.ARENA.y,
+		"the delver roamed outside the arena box")
+	assert_gt(sim.enemies.size(), 0, "enemies still chase the roaming delver")
+	assert_gt(sim.kills, 0, "bolts still reach and kill foes off the arena (not culled at the arena edge)")
+
+
 func test_melee_blade_aura_culls_enemies() -> void:
 	GameState.choose_class("warrior", "Tester")
 	PlayerStats.invalidate()
