@@ -7,11 +7,13 @@ signal chosen(id: String)
 
 var choices: Array = []   # [{id, name, desc, kind}]
 var stage_cleared: int = 1
+var boss_reward := false
 var _picked := false
 
 
 func _build_body(body: VBoxContainer) -> void:
-	var sub := Style.body_label("Stage %d cleared — choose an enhancement" % stage_cleared, 14, Palette.TX_MUTE)
+	var sub_text := "A world boss falls — claim a reward enhancement" if boss_reward else "Stage %d cleared — choose an enhancement" % stage_cleared
+	var sub := Style.body_label(sub_text, 14, Palette.TX_MUTE)
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	body.add_child(sub)
 

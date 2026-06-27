@@ -21,6 +21,20 @@ const MARGIN := 46.0
 const ROAM := 2200.0
 const STAGE_SECONDS := 22.0
 const MAX_ENEMIES := 130
+## Seconds before the first world boss, and between bosses after each kill.
+## Crownfall-style: a marked mini-boss roams the map and rewards an upgrade.
+const BOSS_DELAY := 45.0
+
+## Enemy archetypes. Stat multipliers over the stage-scaled base; the spawn
+## director (below) weights them by elapsed stage so the swarm gains variety and
+## threat. Adapted from the MIT references — DarkRewar/SurvivorsStarterKit's
+## EnemyManager difficulty progression + rcanpahali/pathfinder's timed spawn
+## waves (both MIT). `tint` is a hex colour the renderer reads.
+const ENEMY_KINDS := {
+	"swarmer": {"hp": 0.5, "spd": 1.55, "r": 15.0, "dmg": 0.7, "tint": "c75c4e"},
+	"grunt": {"hp": 1.0, "spd": 1.0, "r": 22.0, "dmg": 1.0, "tint": "a83a33"},
+	"brute": {"hp": 2.7, "spd": 0.58, "r": 31.0, "dmg": 1.9, "tint": "7e2a66"},
+}
 
 # --- run config (derived from the hero's gear in _init) ---------------------
 var rng := RandomNumberGenerator.new()
@@ -46,6 +60,16 @@ var diagonal := false
 var backside := false
 var pierce := 1
 
+# Secondary weapons (drafted; 0 = not owned). Adapted from the MIT references'
+# powerups: orbiting orbs (DarkRewar's FloatingSphere) + a periodic AoE nova
+# (SpiritWater). Class-agnostic passives that stack via the draft.
+var orbs := 0
+var orb_radius := 116.0
+var orb_angle := 0.0
+var nova_level := 0
+var nova_radius := 230.0
+var nova_flash := 0.0
+
 # --- run state --------------------------------------------------------------
 var player := ARENA * 0.5
 var enemies: Array = []   # {pos:Vector2, hp:float, max:float, spd:float, r:float, dmg:float}
@@ -64,9 +88,21 @@ var aim := 0.0          # current aim angle (render draws the aura toward it)
 var aura_flash := 0.0   # >0 briefly after a melee swing (render hint)
 var upgrades_taken: Array[String] = []
 
+# World boss (Crownfall-style): one roams the map at a time, marked on the
+# minimap. Killing it opens a bonus upgrade draft. The boss lives in `enemies`
+# (kind "boss") so the normal attack pipeline damages it.
+var boss_alive := false
+var boss_spawns := 0       # how many have appeared (render rising-edge banner)
+var bosses_slain := 0
+var _draft_reason := "stage"  # "stage" (timed clear) or "boss" (boss kill)
+
 var _fire_acc := 0.0
 var _spawn_acc := 0.0
 var _iframe := 0.0
+var _burst_acc := 0.0
+var _orb_tick := 0.0
+var _nova_acc := 0.0
+var _boss_acc := 0.0
 
 
 ## Build a run from the live player profile (PlayerStats.compute()) + the bag's
@@ -161,34 +197,91 @@ func tick(delta: float, input: Vector2) -> void:
 	if not alive:
 		return
 	_attack(delta)
+	_update_orbs(delta)
+	_update_nova(delta)
 	_advance_shots(delta)
 	_advance_gems(delta)
 
 	if stage_time >= STAGE_SECONDS:
 		awaiting_upgrade = true  # render shows the 3-card draft; resumes on pick
+		_draft_reason = "stage"
 
 
+## The full roamable map the camera follows the delver across.
+func world_rect() -> Rect2:
+	return Rect2(-ROAM, -ROAM, ARENA.x + 2.0 * ROAM, ARENA.y + 2.0 * ROAM)
+
+
+## Spawn director: a steady stream whose rate ramps with stage/time, plus a
+## periodic swarm BURST (pathfinder's batched enemy_count) — keeps the screen
+## alive and rewards crowd-clear builds.
 func _spawn(delta: float) -> void:
 	_spawn_acc += delta
 	var interval := maxf(0.16, 0.95 * pow(0.93, float(stage - 1)) - time * 0.004)
 	while _spawn_acc >= interval and enemies.size() < MAX_ENEMIES:
 		_spawn_acc -= interval
-		_spawn_enemy()
+		_spawn_enemy(_pick_kind())
+	_burst_acc += delta
+	if _burst_acc >= 13.0 and enemies.size() < MAX_ENEMIES - 12:
+		_burst_acc = 0.0
+		var n := 6 + stage
+		for i in n:
+			_spawn_enemy("swarmer", float(i) / float(n) * TAU)
+	# World boss: one at a time — first at BOSS_DELAY, then BOSS_DELAY after each
+	# kill (the timer only runs while none is alive). Marked on the minimap.
+	if not boss_alive:
+		_boss_acc += delta
+		if _boss_acc >= BOSS_DELAY:
+			_boss_acc = 0.0
+			_spawn_boss()
 
 
-## Spawn one foe at a random point on a ring around the player (every angle).
-func _spawn_enemy() -> void:
-	var ang := rng.randf() * TAU
-	# Spawn just offscreen around the delver from every angle. The screen half-
-	# extent is ~960×540, so 1040+ guarantees they enter from the edges, never
-	# pop in on top of the player.
+## A roaming map boss at a random spot well away from the delver (Crownfall-style).
+func _spawn_boss() -> void:
+	var wr := world_rect()
+	var pos := player
+	for _i in 8:
+		pos = wr.position + Vector2(rng.randf() * wr.size.x, rng.randf() * wr.size.y)
+		if (pos - player).length() > 760.0:
+			break
+	var bhp := 16.0 * pow(1.17, float(stage - 1)) * 70.0 + 1200.0
+	enemies.append({
+		"pos": pos, "hp": bhp, "max": bhp,
+		"spd": 52.0 + float(stage) * 2.0,
+		"r": 54.0, "dmg": 22.0 + float(stage) * 2.0,
+		"kind": "boss", "tint": "e0455e",
+	})
+	boss_alive = true
+	boss_spawns += 1
+
+
+## Weighted archetype pick: early stages are grunts + swarmers; brutes ramp in
+## with the stage (the difficulty curve adapted from EnemyManager).
+func _pick_kind() -> String:
+	var brute_w := clampf(0.04 * float(stage - 1), 0.0, 0.4)
+	var r := rng.randf()
+	if r < brute_w:
+		return "brute"
+	if r < brute_w + 0.35:
+		return "swarmer"
+	return "grunt"
+
+
+## Spawn one foe of [param kind] just offscreen around the player (every angle).
+## [param ang] < 0 picks a random angle; >= 0 places it precisely (burst rings).
+func _spawn_enemy(kind := "grunt", ang := -1.0) -> void:
+	var k: Dictionary = ENEMY_KINDS.get(kind, ENEMY_KINDS["grunt"])
+	var a := ang if ang >= 0.0 else rng.randf() * TAU
+	# The screen half-extent is ~960×540, so 1040+ guarantees they enter from the
+	# edges, never pop in on top of the player.
 	var dist := 1040.0 + rng.randf() * 320.0
-	var pos := player + Vector2.RIGHT.rotated(ang) * dist
-	var ehp := 16.0 * pow(1.17, float(stage - 1)) * (0.85 + rng.randf() * 0.4)
+	var pos := player + Vector2.RIGHT.rotated(a) * dist
+	var ehp := 16.0 * pow(1.17, float(stage - 1)) * float(k["hp"]) * (0.85 + rng.randf() * 0.4)
 	enemies.append({
 		"pos": pos, "hp": ehp, "max": ehp,
-		"spd": 66.0 + float(stage) * 4.0 + rng.randf() * 18.0,
-		"r": 22.0, "dmg": 7.0 + float(stage) * 1.2,
+		"spd": (66.0 + float(stage) * 4.0 + rng.randf() * 18.0) * float(k["spd"]),
+		"r": float(k["r"]), "dmg": (7.0 + float(stage) * 1.2) * float(k["dmg"]),
+		"kind": kind, "tint": String(k["tint"]),
 	})
 
 
@@ -235,7 +328,7 @@ func _fire_projectiles() -> void:
 func _swing_aura() -> void:
 	aura_flash = 0.22
 	var arcs := _aura_arcs()
-	for e in enemies:
+	for e in enemies.duplicate():  # snapshot: _damage_enemy may erase on a kill
 		var off := (e["pos"] as Vector2) - player
 		if off.length() > aura_radius + float(e["r"]):
 			continue
@@ -244,6 +337,38 @@ func _swing_aura() -> void:
 			if absf(wrapf(ea - float(arc[0]), -PI, PI)) <= float(arc[1]):
 				_damage_enemy(e, _roll_dmg())
 				break
+
+
+## Orbiting orbs (FloatingSphere): N orbs circle the delver and damage enemies
+## they overlap on a fixed tick — a passive crowd weapon, class-agnostic.
+func _update_orbs(delta: float) -> void:
+	if orbs <= 0:
+		return
+	orb_angle = wrapf(orb_angle + delta * 2.6, 0.0, TAU)
+	_orb_tick -= delta
+	if _orb_tick > 0.0:
+		return
+	_orb_tick = 0.22
+	for i in orbs:
+		var op := player + Vector2.RIGHT.rotated(orb_angle + TAU * float(i) / float(orbs)) * orb_radius
+		for e in enemies.duplicate():
+			if ((e["pos"] as Vector2) - op).length() <= 26.0 + float(e["r"]):
+				_damage_enemy(e, base_hit * 0.6)
+
+
+## Periodic AoE nova (SpiritWater): every few seconds, blast every nearby foe.
+func _update_nova(delta: float) -> void:
+	nova_flash = maxf(0.0, nova_flash - delta)
+	if nova_level <= 0:
+		return
+	_nova_acc += delta
+	if _nova_acc < 2.4:
+		return
+	_nova_acc = 0.0
+	nova_flash = 0.3
+	for e in enemies.duplicate():
+		if ((e["pos"] as Vector2) - player).length() <= nova_radius:
+			_damage_enemy(e, base_hit * (0.8 + 0.4 * float(nova_level)))
 
 
 ## Angle offsets (from aim) for ranged shots: a forward fan (widened by extra
@@ -292,7 +417,18 @@ func _damage_enemy(e: Dictionary, dmg: float) -> void:
 
 func _kill_enemy(e: Dictionary) -> void:
 	kills += 1
-	gems.append({"pos": (e["pos"] as Vector2), "xp": 1})
+	if String(e.get("kind", "")) == "boss":
+		boss_alive = false
+		bosses_slain += 1
+		score += 1500
+		hp = minf(max_hp, hp + max_hp * 0.4)
+		_boss_acc = 0.0
+		for i in 6:  # a gem burst + a bonus upgrade draft — the boss reward
+			gems.append({"pos": (e["pos"] as Vector2) + Vector2.RIGHT.rotated(TAU * float(i) / 6.0) * 42.0, "xp": 3})
+		awaiting_upgrade = true
+		_draft_reason = "boss"
+	else:
+		gems.append({"pos": (e["pos"] as Vector2), "xp": 1})
 	enemies.erase(e)
 
 
@@ -305,7 +441,7 @@ func _advance_shots(delta: float) -> void:
 			continue
 		var hits: Dictionary = s["hit"]
 		var dead := false
-		for e in enemies:
+		for e in enemies.duplicate():  # snapshot: _damage_enemy may erase on a kill
 			if hits.has(e):
 				continue
 			if ((e["pos"] as Vector2) - p).length() <= float(s["r"]) + float(e["r"]):
@@ -366,6 +502,8 @@ const UPGRADES: Array[Dictionary] = [
 	{"id": "move", "name": "Fleetfoot", "desc": "+15% move speed", "kind": "util"},
 	{"id": "max_hp", "name": "Vitality", "desc": "+20% max HP & heal", "kind": "util"},
 	{"id": "pickup", "name": "Lodestone", "desc": "+40% pickup radius", "kind": "util"},
+	{"id": "orbs", "name": "Warding Orbs", "desc": "Orbiting orbs strike nearby foes", "kind": "weapon"},
+	{"id": "nova", "name": "Pyre Nova", "desc": "A blast erupts around you periodically", "kind": "weapon"},
 ]
 
 
@@ -386,11 +524,17 @@ func offer_upgrades() -> Array:
 	return pool.slice(0, mini(3, pool.size()))
 
 
-## Apply a chosen enhancement, then advance to the next (harder) stage.
+## Apply a chosen enhancement. A timed stage-clear advances the stage; a boss
+## reward is a bonus pick that just resumes (no stage-timer reset).
 func choose_upgrade(id: String) -> void:
 	apply_upgrade(id)
 	upgrades_taken.append(id)
-	next_stage()
+	if _draft_reason == "boss":
+		awaiting_upgrade = false
+		_draft_reason = "stage"
+		hp = minf(max_hp, hp + max_hp * 0.1)
+	else:
+		next_stage()
 
 
 func apply_upgrade(id: String) -> void:
@@ -411,6 +555,8 @@ func apply_upgrade(id: String) -> void:
 			max_hp *= 1.2
 			hp = minf(max_hp, hp + max_hp * 0.2)
 		"pickup": pickup_radius *= 1.4
+		"orbs": orbs = maxi(2, orbs + 1)  # first pick = 2 orbs, then +1 each
+		"nova": nova_level += 1
 
 
 func next_stage() -> void:

@@ -97,6 +97,76 @@ func test_final_score_grows_with_progress() -> void:
 	assert_gt(sim.final_score(), base, "score reflects kills + stage + time")
 
 
+func test_secondary_weapons_apply() -> void:
+	var sim := SurvivalSim.new(PlayerStats.compute(), "hunter", 11)
+	sim.apply_upgrade("orbs")
+	assert_eq(sim.orbs, 2, "first Warding Orbs pick gives 2 orbs")
+	sim.apply_upgrade("orbs")
+	assert_eq(sim.orbs, 3, "and stacks +1")
+	sim.apply_upgrade("nova")
+	assert_eq(sim.nova_level, 1, "Pyre Nova enabled")
+
+
+func test_orbs_damage_nearby_enemies() -> void:
+	var sim := SurvivalSim.new(PlayerStats.compute(), "hunter", 12)
+	sim.orbs = 2
+	sim.orb_angle = 0.0
+	var e := {"pos": sim.player + Vector2(sim.orb_radius, 0.0), "hp": 9999.0, "max": 9999.0,
+		"spd": 0.0, "r": 20.0, "dmg": 0.0, "kind": "grunt", "tint": "a83a33"}
+	sim.enemies.append(e)
+	for _i in 20:  # per-frame steps: an orb sweeps onto the ring-adjacent foe
+		sim._update_orbs(0.05)
+	assert_lt(float(e["hp"]), 9999.0, "an orbiting orb sweeps the adjacent foe")
+
+
+func test_spawn_director_mixes_archetypes() -> void:
+	var sim := SurvivalSim.new(PlayerStats.compute(), "hunter", 99)
+	sim.max_hp = 1.0e9
+	sim.hp = sim.max_hp
+	sim.stage = 6  # brutes are weighted in by this stage
+	var seen := {}
+	for _i in 400:  # ~20s, short of a stage clear
+		sim.tick(0.05, Vector2.ZERO)
+		for en in sim.enemies:
+			seen[String(en.get("kind", "?"))] = true
+	assert_gt(seen.size(), 1, "the spawn director mixes enemy archetypes")
+
+
+func test_world_boss_spawns_and_rewards() -> void:
+	var sim := SurvivalSim.new(PlayerStats.compute(), "hunter", 7)
+	sim.max_hp = 1.0e9
+	sim.hp = sim.max_hp
+	# Run until the world boss appears, auto-resolving any stage-clear drafts so
+	# the clock keeps moving (an unresolved draft pauses the sim).
+	var t := 0.0
+	while t < sim.BOSS_DELAY + 3.0 and not sim.boss_alive:
+		if sim.awaiting_upgrade:
+			sim.choose_upgrade(String(sim.offer_upgrades()[0]["id"]))
+		else:
+			sim.tick(0.05, Vector2.ZERO)
+			t += 0.05
+	assert_true(sim.boss_alive, "a world boss spawns after BOSS_DELAY")
+	var bosses := 0
+	var boss: Dictionary = {}
+	for e in sim.enemies:
+		if String(e.get("kind", "")) == "boss":
+			bosses += 1
+			boss = e
+	assert_eq(bosses, 1, "exactly one world boss at a time")
+
+	if sim.awaiting_upgrade:
+		sim.choose_upgrade(String(sim.offer_upgrades()[0]["id"]))
+	var stage_before := sim.stage
+	sim._kill_enemy(boss)
+	assert_false(sim.boss_alive, "the boss is cleared")
+	assert_eq(sim.bosses_slain, 1)
+	assert_true(sim.awaiting_upgrade, "a bonus upgrade draft opens on the boss kill")
+	assert_eq(sim._draft_reason, "boss")
+	sim.choose_upgrade("dmg")
+	assert_eq(sim.stage, stage_before, "a boss reward does NOT advance the stage timer")
+	assert_false(sim.awaiting_upgrade, "and resumes the run")
+
+
 func test_scene_builds_and_ticks() -> void:
 	var s := _SurvivalScene.new()
 	add_child_autofree(s)

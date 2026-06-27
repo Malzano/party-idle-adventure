@@ -25,6 +25,10 @@ var _chips: HBoxContainer
 
 var _draft_open := false
 var _over_open := false
+var _minimap: _Minimap
+var _boss_lbl: Label
+var _boss_seen := 0
+var _boss_banner_t := 0.0
 
 
 func _ready() -> void:
@@ -45,7 +49,7 @@ func _ready() -> void:
 	_arena.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 	_player_sprite = UnitSprite.new(GameContent.hero_bundle("self"), "DELVER", true)
-	_player_sprite.size = Vector2(108, 138)
+	_player_sprite.size = Vector2(62, 80)  # small delver on a huge map
 	_player_sprite.pivot_offset = _player_sprite.size * 0.5
 	_player_sprite.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_player_sprite)
@@ -76,6 +80,19 @@ func _process(delta: float) -> void:
 	_player_sprite.scale.x = -1.0 if cos(_sim.aim) < 0.0 else 1.0
 	_refresh_hud()
 	_arena.queue_redraw()
+	if _minimap != null:
+		_minimap.queue_redraw()
+
+	# World-boss banner on each new spawn (Crownfall "a boss appeared on the map").
+	if _sim.boss_spawns > _boss_seen:
+		_boss_seen = _sim.boss_spawns
+		_boss_banner_t = 3.5
+	if _boss_banner_t > 0.0:
+		_boss_banner_t = maxf(0.0, _boss_banner_t - delta)
+		_boss_lbl.visible = true
+		_boss_lbl.modulate.a = clampf(_boss_banner_t, 0.0, 1.0)
+	elif _boss_lbl.visible:
+		_boss_lbl.visible = false
 
 	if _sim.awaiting_upgrade and not _draft_open:
 		_open_draft()
@@ -107,8 +124,10 @@ func _age_floaters(delta: float) -> void:
 
 func _open_draft() -> void:
 	_draft_open = true
+	var boss := _sim._draft_reason == "boss"
 	var d := _Draft.new()
-	d.modal_title = "Stage Cleared"
+	d.modal_title = "World Boss Slain" if boss else "Stage Cleared"
+	d.boss_reward = boss
 	d.modal_width = 880.0
 	d.choices = _sim.offer_upgrades()
 	d.stage_cleared = _sim.stage
@@ -223,6 +242,28 @@ func _build_hud() -> void:
 	_hp_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	bar_bg.add_child(_hp_lbl)
 
+	# Minimap, bottom-left (Dota/Crownfall style): the whole map at a glance with
+	# the delver, the swarm, and the marked world boss.
+	_minimap = _Minimap.new()
+	_minimap.host = self
+	_minimap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_minimap)
+	_minimap.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	_minimap.offset_left = 18
+	_minimap.offset_right = 250
+	_minimap.offset_top = -218
+	_minimap.offset_bottom = -18
+
+	# World-boss banner (centred, fades after a spawn).
+	_boss_lbl = Style.display_label("⚔  WORLD BOSS — hunt it on the map", 22, Palette.HP, true)
+	_boss_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_boss_lbl.visible = false
+	_boss_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_boss_lbl)
+	_boss_lbl.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_boss_lbl.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_boss_lbl.offset_top = 92
+
 
 func _refresh_hud() -> void:
 	_stage_lbl.text = "STAGE %d" % _sim.stage
@@ -304,6 +345,18 @@ class _Arena:
 			_draw_sector(c, sim.aura_radius, sim.aim, hw, Palette.with_alpha(Palette.EMBER_BRIGHT, bright))
 			draw_arc(c, sim.aura_radius, 0.0, TAU, 56, Palette.with_alpha(Palette.EMBER, 0.25), 2.0)
 
+		# Nova blast flash (secondary weapon) — an expanding ring.
+		if sim.nova_flash > 0.0:
+			var nt := 1.0 - sim.nova_flash / 0.3
+			draw_arc(c, sim.nova_radius * nt, 0.0, TAU, 64, Palette.with_alpha(Palette.EMBER_BRIGHT, sim.nova_flash * 1.8), 4.0)
+
+		# Orbiting orbs (secondary weapon).
+		if sim.orbs > 0:
+			for i in sim.orbs:
+				var op := c + Vector2.RIGHT.rotated(sim.orb_angle + TAU * float(i) / float(sim.orbs)) * sim.orb_radius
+				draw_circle(op, 13.0, Palette.with_alpha(Palette.CYAN_BRIGHT, 0.35))
+				draw_circle(op, 7.0, Color(0.7, 1.0, 1.0, 0.95))
+
 		# Gems (xp/score motes).
 		for g in sim.gems:
 			var gp := (g["pos"] as Vector2) + off
@@ -314,12 +367,15 @@ class _Arena:
 		for e in sim.enemies:
 			var ep := (e["pos"] as Vector2) + off
 			var r := float(e["r"])
-			draw_circle(ep, r + 3.0, Palette.with_alpha(Palette.HP, 0.2))
-			draw_circle(ep, r, Palette.HP)
+			var ecol := Color(String(e.get("tint", "a83a33")))  # archetype colour
+			draw_circle(ep, r + 3.0, Palette.with_alpha(ecol, 0.2))
+			draw_circle(ep, r, ecol)
 			draw_circle(ep, r * 0.45, Color(0.12, 0.03, 0.03))
 			var frac := clampf(float(e["hp"]) / maxf(1.0, float(e["max"])), 0.0, 1.0)
 			if frac < 0.999:
 				draw_arc(ep, r + 5.0, -PI * 0.5, -PI * 0.5 + TAU * frac, 20, Palette.GOLD_BRIGHT, 2.0)
+			if String(e.get("kind", "")) == "boss":
+				draw_arc(ep, r + 9.0, 0.0, TAU, 40, Palette.with_alpha(Palette.EMBER_BRIGHT, 0.6), 3.0)
 
 		# Projectiles.
 		for s in sim.shots:
@@ -328,7 +384,23 @@ class _Arena:
 			draw_circle(sp, float(s["r"]) * 0.5, Color(1, 1, 1, 0.95))
 
 		# Delver footing ring (screen centre).
-		draw_arc(c, host._player_sprite.size.x * 0.32, 0.0, TAU, 28, Palette.with_alpha(Palette.EMBER_BRIGHT, 0.55), 2.0)
+		draw_arc(c, host._player_sprite.size.x * 0.4, 0.0, TAU, 28, Palette.with_alpha(Palette.EMBER_BRIGHT, 0.55), 2.0)
+
+		# Off-screen world-boss marker — an edge arrow pointing toward the boss so
+		# you can find it on the huge map (Crownfall's map marker).
+		for e in sim.enemies:
+			if String(e.get("kind", "")) != "boss":
+				continue
+			var bs := (e["pos"] as Vector2) + off
+			if bs.x < 50.0 or bs.x > 1870.0 or bs.y < 50.0 or bs.y > 1030.0:
+				var dir := (bs - c).normalized()
+				var edge := c + dir * 520.0
+				edge.x = clampf(edge.x, 70.0, 1850.0)
+				edge.y = clampf(edge.y, 70.0, 1010.0)
+				draw_circle(edge, 17.0, Palette.with_alpha(Palette.HP, 0.5))
+				draw_colored_polygon(PackedVector2Array([
+					edge + dir * 24.0, edge + dir.rotated(2.5) * 13.0, edge + dir.rotated(-2.5) * 13.0,
+				]), Palette.EMBER_BRIGHT)
 
 		# Damage floaters.
 		if host._font != null:
@@ -348,3 +420,41 @@ class _Arena:
 			var a := center_ang - half + 2.0 * half * float(i) / float(steps)
 			pts.append(c + Vector2.RIGHT.rotated(a) * radius)
 		draw_colored_polygon(pts, col)
+
+
+# ===========================================================================
+## Bottom-left minimap (Dota/Crownfall style): the whole world at a glance —
+## delver, swarm, the marked world boss, and the camera viewport box.
+class _Minimap:
+	extends Control
+
+	var host = null
+
+	func _draw() -> void:
+		if host == null or host._sim == null:
+			return
+		var sim: SurvivalSim = host._sim
+		var wr: Rect2 = sim.world_rect()
+		draw_rect(Rect2(Vector2.ZERO, size), Color(0.04, 0.03, 0.02, 0.85))
+		draw_rect(Rect2(Vector2.ZERO, size), Palette.IRON_EDGE, false, 1.0)
+
+		for e in sim.enemies:
+			if String(e.get("kind", "")) == "boss":
+				continue
+			draw_circle(_w2m(e["pos"], wr), 1.5, Palette.with_alpha(Palette.HP, 0.75))
+		# Camera viewport box.
+		var vsize := Vector2(1920.0, 1080.0) / wr.size * size
+		draw_rect(Rect2(_w2m(sim.player, wr) - vsize * 0.5, vsize), Palette.with_alpha(Palette.TX, 0.45), false, 1.0)
+		# Delver.
+		draw_circle(_w2m(sim.player, wr), 3.0, Palette.GOLD_BRIGHT)
+		# World boss — pulsing marker on top.
+		for e in sim.enemies:
+			if String(e.get("kind", "")) == "boss":
+				var bp := _w2m(e["pos"], wr)
+				draw_circle(bp, 5.0, Palette.HP)
+				draw_arc(bp, 8.0, 0.0, TAU, 16, Palette.EMBER_BRIGHT, 1.5)
+		if host._font != null:
+			host._font.draw_string(get_canvas_item(), Vector2(7.0, 15.0), "MAP", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Palette.GOLD_DIM)
+
+	func _w2m(wp: Vector2, wr: Rect2) -> Vector2:
+		return (wp - wr.position) / wr.size * size
