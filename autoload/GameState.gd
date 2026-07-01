@@ -47,6 +47,17 @@ func choose_class(id: String, chosen_name: String) -> void:
 	gold = maxi(gold, 100000)
 	iron_ingots = maxi(iron_ingots, 200)
 	ember_dust = maxi(ember_dust, 200)
+	premium_currency = maxi(premium_currency, 24000)  # ~15 ×10 summons, so the altar is testable
+	# MOCK: complete today's dailies so the Notice Board's Claim flow is testable
+	# from the start. Stamp the day too, or the first combat tick's
+	# check_daily_reset() sees daily_day == 0 and wipes these back to zero.
+	@warning_ignore("integer_division")
+	daily_day = now_utc() / 86400
+	daily_stages = maxi(daily_stages, 3)      # quest 0: clear 3 stages
+	daily_summons = maxi(daily_summons, 1)    # quest 1: summon
+	daily_meals = maxi(daily_meals, 1)        # quest 2: cook a meal
+	daily_damage = maxf(daily_damage, 5_000_000.0)  # quest 3: deal 5M damage
+	daily_forges = maxi(daily_forges, 5)      # quest 4: salvage 5 items
 	EventBus.loadout_changed.emit()  # class bonuses reprice the party
 	EventBus.currencies_changed.emit()
 

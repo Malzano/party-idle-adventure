@@ -17,7 +17,10 @@ extends Node
 # Set mock=true to run fully offline (schema-faithful, no network) — every flow
 # still works locally. The save is local-first; network sync is additive, so a
 # down/slow backend never blocks boot or play.
-var mock: bool = false
+## Editor runs use the offline mock (seeded economy, no live-account balances in
+## the way) so every flow — including ×10 summons — is testable locally; exported
+## builds ship live (OS.has_feature("editor") is false in export templates).
+var mock: bool = OS.has_feature("editor")
 ## Cloud Run service URL (no trailing slash). party-idle-dev / asia-southeast1.
 var base_url: String = "https://party-idle-api-909650956354.asia-southeast1.run.app"
 ## Identity Platform browser API key (party-idle-dev). Anonymous sign-in enabled.

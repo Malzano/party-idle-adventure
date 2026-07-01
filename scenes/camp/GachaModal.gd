@@ -8,6 +8,7 @@ extends "res://scenes/camp/ModalShell.gd"
 var _rng := RandomNumberGenerator.new()
 var _rolling := false
 var _has_results := false
+var _last_count := 1  # the ×N of the most recent pull — drives "Summon again ×N"
 
 var _idle_box: VBoxContainer
 var _stage_center: CenterContainer
@@ -18,6 +19,8 @@ var _x10_btn: Button
 var _pity_bar: StatBar
 var _pity_num: Label
 var _soft_lbl: Label
+var _notice: Label  # transient status flash (e.g. not enough soulstones)
+var _notice_tw: Tween
 
 
 func _init() -> void:
@@ -221,7 +224,8 @@ func _make_card(hero: Dictionary, card_size: Vector2, delay: float) -> Control:
 	fcol.add_theme_constant_override("separation", 6)
 	fcol.alignment = BoxContainer.ALIGNMENT_CENTER
 	fpad.add_child(fcol)
-	var sprite := PixelSlot.new("96²\n%s" % String(hero["n"]), true)
+	# The pull is GEAR — show its slot glyph, rarity-tinted, like the rest of the UI.
+	var sprite := GearIcon.new(GearIcon.kind_for_slot(String(hero.get("slot", ""))), rc)
 	var sd := card_size.x * 0.8
 	sprite.custom_minimum_size = Vector2(sd, sd)
 	sprite.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
@@ -260,17 +264,6 @@ func _show_results(pulls: Array) -> void:
 		var delay := 0.36 if single else 0.36 + float(i) * 0.15
 		_grid.add_child(_make_card(pulls[i], card_size, delay))
 	_stage_center.add_child(_grid)
-
-
-func _clear_results() -> void:
-	if _rolling:
-		return
-	if _grid != null:
-		_grid.queue_free()
-		_grid = null
-	_has_results = false
-	_idle_box.visible = true
-	_update_buttons()
 
 
 # =========================================================================
@@ -329,10 +322,11 @@ func _build_foot() -> Control:
 	actions.custom_minimum_size = Vector2(280, 0)
 	actions.add_theme_constant_override("separation", 10)
 	actions.alignment = BoxContainer.ALIGNMENT_CENTER
-	_again_btn = Style.make_button("Summon again", "ghost")
+	# "Summon again" repeats whatever count you last pulled (×1 or ×10).
+	_again_btn = Style.make_button("Summon again ×1", "ghost")
 	_again_btn.visible = false
 	_again_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	_again_btn.pressed.connect(_clear_results)
+	_again_btn.pressed.connect(func() -> void: _do_pull(_last_count))
 	actions.add_child(_again_btn)
 	_x1_btn = Style.make_button("×1 Summon   Q", "stone", 14)
 	_x1_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
@@ -351,6 +345,10 @@ func _build_foot() -> Control:
 		"rarity": "legendary",
 		"flavor": "Guarantees at least one 4★ or higher."})
 	actions.add_child(_x10_btn)
+	_notice = Style.body_label("", 12, Palette.EMBER_BRIGHT)
+	_notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_notice.modulate.a = 0.0
+	actions.add_child(_notice)
 	foot.add_child(actions)
 	return foot
 
@@ -383,10 +381,19 @@ func _do_pull(count: int) -> void:
 	# roster — are applied by the client seam; this modal only renders.
 	var res: Dictionary = await BackendClient.gacha_pull(count)
 	if not bool(res["ok"]):
-		return  # insufficient funds (or network error) — buttons stay enabled
+		# Don't fail silently — tell the delver why nothing happened. Guard the
+		# shape: a live/out-of-contract body may not nest {error:{code}}.
+		var edata: Dictionary = res.get("data", {})
+		var ev: Variant = edata.get("error", {})
+		var err := ""
+		if ev is Dictionary:
+			err = String((ev as Dictionary).get("code", ""))
+		_flash_notice("Not enough soulstones" if err == "insufficient_funds" else "Summon unavailable")
+		return
 	var pulls: Array = res["data"].get("results", [])
 	if pulls.is_empty():
 		return
+	_last_count = count  # remember for "Summon again ×N"
 	_show_results(pulls)
 	_rolling = true
 	_update_buttons()
@@ -403,6 +410,20 @@ func _update_buttons() -> void:
 	_x10_btn.disabled = _rolling
 	_again_btn.visible = _has_results
 	_again_btn.disabled = _rolling
+	_again_btn.text = "Summon again ×%d" % _last_count
+
+
+## Briefly surface a status line under the summon buttons, then fade it out.
+func _flash_notice(text: String) -> void:
+	if _notice == null:
+		return
+	_notice.text = text
+	_notice.modulate.a = 1.0
+	if _notice_tw != null and _notice_tw.is_valid():
+		_notice_tw.kill()  # a fresh flash cancels the previous fade (no flicker)
+	_notice_tw = create_tween()
+	_notice_tw.tween_interval(1.4)
+	_notice_tw.tween_property(_notice, "modulate:a", 0.0, 0.6)
 
 
 func _refresh_pity(p: int) -> void:

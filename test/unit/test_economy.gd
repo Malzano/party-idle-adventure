@@ -165,3 +165,27 @@ func test_quest_progress_mapping() -> void:
 	assert_eq(GameState.quest_progress(2), 3.0, "quest 2 tracks meals")
 	assert_almost_eq(GameState.quest_progress(3), 3.1, 0.0001, "quest 3 tracks damage in millions")
 	assert_eq(GameState.quest_progress(4), 5.0, "quest 4 tracks forges")
+
+
+func test_complete_quest_claims_grants_and_refuses_repeat() -> void:
+	# A finished quest claims once: it flips to claimed, pays its parsed reward
+	# (quest 0 = "240 Gold · 40 XP"), and a second claim is refused.
+	BackendClient.mock = true
+	GameState.reset_to_defaults()
+	GameState.daily_stages = 3  # quest 0 goal is 3 → complete
+	var gold_before := GameState.gold
+	var res: Dictionary = await BackendClient.quest_claim(0)
+	assert_true(bool(res["ok"]), "a completed quest claims")
+	assert_true(GameState.quests_claimed.has(0), "quest 0 is marked claimed")
+	assert_eq(GameState.gold, gold_before + 240, "the 240 gold reward is granted")
+	var again: Dictionary = await BackendClient.quest_claim(0)
+	assert_false(bool(again["ok"]), "a second claim on the same quest is refused")
+
+
+func test_incomplete_quest_cannot_be_claimed() -> void:
+	BackendClient.mock = true
+	GameState.reset_to_defaults()
+	GameState.daily_stages = 1  # quest 0 goal 3 → not complete
+	var res: Dictionary = await BackendClient.quest_claim(0)
+	assert_false(bool(res["ok"]), "an unfinished quest cannot be claimed")
+	assert_false(GameState.quests_claimed.has(0), "nothing is marked claimed")
