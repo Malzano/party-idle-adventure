@@ -120,7 +120,9 @@ func _refresh() -> void:
 	title.add_child(Style.display_label("Floor %d — %s" % [floor, kind_label], 18, kind_color, true))
 	ccol.add_child(title)
 	ccol.add_child(_kv("Waves", "%d  (last %s)" % [Craft.tower_waves(floor), "= boss" if kind != "wave" else "wave"]))
-	ccol.add_child(_kv("Enemy HP / wave", Style.group_int(int(Craft.tower_hp(floor, _diff) * Craft.tower_boss_mult(floor)))))
+	ccol.add_child(_kv("Enemy HP / wave", Style.group_int(int(Craft.tower_hp(floor, _diff)))))
+	if kind != "wave":
+		ccol.add_child(_kv("Boss HP (final wave)", Style.group_int(int(Craft.tower_hp(floor, _diff) * Craft.tower_boss_mult(floor)))))
 	ccol.add_child(_kv("Time limit", "%ds" % int(Craft.tower_time_limit(floor))))
 	var band := Craft.tower_gate_band(cp, floor, _diff)
 	ccol.add_child(_kv("Your Power", "%s   vs gate %s" % [Style.group_int(int(cp)), Style.group_int(int(Craft.tower_cp_gate(floor, _diff)))]))

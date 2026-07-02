@@ -157,6 +157,26 @@ func test_socketed_gem_contributes_to_player_stats() -> void:
 	assert_eq(GameState.gems.size(), 1, "the gem returns to the loose bag")
 
 
+func test_socketing_reprices_stats_without_a_manual_invalidate() -> void:
+	# Regression: insert/remove/drill must bust the PlayerStats cache themselves,
+	# so a socketed gem reaches live stats (party_dps / total_power / tower run)
+	# without the caller invalidating first.
+	var body := _gear("rare", "Body")
+	body["sockets"] = [null]
+	GameState.equipped = [body]
+	PlayerStats.invalidate()
+	var power_before := float(PlayerStats.compute()["total_power"])  # caches the block
+	var gem := Craft.gem_by_id("warden_jade")  # +120 Max Life
+	GameState.gems = [gem]
+	assert_true(GameState.insert_gem(body, 0, gem))
+	# No manual invalidate — insert_gem must have busted the cache itself.
+	var power_after := float(PlayerStats.compute()["total_power"])
+	assert_gt(power_after, power_before, "socketing repriced total_power without a manual invalidate")
+	assert_true(GameState.remove_gem(body, 0))
+	var power_removed := float(PlayerStats.compute()["total_power"])
+	assert_lt(power_removed, power_after, "removing the gem dropped its effect from live stats")
+
+
 # --- Endless Tower --------------------------------------------------------
 
 func test_tower_clears_easy_floor_and_advances() -> void:

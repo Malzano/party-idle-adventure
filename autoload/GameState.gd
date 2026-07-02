@@ -704,9 +704,10 @@ func drill_socket(item: Dictionary) -> Dictionary:
 	mat_spend(costs)
 	sockets.append(null)
 	item["sockets"] = sockets
+	PlayerStats.invalidate()  # a drilled socket can hold a stat gem next
 	EventBus.equipment_changed.emit()
 	EventBus.materials_changed.emit()
-	EventBus.sim_stats_changed.emit()
+	EventBus.loadout_changed.emit()  # reprices party_dps via CombatSim
 	return {"ok": true, "nth": nth}
 
 
@@ -720,8 +721,9 @@ func insert_gem(item: Dictionary, socket_index: int, gem: Dictionary) -> bool:
 	_gems_remove([gem])
 	sockets[socket_index] = gem
 	item["sockets"] = sockets
+	PlayerStats.invalidate()  # the gem's effect must reach the live StatBlock
 	EventBus.equipment_changed.emit()
-	EventBus.sim_stats_changed.emit()
+	EventBus.loadout_changed.emit()  # reprices party_dps via CombatSim
 	return true
 
 
@@ -733,8 +735,9 @@ func remove_gem(item: Dictionary, socket_index: int) -> bool:
 	gems.append(sockets[socket_index])
 	sockets[socket_index] = null
 	item["sockets"] = sockets
+	PlayerStats.invalidate()  # removing the gem must drop its effect from stats
 	EventBus.equipment_changed.emit()
-	EventBus.sim_stats_changed.emit()
+	EventBus.loadout_changed.emit()  # reprices party_dps via CombatSim
 	return true
 
 

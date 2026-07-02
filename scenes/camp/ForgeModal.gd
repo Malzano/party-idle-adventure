@@ -204,6 +204,24 @@ func _fill_mat_readout(row: HBoxContainer) -> void:
 
 
 func _on_inv_changed() -> void:
+	# The anvil piece may have been salvaged/fused/crafted-over in another tab —
+	# drop it if it no longer exists in the paperdoll or bag.
+	if not _selected.is_empty():
+		var alive := false
+		for e in GameState.equipped:
+			if e != null and is_same(e, _selected):
+				alive = true
+				break
+		if not alive:
+			for b in GameState.bag_equipment:
+				if is_same(b, _selected):
+					alive = true
+					break
+		if not alive:
+			_selected = {}
+			_show_delta = false
+			_prev_stats = []
+			_refresh_anvil()
 	if _mat_readout != null:
 		_fill_mat_readout(_mat_readout)
 	for r in _rebuilders:
