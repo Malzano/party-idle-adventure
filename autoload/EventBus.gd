@@ -27,6 +27,10 @@ signal item_summoned(item: Dictionary)
 ## changes, so every resource strip / inventory footer refreshes without polling.
 signal currencies_changed
 
+## Emitted when crafting materials / loose gems change (salvage, fusion, craft,
+## sockets) so the Workshop's material readout and item panels refresh.
+signal materials_changed
+
 ## Save lifecycle signals.
 signal game_saved
 signal game_loaded

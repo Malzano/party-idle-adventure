@@ -37,6 +37,10 @@ static func compute() -> Dictionary:
 		var gb := StatBlock.new()
 		gb.apply_stat_pairs(pairs)
 		block.merge(gb)
+		# Socketed gems contribute their effect like a pet/relic aura.
+		for g in item.get("sockets", []):
+			if g != null:
+				block.apply_effect(String((g as Dictionary).get("eff", "")))
 
 	# --- Class identity bonus (first-login choice) ---------------------------
 	var cls := GameContent.class_by_id(GameState.class_id)

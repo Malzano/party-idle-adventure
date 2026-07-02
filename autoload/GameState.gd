@@ -44,10 +44,17 @@ func choose_class(id: String, chosen_name: String) -> void:
 		for g in GameContent.GEAR_L + GameContent.GEAR_R:
 			bag_equipment.append(GameContent.gear_to_item(g))
 	# MOCK: starting gold + forge materials so crafting is testable from the start.
-	gold = maxi(gold, 100000)
-	iron_ingots = maxi(iron_ingots, 200)
-	ember_dust = maxi(ember_dust, 200)
+	gold = maxi(gold, 1000000)
+	iron_ingots = maxi(iron_ingots, 500)
+	ember_dust = maxi(ember_dust, 500)
 	premium_currency = maxi(premium_currency, 24000)  # ~15 ×10 summons, so the altar is testable
+	# MOCK: stock the new crafting materials + one of every gem so the Workshop
+	# (salvage / fusion / craft / socket) and Endless Tower are testable at once.
+	for _mid in ["tanned_leather", "gravesilk", "hollow_marrow", "rune_dust", "arcane_shard", "cinder_core"]:
+		materials[_mid] = maxi(int(materials.get(_mid, 0)), 200)
+	if gems.is_empty():
+		for _gd in Craft.GEMS:
+			gems.append((_gd as Dictionary).duplicate(true))
 	# MOCK: complete today's dailies so the Notice Board's Claim flow is testable
 	# from the start. Stamp the day too, or the first combat tick's
 	# check_daily_reset() sees daily_day == 0 and wipes these back to zero.
@@ -111,6 +118,14 @@ var equipped: Array = []
 ## (consumables/materials/quest) remain static design content.
 var bag_equipment: Array = []
 const BAG_CAP := 30
+
+# --- Crafting suite (salvage / fusion / craft / sockets) ---------------------------
+## Crafting materials, keyed by GameContent.MATERIALS id → owned count.
+var materials: Dictionary = {}
+## Loose (un-socketed) gems the player owns — each a GameContent.gem instance dict.
+var gems: Array = []
+## Highest Endless Tower floor cleared per difficulty.
+var tower_floor: Dictionary = {"easy": 0, "hard": 0, "hell": 0}
 
 
 ## Seed an EMPTY paperdoll + bag (first run or pre-equipment saves). A fresh
@@ -475,6 +490,9 @@ func reset_to_defaults() -> void:
 	party = {}
 	party_ids = GameContent.DEFAULT_PARTY_IDS.duplicate()
 	hero_skins = {}
+	materials = {}
+	gems = []
+	tower_floor = {"easy": 0, "hard": 0, "hell": 0}
 	food_buff = ""
 	food_buff_effect = ""
 	food_buff_until = 0
@@ -488,6 +506,286 @@ func reset_to_defaults() -> void:
 	daily_forges = 0
 	last_played_utc = 0
 	pending_offline_seconds = 0
+
+
+# =========================================================================
+# Crafting suite — materials, salvage, fusion, craft, sockets, gems, tower.
+# Callers pass an RNG (as try_forge_upgrade does). All mutate here and emit.
+# =========================================================================
+
+## Unified material count: iron_ingots/ember_dust are int fields; the rest live
+## in the materials Dictionary.
+func mat_count(id: String) -> int:
+	match id:
+		"iron_ingots": return iron_ingots
+		"ember_dust": return ember_dust
+		_: return int(materials.get(id, 0))
+
+
+func mat_add(id: String, n: int) -> void:
+	match id:
+		"iron_ingots": iron_ingots = maxi(0, iron_ingots + n)
+		"ember_dust": ember_dust = maxi(0, ember_dust + n)
+		_: materials[id] = maxi(0, int(materials.get(id, 0)) + n)
+
+
+func mat_afford(costs: Dictionary) -> bool:
+	for id in costs:
+		if mat_count(String(id)) < int(costs[id]):
+			return false
+	return true
+
+
+func mat_spend(costs: Dictionary) -> void:
+	for id in costs:
+		mat_add(String(id), -int(costs[id]))
+
+
+func _bag_remove_items(items: Array) -> void:
+	var keep: Array = []
+	for it in bag_equipment:
+		var drop := false
+		for sel in items:
+			if is_same(it, sel):
+				drop = true
+				break
+		if not drop:
+			keep.append(it)
+	bag_equipment = keep
+
+
+func _gems_remove(picks: Array) -> void:
+	var keep: Array = []
+	for g in gems:
+		var drop := false
+		for sel in picks:
+			if is_same(g, sel):
+				drop = true
+				break
+		if not drop:
+			keep.append(g)
+	gems = keep
+
+
+func _roll_yield(table: Dictionary, rng: RandomNumberGenerator) -> Dictionary:
+	var out: Dictionary = {}
+	for id in table:
+		var rng_pair: Array = table[id]
+		out[id] = rng.randi_range(int(rng_pair[0]), int(rng_pair[1]))
+	return out
+
+
+func _grant_mats(rolled: Dictionary) -> void:
+	for id in rolled:
+		mat_add(String(id), int(rolled[id]))
+
+
+## Salvage a bag item → gold cost + rolled materials. Returns {ok, gold, mats}.
+func salvage_item(item: Dictionary, rng: RandomNumberGenerator) -> Dictionary:
+	var r := String(item.get("r", "common"))
+	if not Craft.SALVAGE.has(r):
+		r = "legendary"  # mythic teardown pays out at the legendary table
+	var entry: Dictionary = Craft.SALVAGE[r]
+	var cost := int(entry["gold"])
+	if gold < cost:
+		return {"ok": false, "reason": "gold"}
+	gold -= cost
+	var rolled := _roll_yield(entry["mats"], rng)
+	if r == "legendary" and rng.randf() < 0.5:
+		rolled["cinder_core"] = int(rolled.get("cinder_core", 0)) + 1
+	_grant_mats(rolled)
+	_bag_remove_items([item])
+	daily_forges += 1  # counts toward the "salvage at the forge" daily
+	EventBus.equipment_changed.emit()
+	EventBus.materials_changed.emit()
+	EventBus.currencies_changed.emit()
+	EventBus.quests_changed.emit()
+	return {"ok": true, "gold": cost, "mats": rolled}
+
+
+## Salvage a loose gem → gold + refining reagents. Returns {ok, gold, mats}.
+func salvage_gem(gem: Dictionary, rng: RandomNumberGenerator) -> Dictionary:
+	var r := String(gem.get("r", "common"))
+	if not Craft.SALVAGE_GEM.has(r):
+		r = "legendary"
+	var entry: Dictionary = Craft.SALVAGE_GEM[r]
+	var cost := int(entry["gold"])
+	if gold < cost:
+		return {"ok": false, "reason": "gold"}
+	gold -= cost
+	var rolled := _roll_yield(entry["mats"], rng)
+	_grant_mats(rolled)
+	_gems_remove([gem])
+	EventBus.materials_changed.emit()
+	EventBus.currencies_changed.emit()
+	return {"ok": true, "gold": cost, "mats": rolled}
+
+
+## Fuse 5 bag gear → 1 new gear (rarity shifts vs the highest input). Returns
+## {ok, item, rarity, from, up}.
+func fuse_gear(items: Array, rng: RandomNumberGenerator) -> Dictionary:
+	if items.size() != Craft.FUSE_COUNT:
+		return {"ok": false, "reason": "count"}
+	var hi := Craft.highest_rarity(items)
+	var cost := Craft.fuse_gear_gold(hi)
+	if gold < cost:
+		return {"ok": false, "reason": "gold"}
+	gold -= cost
+	_bag_remove_items(items)
+	var result_r := Craft.fuse_result_rarity(hi, Craft.FUSE_GEAR[hi], rng)
+	var ilvl := Craft.craft_ilvl(result_r)
+	var item := GameContent.generate_item(ilvl, result_r, rng)
+	bag_equipment.append(item)
+	EventBus.equipment_changed.emit()
+	EventBus.materials_changed.emit()
+	EventBus.currencies_changed.emit()
+	return {"ok": true, "item": item, "rarity": result_r, "from": hi,
+		"up": Craft.rarity_index(result_r) > Craft.rarity_index(hi)}
+
+
+## Fuse 5 loose gems → 1 new gem (majority category kept). Returns {ok, gem, up}.
+func fuse_gems(picks: Array, rng: RandomNumberGenerator) -> Dictionary:
+	if picks.size() != Craft.FUSE_COUNT:
+		return {"ok": false, "reason": "count"}
+	var hi := Craft.highest_rarity(picks)
+	var cost := Craft.fuse_gem_gold(hi)
+	if gold < cost:
+		return {"ok": false, "reason": "gold"}
+	var weapon := 0
+	for g in picks:
+		if String((g as Dictionary).get("cat", "")) == "weapon":
+			weapon += 1
+	var cat := "weapon" if weapon * 2 > picks.size() else ("armour" if weapon * 2 < picks.size() else ("weapon" if rng.randf() < 0.5 else "armour"))
+	gold -= cost
+	_gems_remove(picks)
+	var result_r := Craft.fuse_result_rarity(hi, Craft.FUSE_GEM[hi], rng)
+	var gem := Craft.random_gem(result_r, cat, rng)
+	if not gem.is_empty():
+		gems.append(gem)
+	EventBus.materials_changed.emit()
+	EventBus.currencies_changed.emit()
+	return {"ok": true, "gem": gem, "rarity": result_r, "from": hi,
+		"up": Craft.rarity_index(result_r) > Craft.rarity_index(hi)}
+
+
+## Blacksmith: craft a fresh item of a chosen slot + rarity. Returns {ok, item}.
+func craft_item(slot: String, rarity: String, rng: RandomNumberGenerator) -> Dictionary:
+	if not Craft.CRAFT_MATS.has(rarity):
+		return {"ok": false, "reason": "rarity"}
+	var costs: Dictionary = Craft.CRAFT_MATS[rarity]
+	var g := Craft.craft_gold(rarity)
+	if gold < g or not mat_afford(costs):
+		return {"ok": false, "reason": "cost"}
+	gold -= g
+	mat_spend(costs)
+	var item := GameContent.generate_item(Craft.craft_ilvl(rarity), rarity, rng, slot)
+	bag_equipment.append(item)
+	daily_forges += 1
+	EventBus.equipment_changed.emit()
+	EventBus.materials_changed.emit()
+	EventBus.currencies_changed.emit()
+	EventBus.quests_changed.emit()
+	return {"ok": true, "item": item}
+
+
+## Drill the next socket into an item (deterministic; escalating cost). Returns
+## {ok, nth} or {ok:false, reason}.
+func drill_socket(item: Dictionary) -> Dictionary:
+	var slot := String(item.get("slot", ""))
+	var sockets: Array = item.get("sockets", [])
+	var nth := sockets.size() + 1
+	if nth > Craft.socket_max(slot):
+		return {"ok": false, "reason": "max"}
+	var costs: Dictionary = Craft.SOCKET_MATS.get(nth, {})
+	var g := Craft.socket_gold(nth)
+	if gold < g or not mat_afford(costs):
+		return {"ok": false, "reason": "cost"}
+	gold -= g
+	mat_spend(costs)
+	sockets.append(null)
+	item["sockets"] = sockets
+	EventBus.equipment_changed.emit()
+	EventBus.materials_changed.emit()
+	EventBus.sim_stats_changed.emit()
+	return {"ok": true, "nth": nth}
+
+
+## Insert a loose gem into an item's empty socket (respecting the type limit).
+func insert_gem(item: Dictionary, socket_index: int, gem: Dictionary) -> bool:
+	var sockets: Array = item.get("sockets", [])
+	if socket_index < 0 or socket_index >= sockets.size() or sockets[socket_index] != null:
+		return false
+	if not Craft.gem_fits_slot(gem, String(item.get("slot", ""))):
+		return false
+	_gems_remove([gem])
+	sockets[socket_index] = gem
+	item["sockets"] = sockets
+	EventBus.equipment_changed.emit()
+	EventBus.sim_stats_changed.emit()
+	return true
+
+
+## Pop a socketed gem back into the loose-gem bag.
+func remove_gem(item: Dictionary, socket_index: int) -> bool:
+	var sockets: Array = item.get("sockets", [])
+	if socket_index < 0 or socket_index >= sockets.size() or sockets[socket_index] == null:
+		return false
+	gems.append(sockets[socket_index])
+	sockets[socket_index] = null
+	item["sockets"] = sockets
+	EventBus.equipment_changed.emit()
+	EventBus.sim_stats_changed.emit()
+	return true
+
+
+## Attempt the next Endless Tower floor at [diff] with the given party DPS.
+## Returns {cleared, floor, waves_cleared, waves_total, rewards}.
+func tower_climb(diff: String, dps: float, rng: RandomNumberGenerator) -> Dictionary:
+	var floor := int(tower_floor.get(diff, 0)) + 1
+	if floor > Craft.TOWER_FLOORS:
+		return {"cleared": false, "floor": Craft.TOWER_FLOORS, "reason": "maxed"}
+	var run := Craft.run_tower_floor(floor, diff, dps)
+	var rewards := {"gold": 0, "xp": 0, "mats": {}, "items": [], "gems": []}
+	if not run["cleared"]:
+		# Consolation: partial gold for the waves that did fall.
+		var part := int(round(float(Craft.tower_gold(floor, diff)) * float(run["waves_cleared"]) / maxf(1.0, float(run["waves_total"])) * 0.4))
+		if part > 0:
+			add_gold(part)
+			rewards["gold"] = part
+		run["floor"] = floor
+		run["rewards"] = rewards
+		return run
+	# Cleared → first-clear rewards + advance.
+	var g := Craft.tower_gold(floor, diff)
+	var xp := Craft.tower_xp(floor, diff)
+	add_gold(g)
+	add_xp(xp)
+	rewards["gold"] = g
+	rewards["xp"] = xp
+	var mats := {"iron_ingots": Craft.tower_iron(floor, diff), "ember_dust": Craft.tower_dust(floor, diff)}
+	_grant_mats(mats)
+	rewards["mats"] = mats
+	# Boss floors drop gear (+ a gem chance); grand bosses drop more.
+	var drops := 0
+	if Craft.tower_is_grand(floor):
+		drops = 2
+	elif Craft.tower_is_boss(floor):
+		drops = 1
+	for _i in drops:
+		var it := GameContent.generate_item(Craft.craft_ilvl(Craft.tower_drop_rarity(floor, diff)), Craft.tower_drop_rarity(floor, diff), rng)
+		bag_equipment.append(it)
+		rewards["items"].append(it)
+	if Craft.tower_is_grand(floor) or (Craft.tower_is_boss(floor) and rng.randf() < 0.25):
+		var gm := Craft.random_gem(Craft.tower_gem_tier(floor), "", rng)
+		if not gm.is_empty():
+			gems.append(gm)
+			rewards["gems"].append(gm)
+	tower_floor[diff] = floor
+	EventBus.equipment_changed.emit()
+	EventBus.materials_changed.emit()
+	EventBus.currencies_changed.emit()
+	return {"cleared": true, "floor": floor, "waves_cleared": run["waves_cleared"],
+		"waves_total": run["waves_total"], "rewards": rewards}
 
 
 ## Serialize the profile for persistence (plain Dictionary → JSON).
@@ -519,6 +817,9 @@ func to_dict() -> Dictionary:
 		"forge_level": forge_level,
 		"equipped": equipped,
 		"bag_equipment": bag_equipment,
+		"materials": materials,
+		"gems": gems,
+		"tower_floor": tower_floor,
 		"daily_chests": daily_chests,
 		"hero_skins": hero_skins,
 		"food_buff": food_buff,
@@ -578,6 +879,12 @@ func from_dict(data: Dictionary) -> void:
 		bag_equipment = data.get("bag_equipment", [])
 	else:
 		seed_default_equipment()
+	var mats_v: Variant = data.get("materials", {})
+	materials = (mats_v as Dictionary).duplicate() if typeof(mats_v) == TYPE_DICTIONARY else {}
+	var gems_v: Variant = data.get("gems", [])
+	gems = (gems_v as Array).duplicate() if typeof(gems_v) == TYPE_ARRAY else []
+	var tf_v: Variant = data.get("tower_floor", {})
+	tower_floor = (tf_v as Dictionary).duplicate() if typeof(tf_v) == TYPE_DICTIONARY else {"easy": 0, "hard": 0, "hell": 0}
 	daily_chests = int(data.get("daily_chests", 0))
 	var skins_v: Variant = data.get("hero_skins", {})
 	hero_skins = (skins_v as Dictionary).duplicate() if typeof(skins_v) == TYPE_DICTIONARY else {}

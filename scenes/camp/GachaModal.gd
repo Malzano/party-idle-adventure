@@ -14,6 +14,7 @@ var _idle_box: VBoxContainer
 var _stage_center: CenterContainer
 var _grid: GridContainer = null
 var _again_btn: Button
+var _back_btn: Button
 var _x1_btn: Button
 var _x10_btn: Button
 var _pity_bar: StatBar
@@ -345,6 +346,12 @@ func _build_foot() -> Control:
 		"rarity": "legendary",
 		"flavor": "Guarantees at least one 4★ or higher."})
 	actions.add_child(_x10_btn)
+	# Shown only while results are on screen — return to the pre-pull altar.
+	_back_btn = Style.make_button("← Back to Altar", "stone", 14)
+	_back_btn.visible = false
+	_back_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	_back_btn.pressed.connect(_back_to_altar)
+	actions.add_child(_back_btn)
 	_notice = Style.body_label("", 12, Palette.EMBER_BRIGHT)
 	_notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_notice.modulate.a = 0.0
@@ -406,11 +413,28 @@ func _do_pull(count: int) -> void:
 
 
 func _update_buttons() -> void:
+	# Idle → the two summon buttons. After a pull → "Summon again ×N" + Back.
+	_x1_btn.visible = not _has_results
+	_x10_btn.visible = not _has_results
+	_again_btn.visible = _has_results
+	_back_btn.visible = _has_results
 	_x1_btn.disabled = _rolling
 	_x10_btn.disabled = _rolling
-	_again_btn.visible = _has_results
 	_again_btn.disabled = _rolling
+	_back_btn.disabled = _rolling
 	_again_btn.text = "Summon again ×%d" % _last_count
+
+
+## Back to the idle altar (the state before the pull): drop the cards, restore x1/x10.
+func _back_to_altar() -> void:
+	if _rolling:
+		return
+	if _grid != null:
+		_grid.queue_free()
+		_grid = null
+	_has_results = false
+	_idle_box.visible = true
+	_update_buttons()
 
 
 ## Briefly surface a status line under the summon buttons, then fade it out.

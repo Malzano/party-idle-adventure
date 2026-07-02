@@ -38,7 +38,7 @@ const MELEE_RANGE := 0.08               # x past CLASH a melee target must be wi
 # the coherent sim readout; _pos_ground just projects the (x,lane) world point
 # through the 3D camera, so the 2D overlays (HP bars, damage numbers, projectiles,
 # clickable chests) land on the 3D models. Set false for the pure-2D side-scroller. ---
-const USE_3D := true
+const USE_3D := false  # 2D side-scroller (2.5D needs .glb models in assets/models/)
 const BF_BAND := 1400.0                 # x-fraction → sim-px across the side band (world X)
 const BF_DEPTH := 150.0                 # lane → sim-px of depth (world Z; near lane toward camera)
 

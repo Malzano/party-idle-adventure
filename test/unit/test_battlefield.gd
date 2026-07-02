@@ -69,16 +69,17 @@ func test_lineup_swap_reclaims_hero_bobs() -> void:
 	pass_test("no freed-object cast after lineup swap")
 
 
-func test_2p5d_render_path_ticks_without_error() -> void:
-	# With USE_3D on, a live frame runs _render3d_fight + projected _pos_ground +
-	# look_at on the 3D models. Drive real frames (process enabled) and confirm the
-	# 2.5D world is built and the scene survives the tick.
+func test_render_path_ticks_without_error() -> void:
+	# Drive real frames (process enabled) through whichever render path the USE_3D
+	# flag selects: the 2.5D world (_render3d_fight + projected _pos_ground + look_at)
+	# when on, or the 2D side-scroller when off. Either way the scene must tick cleanly,
+	# and the 3D world must exist iff the flag is on.
 	var bf := _bf()
 	for _i in 10:
 		await get_tree().process_frame
-	assert_true(bf._world3d != null, "the 2.5D world is built when USE_3D is on")
+	assert_eq(bf._world3d != null, bf.USE_3D, "the 2.5D world is built iff USE_3D is on")
 	assert_gt(bf._enemies.size(), 0, "the field opens populated and keeps ticking")
-	pass_test("the 3D fight render path ticks cleanly")
+	pass_test("the fight render path ticks cleanly")
 
 
 func test_despawn_chest_is_idempotent() -> void:

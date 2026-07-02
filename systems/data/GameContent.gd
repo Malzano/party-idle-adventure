@@ -1289,8 +1289,8 @@ static func roll_chest_item_rarity(rng: RandomNumberGenerator) -> String:
 
 
 ## Generate one equipment item — mirrors the server's generateItem.
-static func generate_item(ilvl: int, rarity: String, rng: RandomNumberGenerator) -> Dictionary:
-	var slot: String = _ITEM_SLOTS[rng.randi_range(0, _ITEM_SLOTS.size() - 1)]
+static func generate_item(ilvl: int, rarity: String, rng: RandomNumberGenerator, forced_slot: String = "") -> Dictionary:
+	var slot: String = forced_slot if forced_slot != "" and forced_slot in _ITEM_SLOTS else _ITEM_SLOTS[rng.randi_range(0, _ITEM_SLOTS.size() - 1)]
 	var bases: Array = _ITEM_BASES[slot]
 	var item_name: String
 	if rarity == "mythic":

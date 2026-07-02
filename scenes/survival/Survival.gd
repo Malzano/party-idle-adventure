@@ -11,7 +11,7 @@ const _Draft := preload("res://scenes/survival/SurvivalDraft.gd")
 const _GameOver := preload("res://scenes/survival/SurvivalGameOver.gd")
 
 ## Render the world in 2.5D (tilted 3D Combat3DView) vs the flat 2D fallback.
-const USE_3D := true
+const USE_3D := false  # 2D arena (2.5D needs .glb models in assets/models/)
 
 var _sim: SurvivalSim
 var _world3d: Combat3DView   # set when USE_3D — the 2.5D world (HUD stays 2D on top)

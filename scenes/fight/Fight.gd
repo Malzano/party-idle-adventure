@@ -13,6 +13,7 @@ extends Control
 ## the whole battlefield + HUD area; the resource strip floats above (y 14).
 
 const _BattlefieldScript := preload("res://scenes/fight/Battlefield.gd")
+const _TowerModalScript := preload("res://scenes/camp/TowerModal.gd")
 
 const _ICON_PROFILE := "res://assets/icons/nav_hero.svg"
 const _ICON_GOLD := "res://assets/icons/coin_gold.svg"
@@ -424,11 +425,28 @@ func _build_party_finder() -> void:
 		"flavor": "Take your equipped gear into a vampire-survivors gauntlet. (Mock for now.)",
 	})
 	actions.add_child(survival)
+
+	var tower := Style.make_button("🗼 ENDLESS TOWER", "stone", 10)
+	tower.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tower.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	tower.pressed.connect(_open_tower)
+	Tip.attach(tower, {
+		"name": "The Spire",
+		"type": "Endless Tower · 100 floors",
+		"rarity": "legendary",
+		"flavor": "Climb easy, hard or hell — bosses every 5th floor. Your build vs a rising wall.",
+	})
+	actions.add_child(tower)
 	col.add_child(bpad)
 
 	var rivets := _Rivets.new()
 	rivets.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(rivets)
+
+
+## Open the Endless Tower climb menu as a centered modal over the Fight screen.
+func _open_tower() -> void:
+	add_child(_TowerModalScript.new())
 
 
 func _fill_pf_slots() -> void:
