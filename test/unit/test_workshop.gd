@@ -47,13 +47,19 @@ func test_salvage_tab_breaks_down_a_selected_piece() -> void:
 	var m := _modal()
 	await get_tree().process_frame
 	m._set_tab("salvage")
+	await get_tree().process_frame
 	var gear: Array = m._bag_gear()
-	assert_gt(gear.size(), 0, "the seeded bag has gear to salvage")
-	var target: Dictionary = gear[0]
-	m._sel_salvage(target)
+	assert_gt(gear.size(), 1, "the seeded bag has gear to salvage")
+	assert_gt(m._salvage_grid.get_child_count(), 0, "the salvage grid actually renders the bag gear (not an empty/collapsed panel)")
+	# Multi-select two pieces, then batch-salvage them.
+	m._toggle_salvage_pick(gear[0])
+	m._toggle_salvage_pick(gear[1])
+	assert_eq(m._salvage_picks.size(), 2, "two pieces selected")
 	var bag_before := GameState.bag_equipment.size()
 	m._do_salvage()
-	assert_eq(GameState.bag_equipment.size(), bag_before - 1, "salvaging via UI consumes the piece")
+	assert_eq(GameState.bag_equipment.size(), bag_before - 2, "batch salvage consumes every selected piece")
+	assert_eq(int(m._salvage_summary["count"]), 2, "the summary reports the batch count")
+	assert_gt((m._salvage_summary["mats"] as Dictionary).size(), 0, "the summary lists the gained materials")
 
 
 func test_tower_modal_builds_and_climbs_each_difficulty() -> void:

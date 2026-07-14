@@ -62,6 +62,20 @@ func test_salvage_gem_returns_reagents() -> void:
 	assert_eq(GameState.gems.size(), 0, "the gem is consumed")
 
 
+func test_batch_salvage_aggregates_materials_and_consumes_all() -> void:
+	var items: Array = []
+	for r in ["common", "rare", "epic"]:
+		items.append(_gear(r))
+	GameState.bag_equipment = items.duplicate()
+	var gold_before := GameState.gold
+	var res := GameState.salvage_items(items, _rng)
+	assert_true(bool(res["ok"]), "a batch salvage succeeds")
+	assert_eq(int(res["count"]), 3, "all three pieces salvaged")
+	assert_eq(GameState.bag_equipment.size(), 0, "every selected piece is consumed")
+	assert_lt(GameState.gold, gold_before, "the total smith's fee is charged")
+	assert_gt((res["mats"] as Dictionary).size(), 0, "materials are aggregated across the batch")
+
+
 # --- Fusion ---------------------------------------------------------------
 
 func test_fuse_gear_consumes_five_and_produces_one() -> void:

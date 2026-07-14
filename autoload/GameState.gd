@@ -603,6 +603,39 @@ func salvage_item(item: Dictionary, rng: RandomNumberGenerator) -> Dictionary:
 	return {"ok": true, "gold": cost, "mats": rolled}
 
 
+## Salvage several bag pieces at once → total gold cost + aggregated materials.
+## Skips pieces you can't afford. Returns {ok, gold, mats, count}.
+func salvage_items(items: Array, rng: RandomNumberGenerator) -> Dictionary:
+	var total_gold := 0
+	var total_mats: Dictionary = {}
+	var salvaged: Array = []
+	for item in items:
+		var r := String((item as Dictionary).get("r", "common"))
+		if not Craft.SALVAGE.has(r):
+			r = "legendary"
+		var cost := int(Craft.SALVAGE[r]["gold"])
+		if gold < cost:
+			continue
+		gold -= cost
+		total_gold += cost
+		var rolled := _roll_yield(Craft.SALVAGE[r]["mats"], rng)
+		if r == "legendary" and rng.randf() < 0.5:
+			rolled["cinder_core"] = int(rolled.get("cinder_core", 0)) + 1
+		for mid in rolled:
+			total_mats[mid] = int(total_mats.get(mid, 0)) + int(rolled[mid])
+		salvaged.append(item)
+	if salvaged.is_empty():
+		return {"ok": false, "reason": "gold"}
+	_grant_mats(total_mats)
+	_bag_remove_items(salvaged)
+	daily_forges += salvaged.size()
+	EventBus.equipment_changed.emit()
+	EventBus.materials_changed.emit()
+	EventBus.currencies_changed.emit()
+	EventBus.quests_changed.emit()
+	return {"ok": true, "gold": total_gold, "mats": total_mats, "count": salvaged.size()}
+
+
 ## Salvage a loose gem → gold + refining reagents. Returns {ok, gold, mats}.
 func salvage_gem(gem: Dictionary, rng: RandomNumberGenerator) -> Dictionary:
 	var r := String(gem.get("r", "common"))

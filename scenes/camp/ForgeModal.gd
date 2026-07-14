@@ -31,10 +31,10 @@ var _mat_readout: HBoxContainer
 var _rebuilders: Array = []  # per-page callables to refresh their item/gem grids
 
 # Salvage page
-var _salvage_sel: Dictionary = {}
+var _salvage_picks: Array = []          # multi-select for batch salvage
 var _salvage_grid: GridContainer
 var _salvage_detail: VBoxContainer
-var _salvage_preview: Control
+var _salvage_summary: Dictionary = {}   # last batch result {gold, mats, count}
 # Fusion page
 var _fusion_mode := "gear"          # "gear" | "gem"
 var _fusion_picks: Array = []       # up to 5 chosen items/gems
@@ -42,6 +42,7 @@ var _fusion_grid: GridContainer
 var _fusion_slot_row: HBoxContainer
 var _fusion_status: Label
 var _fusion_btn: Button
+var _fusion_result: VBoxContainer
 # Craft page
 var _craft_slot := "Main Hand"
 var _craft_rarity := "rare"
@@ -716,6 +717,9 @@ func _titled_panel(title: String, sub: String) -> Dictionary:
 func _grid_in(parent: Control, cols: int) -> GridContainer:
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	# A real minimum height so the item grid doesn't collapse to nothing on tabs
+	# that have no tall sibling (Salvage/Fusion/Socket) — items were invisible.
+	scroll.custom_minimum_size = Vector2(0, 360)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	parent.add_child(scroll)
 	var grid := GridContainer.new()
@@ -850,17 +854,44 @@ func _rebuild_salvage() -> void:
 	for c in _salvage_grid.get_children():
 		c.queue_free()
 	var gear := _bag_gear()
-	# Keep the selection valid.
-	if not _salvage_sel.is_empty() and not gear.any(func(g): return is_same(g, _salvage_sel)):
-		_salvage_sel = {}
+	if gear.is_empty():
+		_salvage_grid.add_child(Style.body_label("No spare gear in your bag.\nUnequip pieces, or pull / craft more.", 12, Palette.TX_FAINT))
+		_salvage_picks = []
+		_refresh_salvage_detail()
+		return
+	# Drop stale picks (pieces salvaged/moved elsewhere).
+	var kept: Array = []
+	for p in _salvage_picks:
+		for g in gear:
+			if is_same(g, p):
+				kept.append(p)
+				break
+	_salvage_picks = kept
 	for it in gear:
-		var picked := not _salvage_sel.is_empty() and is_same(it, _salvage_sel)
-		_salvage_grid.add_child(_gear_cell(it, _sel_salvage.bind(it), picked))
+		var picked := false
+		for p in _salvage_picks:
+			if is_same(p, it):
+				picked = true
+				break
+		_salvage_grid.add_child(_gear_cell(it, _toggle_salvage_pick.bind(it), picked))
 	_refresh_salvage_detail()
 
 
-func _sel_salvage(item: Dictionary) -> void:
-	_salvage_sel = item
+func _toggle_salvage_pick(item: Dictionary) -> void:
+	var idx := -1
+	for i in _salvage_picks.size():
+		if is_same(_salvage_picks[i], item):
+			idx = i
+			break
+	if idx >= 0:
+		_salvage_picks.remove_at(idx)
+	else:
+		_salvage_picks.append(item)
+	_rebuild_salvage()
+
+
+func _salvage_select_all() -> void:
+	_salvage_picks = _bag_gear().duplicate()
 	_rebuild_salvage()
 
 
@@ -868,39 +899,64 @@ func _refresh_salvage_detail() -> void:
 	for c in _salvage_detail.get_children():
 		c.queue_free()
 	_salvage_detail.add_child(Style.display_label("SALVAGE", 13, Palette.GOLD))
-	if _salvage_sel.is_empty():
-		_salvage_detail.add_child(Style.body_label("Select a piece on the left.", 12, Palette.TX_MUTE))
-		return
-	var r := String(_salvage_sel.get("r", "common"))
-	if not Craft.SALVAGE.has(r):
-		r = "legendary"
-	_salvage_preview = _big_slot(GearIcon.kind_for_slot(String(_salvage_sel.get("slot", ""))), r)
-	_salvage_detail.add_child(_salvage_preview)
-	_salvage_detail.add_child(Style.body_label(String(_salvage_sel.get("n", "")), 14, Palette.rarity_color(r)))
-	var entry: Dictionary = Craft.SALVAGE[r]
-	_salvage_detail.add_child(Style.body_label("Yields (roughly):", 12, Palette.TX_MUTE))
-	for mid in entry["mats"]:
-		var rng_pair: Array = entry["mats"][mid]
-		var line := Style.body_label("  • %s ×%d–%d" % [String(Craft.MATERIALS[mid]["n"]), int(rng_pair[0]), int(rng_pair[1])], 12, Palette.TX)
-		_salvage_detail.add_child(line)
-	var cost := int(entry["gold"])
-	var btn := Style.make_button("Salvage · %s gold" % Style.group_int(cost), "ember")
-	btn.disabled = GameState.gold < cost
-	btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	btn.pressed.connect(_do_salvage)
-	_salvage_detail.add_child(btn)
+	var n := _salvage_picks.size()
+	var total_gold := 0
+	for it in _salvage_picks:
+		var r := String((it as Dictionary).get("r", "common"))
+		if not Craft.SALVAGE.has(r):
+			r = "legendary"
+		total_gold += int(Craft.SALVAGE[r]["gold"])
+	if n == 0:
+		_salvage_detail.add_child(Style.body_label("Tap pieces on the left to select — multiple at once.", 12, Palette.TX_MUTE))
+	else:
+		_salvage_detail.add_child(Style.body_label("%d selected · %s gold total" % [n, Style.group_int(total_gold)], 13, Palette.TX))
+	var btnrow := HBoxContainer.new()
+	btnrow.add_theme_constant_override("separation", 8)
+	var allb := Style.make_button("Select all", "stone", 12)
+	allb.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	allb.pressed.connect(_salvage_select_all)
+	btnrow.add_child(allb)
+	var sb := Style.make_button("Salvage %d" % n if n > 0 else "Salvage", "ember", 12)
+	sb.disabled = n == 0 or GameState.gold < total_gold
+	sb.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	sb.pressed.connect(_do_salvage)
+	btnrow.add_child(sb)
+	_salvage_detail.add_child(btnrow)
+	# Last batch summary — what the previous salvage returned.
+	if not _salvage_summary.is_empty():
+		_salvage_detail.add_child(_hairline())
+		_salvage_detail.add_child(Style.body_label("Broke down %d piece(s) · −%s gold" % [int(_salvage_summary["count"]), Style.group_int(int(_salvage_summary["gold"]))], 12, Palette.TX_MUTE))
+		_salvage_detail.add_child(Style.body_label("Gained:", 12, Palette.GOLD))
+		var mats: Dictionary = _salvage_summary["mats"]
+		for mid in Craft.MATERIAL_ORDER:
+			if mats.has(mid):
+				var mrow := HBoxContainer.new()
+				mrow.add_theme_constant_override("separation", 6)
+				var mic := GearIcon.new(String(Craft.MATERIALS[mid]["kind"]), Palette.rarity_color(String(Craft.MATERIALS[mid]["tier"])))
+				mic.custom_minimum_size = Vector2(22, 22)
+				mrow.add_child(mic)
+				mrow.add_child(Style.body_label("%s ×%d" % [String(Craft.MATERIALS[mid]["n"]), int(mats[mid])], 12, Palette.R_UNCOMMON))
+				_salvage_detail.add_child(mrow)
+
+
+func _hairline() -> Control:
+	var h := ColorRect.new()
+	h.color = Palette.IRON_EDGE
+	h.custom_minimum_size = Vector2(0, 1)
+	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return h
 
 
 func _do_salvage() -> void:
-	if _salvage_sel.is_empty():
+	if _salvage_picks.is_empty():
 		return
-	var res := GameState.salvage_item(_salvage_sel, _rng)
+	var res := GameState.salvage_items(_salvage_picks.duplicate(), _rng)
 	if not bool(res["ok"]):
 		return
-	if _salvage_preview != null:
-		_glow_flash(_salvage_preview, Palette.CYAN_BRIGHT)
-	_salvage_sel = {}
-	# equipment_changed/materials_changed → _on_inv_changed rebuilds the grid.
+	_salvage_summary = {"gold": int(res["gold"]), "mats": res["mats"], "count": int(res["count"])}
+	_salvage_picks = []
+	_glow_flash(_salvage_grid, Palette.CYAN_BRIGHT)
+	_refresh_salvage_detail()  # _on_inv_changed also rebuilds the grid
 
 
 func _big_slot(kind: String, rar: String) -> Control:
@@ -990,6 +1046,9 @@ func _build_fusion_page() -> Control:
 	_fusion_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	_fusion_btn.pressed.connect(_do_fuse)
 	rc.add_child(_fusion_btn)
+	_fusion_result = VBoxContainer.new()
+	_fusion_result.add_theme_constant_override("separation", 8)
+	rc.add_child(_fusion_result)
 	row.add_child(right)
 	_rebuilders.append(_rebuild_fusion)
 	_rebuild_fusion()
@@ -1012,6 +1071,11 @@ func _rebuild_fusion() -> void:
 	for c in _fusion_grid.get_children():
 		c.queue_free()
 	var src := _fusion_source()
+	if src.is_empty():
+		_fusion_grid.add_child(Style.body_label("No %s to fuse yet." % ("gems" if _fusion_mode == "gem" else "spare gear"), 12, Palette.TX_FAINT))
+		_fusion_picks = []
+		_refresh_fusion_slots()
+		return
 	var kept: Array = []
 	for p in _fusion_picks:
 		for s in src:
@@ -1079,10 +1143,37 @@ func _do_fuse() -> void:
 	_fusion_picks = []
 	var up := bool(res.get("up", false))
 	var rr := String(res.get("rarity", ""))
-	_glow_flash(_fusion_slot_row, Palette.EMBER_BRIGHT if up else Palette.CYAN_BRIGHT)
-	# _on_inv_changed rebuilds the grid + slots; set the headline afterwards.
+	# _on_inv_changed rebuilds the grid + slots; set the headline + result card after.
 	_fusion_status.text = ("★ UP-TIER → %s!" % rr.capitalize()) if up else ("Result: %s" % rr.capitalize())
 	_fusion_status.add_theme_color_override("font_color", Palette.R_UNCOMMON if up else Palette.TX)
+	_render_fusion_result(res)
+
+
+## Show what the fusion produced — the rolled item/gem with its icon + name.
+func _render_fusion_result(res: Dictionary) -> void:
+	for c in _fusion_result.get_children():
+		c.queue_free()
+	var obj: Dictionary = res.get("gem", res.get("item", {}))
+	if obj.is_empty():
+		return
+	var up := bool(res.get("up", false))
+	var rar := String(obj.get("r", "common"))
+	_fusion_result.add_child(_hairline())
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	var kind := "gem" if _fusion_mode == "gem" else GearIcon.kind_for_slot(String(obj.get("slot", "")))
+	row.add_child(_mini_slot(kind, rar))
+	var info := VBoxContainer.new()
+	info.add_theme_constant_override("separation", 2)
+	info.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	info.add_child(Style.body_label(String(obj.get("n", "")), 14, Palette.rarity_color(rar)))
+	if _fusion_mode == "gem":
+		info.add_child(Style.body_label(String(obj.get("eff", "")), 12, Palette.CYAN_BRIGHT))
+	else:
+		info.add_child(Style.body_label("%s · iLvl %d" % [String(obj.get("slot", "")), int(obj.get("ilvl", 0))], 12, Palette.TX_MUTE))
+	row.add_child(info)
+	_fusion_result.add_child(row)
+	_glow_flash(_fusion_result, Palette.EMBER_BRIGHT if up else Palette.CYAN_BRIGHT)
 
 
 # =========================================================================
