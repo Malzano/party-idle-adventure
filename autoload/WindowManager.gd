@@ -17,7 +17,7 @@ const WIN_SURVIVAL := "survival"
 # Titlebars compose as "<title> — GameContent.GAME_TITLE" in _create().
 const _DEFS := {
 	WIN_CAMP: {
-		"title": "Hollowreach Camp",
+		"title": "BinkBonk Meadow",
 		"scene": "res://scenes/camp/Camp.tscn",
 		"size": Vector2i(1600, 900),
 		"strip": true,
@@ -47,7 +47,7 @@ const _DEFS := {
 		"strip": false,
 	},
 	WIN_SURVIVAL: {
-		"title": "Survival — The Hollow Tide",
+		"title": "Star Stampede",
 		"scene": "res://scenes/survival/Survival.tscn",
 		"size": Vector2i(1600, 900),
 		"strip": false,

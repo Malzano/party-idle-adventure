@@ -8,7 +8,7 @@ extends RefCounted
 ## Working title — the ONE place the product name lives (window titles, login
 ## logo, tooltips compose from it). Swap here when the final name lands. The
 ## in-world lore names (the Hollow, Hollowreach) are setting, not branding.
-const GAME_TITLE := "Party Idle Adventure"
+const GAME_TITLE := "BinkBonk Idle"
 
 # =========================================================================
 # FIGHT — party, enemies, props, trail, spawn markers (fight.jsx)
@@ -143,11 +143,11 @@ static func active_party() -> Array:
 # --- Floor-themed enemy rosters (the names the battlefield spawns; wraps per
 # floor like the boss-name tables in bosses.json). Floor 1 = weak early foes. --
 const ENEMY_ROSTER := [
-	{"elite": "Bonepicker Brute", "trash": ["Hollow Ghoul", "Crypt Rat"]},    # floor 1
+	{"elite": "Bonepicker Brute", "trash": ["Gloopy Slime", "Crypt Rat"]},    # floor 1
 	{"elite": "Cinder Acolyte", "trash": ["Ash Crawler", "Ember Wretch"]},    # floor 2
 	{"elite": "Gravebound Ogre", "trash": ["Tomb Shambler", "Rotwalker"]},    # floor 3
 	{"elite": "Hexwright Adept", "trash": ["Curse Wisp", "Hex Thrall"]},      # floor 4
-	{"elite": "Marrow Knight", "trash": ["Marrow Stalker", "Pale Husk"]},     # floor 5
+	{"elite": "Marrow Knight", "trash": ["Sneaky Snail", "Pale Husk"]},     # floor 5
 	{"elite": "Bog Drowner", "trash": ["Mire Lurker", "Drowned Thrall"]},     # floor 6
 ]
 
@@ -155,7 +155,7 @@ const ENEMY_ROSTER := [
 ## Enemy roster for a floor (1-indexed); wraps so deeper floors recycle themes.
 static func enemy_roster_for_floor(floor_i: int) -> Dictionary:
 	if ENEMY_ROSTER.is_empty():
-		return {"elite": "Bone Warden", "trash": ["Hollow Ghoul"]}
+		return {"elite": "Mushroom King", "trash": ["Gloopy Slime"]}
 	return ENEMY_ROSTER[(maxi(1, floor_i) - 1) % ENEMY_ROSTER.size()]
 
 
@@ -251,15 +251,15 @@ static func aura_check(ids: Array) -> Dictionary:
 
 ## Enemies converge from multiple edges; dist drives depth (size/fade).
 const ENEMIES := [
-	{"id": "boss", "name": "Bone Warden", "x": 71.0, "y": 15.0, "hp": 100.0, "elite": true, "dist": "mid"},
-	{"id": "e1", "name": "Marrow Stalker", "x": 63.0, "y": 22.0, "hp": 88.0, "dist": "mid", "lunge": true, "trail_rot": 28.0},
-	{"id": "e2", "name": "Hollow Ghoul", "x": 79.0, "y": 12.0, "hp": 60.0, "dist": "far"},
-	{"id": "e3", "name": "Hollow Ghoul", "x": 83.0, "y": 30.0, "hp": 54.0, "dist": "far"},
-	{"id": "e4", "name": "Hollow Ghoul", "x": 88.0, "y": 53.0, "hp": 70.0, "dist": "far", "lunge": true, "trail_rot": 0.0},
-	{"id": "e5", "name": "Marrow Stalker", "x": 47.0, "y": 8.0, "hp": 80.0, "dist": "far"},
-	{"id": "e6", "name": "Hollow Ghoul", "x": 58.0, "y": 91.0, "hp": 64.0, "dist": "mid", "lunge": true, "trail_rot": 95.0},
-	{"id": "e7", "name": "Hollow Ghoul", "x": 45.0, "y": 49.0, "hp": 42.0, "dist": "near"},
-	{"id": "e8", "name": "Marrow Stalker", "x": 40.0, "y": 57.0, "hp": 76.0, "dist": "near", "lunge": true, "trail_rot": 35.0},
+	{"id": "boss", "name": "Mushroom King", "x": 71.0, "y": 15.0, "hp": 100.0, "elite": true, "dist": "mid"},
+	{"id": "e1", "name": "Sneaky Snail", "x": 63.0, "y": 22.0, "hp": 88.0, "dist": "mid", "lunge": true, "trail_rot": 28.0},
+	{"id": "e2", "name": "Gloopy Slime", "x": 79.0, "y": 12.0, "hp": 60.0, "dist": "far"},
+	{"id": "e3", "name": "Gloopy Slime", "x": 83.0, "y": 30.0, "hp": 54.0, "dist": "far"},
+	{"id": "e4", "name": "Gloopy Slime", "x": 88.0, "y": 53.0, "hp": 70.0, "dist": "far", "lunge": true, "trail_rot": 0.0},
+	{"id": "e5", "name": "Sneaky Snail", "x": 47.0, "y": 8.0, "hp": 80.0, "dist": "far"},
+	{"id": "e6", "name": "Gloopy Slime", "x": 58.0, "y": 91.0, "hp": 64.0, "dist": "mid", "lunge": true, "trail_rot": 95.0},
+	{"id": "e7", "name": "Gloopy Slime", "x": 45.0, "y": 49.0, "hp": 42.0, "dist": "near"},
+	{"id": "e8", "name": "Sneaky Snail", "x": 40.0, "y": 57.0, "hp": 76.0, "dist": "near", "lunge": true, "trail_rot": 35.0},
 ]
 
 ## Depth tiers: us = unit scale, uo = unit opacity.
@@ -337,28 +337,28 @@ const STAGE_NAMES := [
 ## Building hotspots. x/y are scene percentages; w/h px.
 const BUILDINGS := [
 	{
-		"id": "altar", "name": "Summoning Altar", "sub": "Skill Learning House",
+		"id": "altar", "name": "Wishing Well", "sub": "Skill Learning House",
 		"x": 50.0, "y": 27.0, "w": 340.0, "h": 300.0, "hot": "Q", "featured": true,
 		"sprite": "340×300 · altar", "tip_type": "Gacha · Featured banner active",
 		"flavor": "Bind a wandering soul to your covenant. The altar hungers for soulstones.",
 		"badge": "NEW BANNER",
 	},
 	{
-		"id": "board", "name": "Notice Board", "sub": "Quests · Leaderboard · Daily",
+		"id": "board", "name": "Bulletin Board", "sub": "Quests · Leaderboard · Daily",
 		"x": 17.0, "y": 60.0, "w": 240.0, "h": 220.0, "hot": "E", "featured": false,
 		"sprite": "240×220 · board", "tip_type": "Town bulletin",
 		"flavor": "Bounties, rankings, and the rotating daily dungeon.",
 		"badge": "3 NEW",
 	},
 	{
-		"id": "forge", "name": "Crafting House", "sub": "Forge · Upgrade · Salvage",
+		"id": "forge", "name": "Tinker Shop", "sub": "Forge · Upgrade · Salvage",
 		"x": 81.0, "y": 46.0, "w": 280.0, "h": 240.0, "hot": "R", "featured": false,
 		"sprite": "280×240 · forge", "tip_type": "Smithing",
 		"flavor": "Reforge iron and bone into something that bites back.",
 		"badge": "",
 	},
 	{
-		"id": "food", "name": "Hearthfire Kitchen", "sub": "Cook party-buff meals",
+		"id": "food", "name": "Snack Shack", "sub": "Cook party-buff meals",
 		"x": 34.0, "y": 74.0, "w": 230.0, "h": 200.0, "hot": "F", "featured": false,
 		"sprite": "230×200 · kitchen", "tip_type": "Cooking · Buffs",
 		"flavor": "A warm meal before the dark. Buffs the whole party for the next delve.",
@@ -400,7 +400,7 @@ const QUESTS := [
 ## Notice-board mini leaderboard.
 const BOARD_RANKS := [
 	{"r": 1, "n": "Mournheart", "lv": 88, "p": "412.6M", "me": false},
-	{"r": 2, "n": "Vael (You)", "lv": 47, "p": "188.4M", "me": true},
+	{"r": 2, "n": "Pip (You)", "lv": 47, "p": "188.4M", "me": true},
 	{"r": 3, "n": "Drossel", "lv": 52, "p": "176.0M", "me": false},
 	{"r": 4, "n": "Ironwake", "lv": 61, "p": "162.9M", "me": false},
 	{"r": 5, "n": "Lysa", "lv": 44, "p": "140.2M", "me": false},
@@ -552,7 +552,7 @@ const BAG := {
 	],
 	"quest": [
 		{"n": "Warden's Rusted Key", "r": "epic", "t": "Quest · The Sunken Reliquary", "s": [["Opens", "Reliquary Gate 4-10"]]},
-		{"n": "Pale Census Ledger", "r": "rare", "t": "Quest · Hollowreach Camp", "s": [["Deliver to", "Notice Board"]]},
+		{"n": "Pale Census Ledger", "r": "rare", "t": "Quest · Hollowreach Camp", "s": [["Deliver to", "Bulletin Board"]]},
 		{"n": "Ashling's Locket", "r": "legendary", "t": "Quest · Personal", "s": [["Hint", "She won't speak of it."]]},
 	],
 }
@@ -661,11 +661,11 @@ const CATS := [
 const SCOPES := [["global", "Global"], ["friends", "Friends"], ["guild", "Guild"]]
 
 const GUILDS := {
-	"ASH": {"name": "Ashen Covenant", "c": Color("e8843a")},
-	"VIG": {"name": "The Vigil", "c": Color("cdd2d6")},
-	"HEX": {"name": "Hexbound", "c": Color("a661d6")},
-	"GLD": {"name": "Gilded Hand", "c": Color("d3ad62")},
-	"TMB": {"name": "Tombwardens", "c": Color("6fcf6a")},
+	"ASH": {"name": "Waffle Squad", "c": Color("e8843a")},
+	"VIG": {"name": "Moon Beams", "c": Color("cdd2d6")},
+	"HEX": {"name": "Berry Bunch", "c": Color("a661d6")},
+	"GLD": {"name": "Golden Geese", "c": Color("d3ad62")},
+	"TMB": {"name": "Snug Bugs", "c": Color("6fcf6a")},
 }
 
 ## One dataset; each category sorts the same delvers differently.
@@ -681,7 +681,7 @@ const PLAYERS := [
 	{"name": "Hollowfen", "guild": "HEX", "lv": 70, "tier": "Hollow Sovereign", "power": 243.1, "stage": [8, 8], "boss": 54.0, "weekly": 60, "trend": -2, "you": false, "friend": false},
 	{"name": "Thornard", "guild": "GLD", "lv": 67, "tier": "Hollow Sovereign", "power": 226.8, "stage": [7, 44], "boss": 49.7, "weekly": 88, "trend": 1, "you": false, "friend": true},
 	{"name": "Mariss", "guild": "VIG", "lv": 64, "tier": "Hollow Sovereign", "power": 204.5, "stage": [7, 36], "boss": 45.2, "weekly": 41, "trend": 0, "you": false, "friend": false},
-	{"name": "Vael", "guild": "ASH", "lv": 47, "tier": "Emberlord", "power": 188.4, "stage": [7, 40], "boss": 96.8, "weekly": 224, "trend": 3, "you": true, "friend": true},
+	{"name": "Pip", "guild": "ASH", "lv": 47, "tier": "Emberlord", "power": 188.4, "stage": [7, 40], "boss": 96.8, "weekly": 224, "trend": 3, "you": true, "friend": true},
 	{"name": "Dunmore", "guild": "TMB", "lv": 61, "tier": "Emberlord", "power": 176.0, "stage": [7, 18], "boss": 37.1, "weekly": 22, "trend": -1, "you": false, "friend": false},
 	{"name": "Ashveil", "guild": "ASH", "lv": 58, "tier": "Emberlord", "power": 162.9, "stage": [7, 10], "boss": 33.6, "weekly": 150, "trend": 1, "you": false, "friend": true},
 	{"name": "Pyrrich", "guild": "HEX", "lv": 55, "tier": "Emberlord", "power": 150.2, "stage": [6, 40], "boss": 30.0, "weekly": 18, "trend": 0, "you": false, "friend": false},
@@ -1037,7 +1037,7 @@ const FACTIONS := [
 		"fit": "warrior", "rival": "HLW",
 	},
 	{
-		"id": "ASH", "name": "Ashen Covenant",
+		"id": "ASH", "name": "Waffle Squad",
 		"creed": "What burns, purifies.",
 		"pros": ["+14% Fire Damage", "+8% All Damage", "+6% Crit Chance"],
 		"cons": ["-12% Armour"],
