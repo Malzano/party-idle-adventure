@@ -1044,8 +1044,8 @@ static func class_by_id(id: String) -> Dictionary:
 
 const FACTIONS := [
 	{
-		"id": "EMB", "name": "Emberwatch",
-		"creed": "Keep the fire. The fire keeps you.",
+		"id": "EMB", "name": "The Marshmallow Watch",
+		"creed": "Keep the hearth toasty. The hearth keeps you.",
 		"pros": ["+15% Maximum Life", "+12% Armour"],
 		"cons": ["-8% Attack Speed", "-10% Coin Find"],
 		"special": {"offline_cap_bonus_hours": 2},
@@ -1053,23 +1053,23 @@ const FACTIONS := [
 	},
 	{
 		"id": "ASH", "name": "Waffle Squad",
-		"creed": "What burns, purifies.",
+		"creed": "Breakfast is a battle plan.",
 		"pros": ["+14% Toasty Damage", "+8% All Damage", "+6% Crit Chance"],
 		"cons": ["-12% Armour"],
 		"special": {"forge_iron_cost_mult": 1.25},
 		"fit": "mage", "rival": "EMB",
 	},
 	{
-		"id": "HLW", "name": "The Hollowed",
-		"creed": "It only keeps what you still want.",
+		"id": "HLW", "name": "The Sneaky Snackers",
+		"creed": "Finders keepers, sharers weepers.",
 		"pros": ["+18% Coin Find", "+12% Item Rarity"],
 		"cons": ["-10% Maximum Life"],
 		"special": {"chest_rarity_band_bonus": 1, "enemy_hp_mult": 1.06},
 		"fit": "rogue", "rival": "LNT",
 	},
 	{
-		"id": "LNT", "name": "The Last Lantern",
-		"creed": "Forward is the only door.",
+		"id": "LNT", "name": "The Firefly Troop",
+		"creed": "Forward is the comfiest direction.",
 		"pros": ["+12% Movement Speed", "+10% XP Gain"],
 		"cons": ["-8% Maximum Mana"],
 		"special": {"party_online_all_damage_pct": 2, "daily_chest_cap_delta": -10},
