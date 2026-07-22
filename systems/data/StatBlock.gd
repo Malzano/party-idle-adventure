@@ -68,6 +68,22 @@ const _ALIASES := {
 	"dexterity": "dexterity",
 	"intelligence": "intelligence",
 	"vitality": "vitality",
+	# --- BinkBonk display names → the same canonical keys (the old gothic names
+	# above stay as legacy aliases so items in existing saves keep parsing) ---
+	"muscle": "strength",
+	"nimbleness": "dexterity",
+	"sparkle": "intelligence",
+	"snuggle": "vitality",
+	"toasty_resist": "fire_resist",
+	"frosty_resist": "cold_resist",
+	"zappy_resist": "lightning_resist",
+	"gloomy_resist": "chaos_resist",
+	"toasty_damage": "fire_damage",
+	"coin_find": "gold_find",
+	"bonk_damage": "melee_damage",
+	"bonk_dmg": "physical_dmg",
+	"sparkle_damage": "spell_damage",
+	"life_nibble": "life_leech",
 }
 
 ## The five attributes (for "+30 All Attributes" expansion).

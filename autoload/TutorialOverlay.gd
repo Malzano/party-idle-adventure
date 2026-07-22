@@ -1,5 +1,5 @@
 extends Node
-## First-session spotlight tutorial controller (autoload). Drives a 14-step
+## First-session spotlight tutorial controller (autoload). Drives a 15-step
 ## coachmark tour: dim the active window, spotlight one real control, show a
 ## wording box, and advance by Next or by the player DOING the thing (changing
 ## speed, toggling auto-skill, opening HERO/CAMP, equipping gear).
@@ -36,52 +36,56 @@ var _eff_mode := "next"             # effective mode (may downgrade do→next)
 var _eff_advance := ""              # effective advance-by-doing trigger
 var _accum := 0.0
 
-# The 14 beats — verbatim copy from the design handoff. target keys resolve via
-# the anchor registry; advance_on maps to an EventBus signal handled below.
+# The 15 beats — verbatim copy from the design handoff (BinkBonk tutorial.jsx).
+# target keys resolve via the anchor registry; advance_on maps to an EventBus
+# signal handled below. Beat 14 spotlights the Stampede Gate (Survival mode).
 const STEPS: Array = [
 	{"screen": "fight", "mode": "intro", "prefer": "center", "targets": [], "big": true,
-		"headline": "The delve never stops", "cta": "Begin ›",
-		"body": "Delver, your party fights without you — day and night, even when the game is shut. Watch them carve forward."},
+		"headline": "The party never stops!", "cta": "Begin ›",
+		"body": "Hi friend! Your party adventures without you — day and night, even while the game naps. Watch them skip along and bonk baddies."},
 	{"screen": "fight", "mode": "next", "prefer": "below", "targets": ["fight.battlefield"], "frac": [0.28, 0.34, 0.36, 0.30],
-		"headline": "Blood and mercy",
-		"body": "Cream numbers are damage, ember crits bite deepest, green is healing. Every strike is real math, not theatre."},
+		"headline": "Bonks and boo-boos",
+		"body": "White numbers are bonks, big golden ones are critical bonks, and green means healing. Every number is real math, promise!"},
 	{"screen": "fight", "mode": "next", "prefer": "below", "targets": ["fight.wavebar"],
-		"headline": "Five waves to glory",
-		"body": "Each stage is five waves. Fill this bar to push the boss and break into the next stage."},
+		"headline": "Five waves to victory",
+		"body": "Each stage is five waves. Fill this bar to reach the boss and hop into the next stage."},
 	{"screen": "fight", "mode": "next", "prefer": "below", "targets": ["fight.dps"],
-		"headline": "Your killing speed",
-		"body": "This is how fast your party deals death. Raise it with gear and talents — higher means deeper, faster."},
+		"headline": "Your bonking speed",
+		"body": "This is how fast your party bonks. Raise it with gear and talents — more bonk means further, faster!"},
 	{"screen": "fight", "mode": "next", "prefer": "above", "targets": ["fight.heroframe"],
-		"headline": "Watch their vitals",
-		"body": "Your delver's life and mana ride these bars. If the red runs dry, the advance stalls."},
+		"headline": "Keep an eye on your pals",
+		"body": "Each pal's life and mana live on these bars. If the red runs low, the adventure slows down while they catch their breath."},
 	{"screen": "fight", "mode": "do", "prefer": "above", "targets": ["fight.speed"], "advance_on": "speed4",
-		"headline": "Bend the clock", "hint": "▸ Tap 4× to continue",
-		"body": "Click to fast-forward the carnage — 1×, 2×, 4×. Try 4× now and watch the bodies fall faster."},
+		"headline": "Zoom zoom!", "hint": "▸ Tap 4× to continue",
+		"body": "Click to fast-forward the fun — 1×, 2×, 4×. Try 4× now and watch the party zoom!"},
 	{"screen": "fight", "mode": "do", "prefer": "above", "targets": ["fight.autoskill"], "advance_on": "autoskill",
-		"headline": "Hands off the reins", "hint": "▸ Toggle Auto-Skill to continue",
-		"body": "With Auto-Skill lit, your abilities fire themselves. This is an idle crawl — let it run."},
+		"headline": "Hands-free heroics", "hint": "▸ Toggle Auto-Skill to continue",
+		"body": "With Auto-Skill glowing, your pals cast their abilities all by themselves. It's an idle adventure — let it roll!"},
 	{"screen": "fight", "mode": "next", "prefer": "below", "targets": ["strip.level"],
-		"headline": "Your mark on the world",
-		"body": "Your name, level, and renown sit here. Slain foes feed this bar — and your rank."},
+		"headline": "That's you!",
+		"body": "Your name, level, and renown live here. Every bonked baddie feeds this bar — and your rank."},
 	{"screen": "fight", "mode": "next", "prefer": "below", "targets": ["strip.gold"],
-		"headline": "The coin of the dead",
-		"body": "Gold pours in from every kill. You'll spend it at the forge and on the road to power."},
+		"headline": "Shiny shiny coins",
+		"body": "Coins roll in from every bonk. Spend them at the Tinker Shop and on the road to greatness."},
 	{"screen": "fight", "mode": "do", "prefer": "right", "targets": ["nav.hero"], "advance_on": "hero_open",
-		"headline": "Tend your delver", "hint": "▸ Open HERO to continue",
-		"body": "Press 3 or click HERO. Loot means nothing until it's worn — let's arm you."},
+		"headline": "Dress up your hero", "hint": "▸ Open HERO to continue",
+		"body": "Press 3 or click HERO. Loot is just clutter until it's worn — let's get you looking snazzy."},
 	{"screen": "profile", "hero_tab": 0, "mode": "do", "prefer": "left", "arrow": true,
 		"targets": ["hero.inventory", "hero.gearslot"], "advance_on": "equip",
-		"headline": "Drag it onto your bones", "hint": "▸ Equip a bag item to continue",
-		"body": "Drag a piece of gear from the bag onto its slot. Feel your power climb."},
+		"headline": "Pop it on!", "hint": "▸ Equip a bag item to continue",
+		"body": "Drag a piece of gear from the bag onto its slot and feel your power climb. Ooh, sparkly."},
 	{"screen": "profile", "mode": "next", "prefer": "below", "targets": ["hero.talents"],
-		"headline": "Carve your path",
-		"body": "The talent web waits here — spend points to twist your build toward ruin or resilience. Explore it later."},
+		"headline": "Pick your sparkle",
+		"body": "The talent web lives here — spend points to shape your build toward big bonks or big snuggles. Explore it later!"},
 	{"screen": "fight", "mode": "do", "prefer": "right", "targets": ["nav.camp"], "advance_on": "camp_open",
-		"headline": "Return to the fire", "hint": "▸ Open CAMP to continue",
-		"body": "Press 1 or click CAMP. Between delves, the camp is where you grow stronger."},
+		"headline": "Back to the campfire", "hint": "▸ Open CAMP to continue",
+		"body": "Press 1 or click CAMP. Between adventures, the meadow is where you grow stronger (and eat snacks)."},
+	{"screen": "camp", "mode": "next", "prefer": "above", "targets": ["camp.gate"],
+		"headline": "Feeling brave?",
+		"body": "The Stampede Gate opens the Star Stampede — a solo run where YOU steer with WASD while baddies pour in from everywhere. Pack your charm backpack first: where each charm sits matters!"},
 	{"screen": "camp", "mode": "finish", "prefer": "below", "targets": ["camp.altar"], "cta": "Finish ✦", "skip_label": "Skip",
-		"headline": "Summon greater arms",
-		"body": "The altar trades soulstones for gear from beyond. Save your pulls, then push deeper, delver. The dark won't wait."},
+		"headline": "Make a wish!",
+		"body": "The Wishing Well trades stardrops for wonderful new gear. Save up your wishes, then hop deeper, friend — adventure awaits!"},
 ]
 
 

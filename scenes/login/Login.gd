@@ -289,7 +289,7 @@ func _build_begin_block() -> void:
 	col.add_child(lbl)
 
 	_name_edit = LineEdit.new()
-	_name_edit.placeholder_text = "Delver"
+	_name_edit.placeholder_text = "Adventurer"
 	_name_edit.max_length = 16
 	_name_edit.custom_minimum_size = Vector2(0, 42)
 	_name_edit.add_theme_stylebox_override("normal", Style.inset_box())

@@ -416,7 +416,7 @@ func _detail_value(label: String, p: Dictionary, derived: Dictionary, fallback: 
 			return _pct_inc(float(derived["attack_speed"]))
 		"Movement Speed":
 			return _pct_inc(float(derived["movement_speed"]))
-		"Gold Find":
+		"Coin Find", "Gold Find":
 			return _pct_inc(float(derived["gold_find"]))
 		"Item Rarity":
 			return _pct_inc(float(derived["item_rarity"]))
@@ -430,13 +430,13 @@ func _detail_value(label: String, p: Dictionary, derived: Dictionary, fallback: 
 			return Style.group_int(int(derived["mana_regen"]))
 		"Evasion":
 			return Style.group_int(int(derived["evasion"]))
-		"Fire Resist":
+		"Toasty Resist", "Fire Resist":
 			return _pct_inc(float(derived["fire_resist"]))
-		"Cold Resist":
+		"Frosty Resist", "Cold Resist":
 			return _pct_inc(float(derived["cold_resist"]))
-		"Lightning Resist":
+		"Zappy Resist", "Lightning Resist":
 			return _pct_inc(float(derived["lightning_resist"]))
-		"Chaos Resist":
+		"Gloomy Resist", "Chaos Resist":
 			return _pct_inc(float(derived["chaos_resist"]))
 		"Accuracy":
 			return "%d%%" % roundi(float(derived["accuracy"]) * 100.0)
@@ -801,9 +801,9 @@ func _live_materials() -> Array:
 	for it_v in GameContent.BAG["materials"]:
 		var it: Dictionary = (it_v as Dictionary).duplicate()
 		match String(it["n"]):
-			"Iron Ingot":
+			"Tin Bits", "Iron Ingot":
 				it["q"] = _mat_iron
-			"Ember Dust":
+			"Sparkle Dust", "Ember Dust":
 				it["q"] = _mat_dust
 		out.append(it)
 	return out
@@ -917,10 +917,10 @@ func _build_inv_foot() -> Control:
 	h.add_theme_constant_override("separation", 18)
 	_gold_val = Style.pixel_label("", 12, Palette.TX)
 	h.add_child(_currency_readout(_svg_icon("res://assets/icons/coin_gold.svg"), _gold_val,
-		{"name": "Gold", "type": "Soft currency", "rarity": "legendary"}))
+		{"name": "Coins", "type": "Soft currency", "rarity": "legendary"}))
 	_soul_val = Style.pixel_label("", 12, Palette.TX)
 	h.add_child(_currency_readout(_svg_icon("res://assets/icons/soulstone.svg"), _soul_val,
-		{"name": "Soulstone", "type": "Premium currency", "rarity": "epic"}))
+		{"name": "Stardrops", "type": "Premium currency", "rarity": "epic"}))
 	_dust_val = Style.pixel_label("", 12, Palette.TX)
 	h.add_child(_currency_readout(_ember_diamond(10.0), _dust_val,
 		{"name": "Ember Dust", "type": "Crafting material", "rarity": "rare"}))

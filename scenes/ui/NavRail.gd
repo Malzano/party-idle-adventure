@@ -1,14 +1,15 @@
 extends Control
-## Persistent left navigation rail (Grimhollow .rail) on the MAIN window.
-## Crest at top, three icon buttons (CAMP 1 / FIGHT 2 / HERO 3), options gear
-## at the bottom. Fight is the main window itself (always lit); Camp and Hero
-## open their own OS windows — their buttons light while the window is open.
+## Persistent left navigation rail (BinkBonk .rail) on the MAIN window.
+## Crest at top, four icon buttons (CAMP 1 / FIGHT 2 / HERO 3 / RUMBLE 4),
+## options gear at the bottom. Fight is the main window itself (always lit);
+## the others open their own OS windows — buttons light while the window is open.
 
-## Display order. id strings mirror the GameState.SCREEN_* constants.
+## Display order. id strings mirror the WindowManager window ids.
 const _ENTRIES := [
 	{"id": "camp", "label": "Camp", "hotkey": "1", "icon": "res://assets/icons/nav_camp.svg"},
 	{"id": "fight", "label": "Fight", "hotkey": "2", "icon": "res://assets/icons/nav_fight.svg"},
 	{"id": "hero", "label": "Hero", "hotkey": "3", "icon": "res://assets/icons/nav_hero.svg"},
+	{"id": "survival", "label": "Rumble", "hotkey": "4", "icon": "res://assets/icons/nav_stampede.svg"},
 ]
 
 var _entries_ui: Dictionary = {}  # id -> {button, icon, label, hot, indicator}
@@ -74,7 +75,7 @@ func _make_crest() -> Control:
 	crest.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	crest.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	_set_texture(crest, "res://assets/icons/crest.svg")
-	crest.tooltip_text = "%s — Idle Crawler" % GameContent.GAME_TITLE
+	crest.tooltip_text = "%s — Cozy Idle Adventure" % GameContent.GAME_TITLE
 	return crest
 
 
@@ -171,6 +172,8 @@ func select(screen: String) -> void:
 			WindowManager.open(WindowManager.WIN_CAMP)
 		"hero":
 			WindowManager.open(WindowManager.WIN_HERO)
+		"survival":
+			WindowManager.open(WindowManager.WIN_SURVIVAL)
 		_:
 			WindowManager.focus_main()
 
@@ -189,9 +192,11 @@ func _apply_button_state(id: String, active: bool) -> void:
 	button.add_theme_stylebox_override("hover", Style.rail_btn_box(active, true))
 	button.add_theme_stylebox_override("pressed", Style.rail_btn_box(active))
 	button.add_theme_stylebox_override("focus", Style.rail_btn_box(active))
-	(ui["icon"] as TextureRect).modulate = Palette.EMBER_BRIGHT if active else Palette.TX_MUTE
-	(ui["label"] as Label).add_theme_color_override("font_color", Palette.EMBER_BRIGHT if active else Palette.TX_MUTE)
-	(ui["hot"] as Label).add_theme_color_override("font_color", Palette.EMBER if active else Palette.TX_FAINT)
+	# The rail sits on cozy night navy — idle text/icons use the light cream faint
+	# tone (the cocoa TX_* inks would vanish on the dark rail).
+	(ui["icon"] as TextureRect).modulate = Palette.EMBER_BRIGHT if active else Palette.TX_FAINT
+	(ui["label"] as Label).add_theme_color_override("font_color", Palette.EMBER_BRIGHT if active else Palette.TX_FAINT)
+	(ui["hot"] as Label).add_theme_color_override("font_color", Palette.EMBER if active else Palette.with_alpha(Palette.IRON_HI, 0.55))
 	(ui["indicator"] as ColorRect).visible = active
 
 
@@ -214,6 +219,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			select("fight")
 		KEY_3:
 			select("hero")
+		KEY_4:
+			select("survival")
 		KEY_L:
 			WindowManager.open(WindowManager.WIN_LEADERBOARD)
 		KEY_P:

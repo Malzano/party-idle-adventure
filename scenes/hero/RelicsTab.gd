@@ -129,7 +129,7 @@ func _re_cell(rl: Dictionary) -> Control:
 			"type": "Relic · %s" % rar,
 			"rarity": rar,
 			"stats": [["Bonus", rl["eff"]]],
-			"flavor": "Relics carry the echoes of fallen delvers.",
+			"flavor": "Lucky charms hum little happy tunes.",
 		})
 	return cell
 

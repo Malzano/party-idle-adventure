@@ -370,9 +370,9 @@ func try_forge_upgrade(rng: RandomNumberGenerator) -> Dictionary:
 	if gold < gold_cost:
 		return {"ok": false, "success": false, "reason": "Not enough gold"}
 	if iron_ingots < iron_cost:
-		return {"ok": false, "success": false, "reason": "Not enough Iron Ingots"}
+		return {"ok": false, "success": false, "reason": "Not enough Tin Bits"}
 	if ember_dust < dust_cost:
-		return {"ok": false, "success": false, "reason": "Not enough Ember Dust"}
+		return {"ok": false, "success": false, "reason": "Not enough Sparkle Dust"}
 	gold -= gold_cost
 	iron_ingots -= iron_cost
 	ember_dust -= dust_cost

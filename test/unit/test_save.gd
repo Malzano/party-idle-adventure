@@ -100,7 +100,7 @@ func test_class_and_equipment_round_trip() -> void:
 	GameState.choose_class("rogue", "  Nyx  ")
 	assert_eq(GameState.player_name, "Nyx", "chosen name is trimmed")
 	assert_eq(GameState.player_class, "Rogue")
-	assert_eq(GameState.player_title, "the Twice-Hanged")
+	assert_eq(GameState.player_title, "the Sneaky")
 	assert_true(GameState.has_profile(), "choosing a class creates the profile")
 
 	# A fresh delver starts with an empty paperdoll, so place a helm to unequip.

@@ -36,7 +36,7 @@ func test_overlay_has_public_api() -> void:
 	assert_true(TutorialOverlay.has_method("register_anchor"))
 	assert_true(TutorialOverlay.has_method("is_done"))
 	assert_true(TutorialOverlay.has_method("maybe_autostart"))
-	assert_eq(TutorialOverlay.STEPS.size(), 14, "14-step tour")
+	assert_eq(TutorialOverlay.STEPS.size(), 15, "15-step tour (incl. the Stampede Gate beat)")
 
 
 func test_anchor_registry_validates_liveness() -> void:

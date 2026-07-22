@@ -1055,7 +1055,7 @@ func _make_chest_node() -> Control:
 		"name": "Battle Cache",
 		"type": "Click to open",
 		"rarity": "rare",
-		"flavor": "Left behind on the route. The Hollow decides what's inside.",
+		"flavor": "Left behind on the trail. The meadow decides what's inside.",
 	})
 
 	var shadow := _Shadow.new(0.6)
@@ -1126,11 +1126,11 @@ func _open_chest(entry: Dictionary) -> void:
 	var reward: Dictionary = data["reward"]
 	match String(reward["kind"]):
 		"gold":
-			_chest_floater(at, "+%s gold" % Style.group_int(int(reward["gold"])), Palette.GOLD_BRIGHT, 17)
+			_chest_floater(at, "+%s coins" % Style.group_int(int(reward["gold"])), Palette.GOLD_BRIGHT, 17)
 		"materials":
-			var txt := "+%d iron ingots" % int(reward["iron"])
+			var txt := "+%d tin bits" % int(reward["iron"])
 			if int(reward["dust"]) > 0:
-				txt += " · +%d ember dust" % int(reward["dust"])
+				txt += " · +%d sparkle dust" % int(reward["dust"])
 			_chest_floater(at, txt, Palette.TX, 15)
 		"item":
 			var item: Dictionary = reward["item"]
@@ -1142,15 +1142,15 @@ func _open_chest(entry: Dictionary) -> void:
 	var who := GameState.player_name if GameState.player_name != "" else "You"
 	match String(reward["kind"]):
 		"gold":
-			EventBus.sim_loot.emit([who, "looted", "+%s gold" % Style.group_int(int(reward["gold"])), "common"])
+			EventBus.sim_loot.emit([who, "looted", "+%s coins" % Style.group_int(int(reward["gold"])), "common"])
 		"materials":
-			EventBus.sim_loot.emit([who, "looted", "+%d iron ingots" % int(reward["iron"]), "uncommon"])
+			EventBus.sim_loot.emit([who, "looted", "+%d tin bits" % int(reward["iron"]), "uncommon"])
 		"item":
 			var it: Dictionary = reward["item"]
 			if bool(reward["banked"]):
 				EventBus.sim_loot.emit([who, "looted", String(it["n"]), String(it["r"])])
 			else:
-				EventBus.sim_loot.emit([who, "looted", "+%s gold" % Style.group_int(int(reward["gold"])), "common"])
+				EventBus.sim_loot.emit([who, "looted", "+%s coins" % Style.group_int(int(reward["gold"])), "common"])
 	_despawn_chest(entry, true)
 
 

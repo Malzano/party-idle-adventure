@@ -1238,13 +1238,15 @@ func _grant_reward_text(rw: String) -> Dictionary:
 			continue
 		var n := int(m.get_string(1))
 		var what := m.get_string(2).to_lower()
-		if what.begins_with("gold"):
+		# BinkBonk display words first; the old gothic words stay as legacy aliases
+		# so any stored/older reward strings keep granting.
+		if what.begins_with("coin") or what.begins_with("gold"):
 			granted["gold"] = n
 			GameState.add_gold(n)
 		elif what.begins_with("xp"):
 			granted["xp"] = n
 			GameState.add_xp(n)
-		elif what.begins_with("soulstone"):
+		elif what.begins_with("stardrop") or what.begins_with("soulstone"):
 			granted["soulstones"] = n
 			GameState.premium_currency += n
 			EventBus.currencies_changed.emit()

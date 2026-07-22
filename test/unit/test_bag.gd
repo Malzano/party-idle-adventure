@@ -143,9 +143,9 @@ func test_every_equipment_defines_a_survival_stat() -> void:
 	assert_true(gen.has("shape"), "generated item stores its shape name")
 	for pair in (gen["s"] as Array):
 		assert_false(GameContent._BH_AFFIXES.has(String(pair[0])), "Survival affixes never leak into idle stats")
-	# tip_stats surfaces a Survival section.
+	# tip_stats surfaces a Stampede (Survival-mode) section.
 	var has_survival := false
 	for r in GameContent.tip_stats(gen):
-		if String(r[0]).contains("Survival"):
+		if String(r[0]).contains("Stampede"):
 			has_survival = true
-	assert_true(has_survival, "tooltip stats include a Survival section")
+	assert_true(has_survival, "tooltip stats include a Stampede section")

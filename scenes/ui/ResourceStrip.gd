@@ -1,6 +1,6 @@
 extends PanelContainer
-## Top-right resource strip (Grimhollow .res-strip). Rank badge, player block
-## (portrait + name + level + XP), then Gold / Soulstone / Energy. Pinned by
+## Top-right resource strip (BinkBonk .res-strip). Rank badge, player block
+## (portrait + name + level + XP), then Coins / Stardrops / Energy. Pinned by
 ## Main to the top-right; sizes to its content. Refreshes from GameState on
 ## EventBus.currencies_changed / game_loaded.
 ##
@@ -39,9 +39,10 @@ func _build() -> void:
 	row.add_child(_make_divider())
 	row.add_child(_make_player_block())
 	row.add_child(_make_divider())
-	row.add_child(_make_resource("res://assets/icons/coin_gold.svg", Palette.GOLD_BRIGHT, "gold"))
-	row.add_child(_make_resource("res://assets/icons/soulstone.svg", Color("c98bea"), "soul"))
-	row.add_child(_make_resource("res://assets/icons/energy.svg", Palette.CYAN_BRIGHT, "energy"))
+	# Deep inks — the strip pill is warm cream now, so bright accents wash out.
+	row.add_child(_make_resource("res://assets/icons/coin_gold.svg", Palette.GOLD_DIM, "gold"))
+	row.add_child(_make_resource("res://assets/icons/soulstone.svg", Color("a45ee0"), "soul"))
+	row.add_child(_make_resource("res://assets/icons/energy.svg", Palette.CYAN_DEEP, "energy"))
 
 
 func _make_divider() -> Control:
@@ -70,13 +71,13 @@ func _make_rank_badge() -> Control:
 	box.alignment = BoxContainer.ALIGNMENT_CENTER
 	box.add_theme_constant_override("separation", 7)
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.add_child(_make_icon("res://assets/icons/crown.svg", 18, Color.WHITE))
+	box.add_child(_make_icon("res://assets/icons/crown.svg", 18, Palette.GOLD_DIM))
 
 	var meta := VBoxContainer.new()
 	meta.add_theme_constant_override("separation", 1)
 	meta.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	meta.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var num := Style.pixel_label("#%d" % GameState.global_rank, 13, Palette.GOLD_BRIGHT)
+	var num := Style.pixel_label("#%d" % GameState.global_rank, 13, Palette.GOLD_DIM)
 	var lbl := Style.body_label("RANK", 8, Palette.TX_MUTE)
 	meta.add_child(num)
 	meta.add_child(lbl)
@@ -106,7 +107,7 @@ func _make_player_block() -> Control:
 			["Prestige", GameState.prestige],
 			["Rank", "#%d · %s" % [GameState.global_rank, String(GameContent.SEASON["you"]["tier"])]],
 		],
-		"flavor": "The deeper you delve, the brighter you burn.",
+		"flavor": "The further you adventure, the brighter you twinkle.",
 	})
 
 	# Portrait (pixel-art drop-slot for a 48² face sprite).
@@ -123,9 +124,9 @@ func _make_player_block() -> Control:
 	var meta := VBoxContainer.new()
 	meta.add_theme_constant_override("separation", 3)
 	meta.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_name_label = Style.display_label(GameState.player_name, 15, Palette.GOLD_BRIGHT, true)
+	_name_label = Style.display_label(GameState.player_name, 15, Palette.GOLD_DIM, true)
 	meta.add_child(_name_label)
-	_level_label = Style.pixel_label("LV 1", 9, Palette.EMBER_BRIGHT)
+	_level_label = Style.pixel_label("LV 1", 9, Palette.EMBER_DEEP)
 	meta.add_child(_level_label)
 	meta.add_child(_make_bar(108, 6, 0.0, Palette.XP))
 	row.add_child(meta)
@@ -133,12 +134,12 @@ func _make_player_block() -> Control:
 
 
 const _RES_TIPS := {
-	"gold": {"name": "Gold", "type": "Soft currency", "rarity": "legendary",
-		"flavor": "Earned from kills, quests, and selling loot at the Forge."},
-	"soul": {"name": "Soulstone", "type": "Premium currency", "rarity": "epic",
-		"flavor": "Spent at the Summoning Altar. Earned rarely, or purchased."},
+	"gold": {"name": "Coins", "type": "Soft currency", "rarity": "legendary",
+		"flavor": "Earned from bonks, quests, and recycling loot at the Tinker Shop."},
+	"soul": {"name": "Stardrops", "type": "Premium currency", "rarity": "epic",
+		"flavor": "Tossed into the Wishing Well. Earned rarely, or purchased."},
 	"energy": {"name": "Energy", "type": "Stamina · +1 / 5 min", "rarity": "rare",
-		"flavor": "Consumed entering dungeons. Regenerates over time."},
+		"flavor": "Consumed entering adventures. Regenerates over time."},
 }
 
 
@@ -194,7 +195,7 @@ func _make_icon(path: String, px: float, color: Color) -> TextureRect:
 
 func _make_bar(width: float, height: float, pct: float, fill_color: Color) -> Control:
 	var bg := ColorRect.new()
-	bg.color = Color("0a0807")
+	bg.color = Color("e7d2a8")  # warm groove on the cream pill
 	bg.custom_minimum_size = Vector2(width, height)
 	bg.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 

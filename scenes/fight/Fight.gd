@@ -386,7 +386,7 @@ func _build_party_finder() -> void:
 	manage.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	manage.pressed.connect(func() -> void: WindowManager.open_hero_tab(0))
 	Tip.attach(manage, {
-		"name": "Your Delver",
+		"name": "Your Adventurer",
 		"type": "Hero window · 3",
 		"rarity": "",
 		"flavor": "Gear, pets, relics and talents for your one character.",
@@ -410,7 +410,7 @@ func _build_party_finder() -> void:
 		"name": "Party Finder",
 		"type": "Hotkey · P",
 		"rarity": "",
-		"flavor": "Group with other delvers; presence syncs while the party fights.",
+		"flavor": "Group with other adventurers; presence syncs while the party fights.",
 	})
 	actions.add_child(finder)
 
@@ -1081,7 +1081,7 @@ func _build_popup() -> void:
 	col.add_theme_constant_override("separation", 0)
 	pad.add_child(col)
 
-	var title := Style.display_label("Welcome back, delver", 26, Palette.GOLD_BRIGHT, true)
+	var title := Style.display_label("Welcome back, friend!", 26, Palette.GOLD_DIM, true)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(title)
 
@@ -1101,7 +1101,7 @@ func _build_popup() -> void:
 	gains_pad.add_theme_constant_override("margin_bottom", 18)
 	var gains := HBoxContainer.new()
 	gains.add_theme_constant_override("separation", 14)
-	gains.add_child(_gain_card(_ICON_GOLD, gold_s, "Gold"))
+	gains.add_child(_gain_card(_ICON_GOLD, gold_s, "Coins"))
 	gains.add_child(_gain_card(_ICON_CREST, levels_s, "Levels"))
 	gains.add_child(_gain_card(_ICON_SOULSTONE, items_s, "Items"))
 	gains_pad.add_child(gains)

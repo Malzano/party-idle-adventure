@@ -17,10 +17,10 @@ const GAME_TITLE := "BinkBonk Idle"
 ## The 4-hero party: tight cluster lower-left third, tank leading toward TR.
 ## x/y are battlefield percentages.
 const PARTY := [
-	{"id": "brand", "name": "Brand", "role": "tank", "role_lbl": "Tank", "cls": "Bulwark", "hp": 100.0, "mana": 60.0, "x": 30.0, "y": 62.0, "lvl": 47},
-	{"id": "ash", "name": "Ashling", "role": "dps", "role_lbl": "DPS", "cls": "Pyromancer", "hp": 74.0, "mana": 50.0, "x": 24.0, "y": 66.0, "lvl": 48},
-	{"id": "hex", "name": "Hex", "role": "mage", "role_lbl": "Mage", "cls": "Hexcaster", "hp": 61.0, "mana": 90.0, "x": 20.0, "y": 63.0, "lvl": 44},
-	{"id": "wren", "name": "Sister Wren", "role": "healer", "role_lbl": "Healer", "cls": "Lightbinder", "hp": 96.0, "mana": 82.0, "x": 24.0, "y": 72.0, "lvl": 45},
+	{"id": "brand", "name": "Bonk", "role": "tank", "role_lbl": "Tank", "cls": "Shieldbud", "hp": 100.0, "mana": 60.0, "x": 30.0, "y": 62.0, "lvl": 47},
+	{"id": "ash", "name": "Pyra", "role": "dps", "role_lbl": "DPS", "cls": "Emberpuff", "hp": 74.0, "mana": 50.0, "x": 24.0, "y": 66.0, "lvl": 48},
+	{"id": "hex", "name": "Mimsy", "role": "mage", "role_lbl": "Mage", "cls": "Stargazer", "hp": 61.0, "mana": 90.0, "x": 20.0, "y": 63.0, "lvl": 44},
+	{"id": "wren", "name": "Lulu", "role": "healer", "role_lbl": "Healer", "cls": "Moonpetal", "hp": 96.0, "mana": 82.0, "x": 24.0, "y": 72.0, "lvl": 45},
 ]
 
 # =========================================================================
@@ -31,18 +31,18 @@ const PARTY := [
 # =========================================================================
 
 const HEROES := [
-	{"id": "brand", "name": "Brand", "cls": "Bulwark", "role": "tank", "role_lbl": "Tank", "r": "epic", "lvl": 47, "hp": 100.0, "mana": 60.0, "trait": "Taunts foes and blocks 32% of hits."},
-	{"id": "ash", "name": "Ashling", "cls": "Pyromancer", "role": "dps", "role_lbl": "DPS", "r": "legendary", "lvl": 48, "hp": 74.0, "mana": 50.0, "trait": "Ignites melt armour. Featured banner hero."},
-	{"id": "hex", "name": "Hex", "cls": "Hexcaster", "role": "mage", "role_lbl": "Mage", "r": "epic", "lvl": 44, "hp": 61.0, "mana": 90.0, "trait": "Curses spread to nearby enemies."},
-	{"id": "wren", "name": "Sister Wren", "cls": "Lightbinder", "role": "healer", "role_lbl": "Healer", "r": "epic", "lvl": 45, "hp": 96.0, "mana": 82.0, "trait": "Heals the lowest ally every 4s."},
-	{"id": "mord", "name": "Mordrake", "cls": "Gravewarden", "role": "tank", "role_lbl": "Tank", "r": "epic", "lvl": 41, "hp": 100.0, "mana": 44.0, "trait": "Raises a bone wall at half health."},
-	{"id": "sera", "name": "Seraphine", "cls": "Dawncaller", "role": "healer", "role_lbl": "Healer", "r": "epic", "lvl": 39, "hp": 88.0, "mana": 90.0, "trait": "Revives once per delve."},
-	{"id": "korr", "name": "Korr", "cls": "Reaver", "role": "dps", "role_lbl": "DPS", "r": "rare", "lvl": 36, "hp": 80.0, "mana": 38.0, "trait": "Gains fury per kill, up to +40% speed."},
-	{"id": "tarn", "name": "Tarn", "cls": "Marksman", "role": "dps", "role_lbl": "DPS", "r": "rare", "lvl": 28, "hp": 64.0, "mana": 42.0, "trait": "Always strikes the farthest enemy."},
-	{"id": "wisp", "name": "Wisp", "cls": "Lantern", "role": "healer", "role_lbl": "Healer", "r": "rare", "lvl": 30, "hp": 58.0, "mana": 96.0, "trait": "Mana fountain aura for the party."},
-	{"id": "grub", "name": "Grub", "cls": "Ironshard", "role": "tank", "role_lbl": "Tank", "r": "common", "lvl": 12, "hp": 90.0, "mana": 20.0, "trait": "Cheap, loyal, surprisingly durable."},
-	{"id": "veyra", "name": "Veyra", "cls": "Stormcaller", "role": "mage", "role_lbl": "Mage", "r": "legendary", "lvl": 1, "hp": 60.0, "mana": 100.0, "trait": "Chain lightning arcs to 5 targets.", "locked": true},
-	{"id": "oszric", "name": "Oszric", "cls": "Plaguebinder", "role": "mage", "role_lbl": "Mage", "r": "epic", "lvl": 1, "hp": 58.0, "mana": 92.0, "trait": "Poison stacks never expire.", "locked": true},
+	{"id": "brand", "name": "Bonk", "cls": "Shieldbud", "role": "tank", "role_lbl": "Tank", "r": "epic", "lvl": 47, "hp": 100.0, "mana": 60.0, "trait": "Boops foes and blocks 32% of hits."},
+	{"id": "ash", "name": "Pyra", "cls": "Emberpuff", "role": "dps", "role_lbl": "DPS", "r": "legendary", "lvl": 48, "hp": 74.0, "mana": 50.0, "trait": "Toasty sparks melt armour. Featured banner pal!"},
+	{"id": "hex", "name": "Mimsy", "cls": "Stargazer", "role": "mage", "role_lbl": "Mage", "r": "epic", "lvl": 44, "hp": 61.0, "mana": 90.0, "trait": "Sleepy stardust drifts to nearby foes."},
+	{"id": "wren", "name": "Lulu", "cls": "Moonpetal", "role": "healer", "role_lbl": "Healer", "r": "epic", "lvl": 45, "hp": 96.0, "mana": 82.0, "trait": "Heals the sleepiest pal every 4s."},
+	{"id": "mord", "name": "Brambles", "cls": "Thornhugger", "role": "tank", "role_lbl": "Tank", "r": "epic", "lvl": 41, "hp": 100.0, "mana": 44.0, "trait": "Grows a hedge wall at half health."},
+	{"id": "sera", "name": "Sunny", "cls": "Dawnsprout", "role": "healer", "role_lbl": "Healer", "r": "epic", "lvl": 39, "hp": 88.0, "mana": 90.0, "trait": "Revives once per adventure."},
+	{"id": "korr", "name": "Chomps", "cls": "Nibbler", "role": "dps", "role_lbl": "DPS", "r": "rare", "lvl": 36, "hp": 80.0, "mana": 38.0, "trait": "Gets the zoomies per bonk, up to +40% speed."},
+	{"id": "tarn", "name": "Twig", "cls": "Acorn Archer", "role": "dps", "role_lbl": "DPS", "r": "rare", "lvl": 28, "hp": 64.0, "mana": 42.0, "trait": "Always bonks the farthest foe."},
+	{"id": "wisp", "name": "Glow", "cls": "Firefly", "role": "healer", "role_lbl": "Healer", "r": "rare", "lvl": 30, "hp": 58.0, "mana": 96.0, "trait": "Mana lemonade aura for the party."},
+	{"id": "grub", "name": "Pebble", "cls": "Rockling", "role": "tank", "role_lbl": "Tank", "r": "common", "lvl": 12, "hp": 90.0, "mana": 20.0, "trait": "Cheap, loyal, surprisingly sturdy."},
+	{"id": "veyra", "name": "Zappy", "cls": "Stormbean", "role": "mage", "role_lbl": "Mage", "r": "legendary", "lvl": 1, "hp": 60.0, "mana": 100.0, "trait": "Chain sparkles arc to 5 targets.", "locked": true},
+	{"id": "oszric", "name": "Goober", "cls": "Slimeling", "role": "mage", "role_lbl": "Mage", "r": "epic", "lvl": 1, "hp": 58.0, "mana": 92.0, "trait": "Goo stacks never expire.", "locked": true},
 ]
 
 const DEFAULT_PARTY_IDS: Array[String] = ["brand", "ash", "hex", "wren"]
@@ -74,7 +74,7 @@ static func class_role(class_id: String) -> Dictionary:
 		"mage": return {"role": "mage", "lbl": "Mage"}
 		"hunter": return {"role": "dps", "lbl": "Ranger"}
 		"rogue": return {"role": "dps", "lbl": "Rogue"}
-		_: return {"role": "dps", "lbl": "Delver"}
+		_: return {"role": "dps", "lbl": "Adventurer"}
 
 
 ## Real-party composition aura — GD mirror of the server's compositionAura.ts so
@@ -124,14 +124,14 @@ static func hero_recruited(id: String) -> bool:
 static func active_party() -> Array:
 	var cls := class_by_id(GameState.class_id)
 	var cr := class_role(GameState.class_id)
-	var nm := GameState.player_name if GameState.player_name != "" else String(cls.get("name", "Delver"))
+	var nm := GameState.player_name if GameState.player_name != "" else String(cls.get("name", "Adventurer"))
 	return [{
 		"id": "self",
 		"name": nm,
 		"role": String(cr["role"]),
 		"role_lbl": String(cr["lbl"]),
 		"class_id": GameState.class_id,  # battlefield reads this for facing + projectile spec
-		"cls": String(cls.get("name", "Delver")),
+		"cls": String(cls.get("name", "Adventurer")),
 		"hp": 100.0,
 		"mana": 80.0,
 		"x": 26.0,
@@ -143,12 +143,12 @@ static func active_party() -> Array:
 # --- Floor-themed enemy rosters (the names the battlefield spawns; wraps per
 # floor like the boss-name tables in bosses.json). Floor 1 = weak early foes. --
 const ENEMY_ROSTER := [
-	{"elite": "Bonepicker Brute", "trash": ["Gloopy Slime", "Crypt Rat"]},    # floor 1
-	{"elite": "Cinder Acolyte", "trash": ["Ash Crawler", "Ember Wretch"]},    # floor 2
-	{"elite": "Gravebound Ogre", "trash": ["Tomb Shambler", "Rotwalker"]},    # floor 3
-	{"elite": "Hexwright Adept", "trash": ["Curse Wisp", "Hex Thrall"]},      # floor 4
-	{"elite": "Marrow Knight", "trash": ["Sneaky Snail", "Pale Husk"]},     # floor 5
-	{"elite": "Bog Drowner", "trash": ["Mire Lurker", "Drowned Thrall"]},     # floor 6
+	{"elite": "Royal Gloop", "trash": ["Gloopy Slime", "Crumb Mouse"]},       # floor 1
+	{"elite": "Toasty Twig", "trash": ["Warm Puff", "Ember Bunny"]},          # floor 2
+	{"elite": "Grumpy Boulder", "trash": ["Pebble Pal", "Rolly Poly"]},       # floor 3
+	{"elite": "Dizzy Duke", "trash": ["Silly Sprout", "Twirly Wisp"]},        # floor 4
+	{"elite": "Mushroom Knight", "trash": ["Sneaky Snail", "Puffball"]},      # floor 5
+	{"elite": "Soggy Froggy", "trash": ["Puddle Pup", "Mire Minnow"]},        # floor 6
 ]
 
 
@@ -312,22 +312,22 @@ const CLASH := {"x": 40.0, "y": 54.0}
 
 ## Auto-loot ticker feed: [who, verb, item, rarity].
 const LOOT_FEED := [
-	["Ashling", "looted", "Cindergrip Maul", "epic"],
-	["Party", "gained", "+240 Gold", "common"],
-	["Hex", "looted", "Hexweave Cowl", "rare"],
-	["Brand", "looted", "Bone Pauldron", "uncommon"],
-	["Party", "found", "Relic Shard ×2", "epic"],
-	["Wren", "looted", "Lightbinder Charm", "rare"],
+	["Pyra", "looted", "Bonk Hammer", "epic"],
+	["Party", "gained", "+240 Coins", "common"],
+	["Mimsy", "looted", "Starweave Cap", "rare"],
+	["Bonk", "looted", "Acorn Pauldron", "uncommon"],
+	["Party", "found", "Charm Shard ×2", "epic"],
+	["Lulu", "looted", "Moonpetal Charm", "rare"],
 	["Party", "gained", "+1,120 XP", "common"],
-	["Ashling", "looted", "Emberglass Ring", "legendary"],
-	["Party", "gained", "+180 Gold", "common"],
-	["Hex", "looted", "Tattered Grimoire", "common"],
+	["Pyra", "looted", "Starglass Ring", "legendary"],
+	["Party", "gained", "+180 Coins", "common"],
+	["Mimsy", "looted", "Doodled Grimoire", "common"],
 ]
 
 ## Stage names rotate as the party advances.
 const STAGE_NAMES := [
-	"The Sunken Reliquary", "Gallows of the Pale", "Emberfall Crypts",
-	"The Hollow Throat", "Marrowdeep", "Cinder Garden",
+	"The Glimmer Grove", "Buttercup Pass", "Starfall Slopes",
+	"The Snoozy Meadow", "Mushroom Hollow", "Firefly Garden",
 ]
 
 # =========================================================================
@@ -337,32 +337,39 @@ const STAGE_NAMES := [
 ## Building hotspots. x/y are scene percentages; w/h px.
 const BUILDINGS := [
 	{
-		"id": "altar", "name": "Wishing Well", "sub": "Skill Learning House",
+		"id": "altar", "name": "Wishing Well", "sub": "Make a wish · meet new pals",
 		"x": 50.0, "y": 27.0, "w": 340.0, "h": 300.0, "hot": "Q", "featured": true,
-		"sprite": "340×300 · altar", "tip_type": "Gacha · Featured banner active",
-		"flavor": "Bind a wandering soul to your covenant. The altar hungers for soulstones.",
+		"sprite": "340×300 · wishing well", "tip_type": "Gacha · Featured banner active",
+		"flavor": "Toss in a stardrop and a new friend might splash right out!",
 		"badge": "NEW BANNER",
 	},
 	{
-		"id": "board", "name": "Bulletin Board", "sub": "Quests · Leaderboard · Daily",
+		"id": "board", "name": "Bulletin Board", "sub": "Quests · Rankings · Daily",
 		"x": 17.0, "y": 60.0, "w": 240.0, "h": 220.0, "hot": "E", "featured": false,
 		"sprite": "240×220 · board", "tip_type": "Town bulletin",
-		"flavor": "Bounties, rankings, and the rotating daily dungeon.",
+		"flavor": "Sticky notes, stickers, and today's special adventure.",
 		"badge": "3 NEW",
 	},
 	{
-		"id": "forge", "name": "Tinker Shop", "sub": "Forge · Upgrade · Salvage",
+		"id": "forge", "name": "Tinker Shop", "sub": "Craft · Upgrade · Recycle",
 		"x": 81.0, "y": 46.0, "w": 280.0, "h": 240.0, "hot": "R", "featured": false,
-		"sprite": "280×240 · forge", "tip_type": "Smithing",
-		"flavor": "Reforge iron and bone into something that bites back.",
+		"sprite": "280×240 · tinker shop", "tip_type": "Tinkering",
+		"flavor": "Hammer, glue, and a little sparkle — good as new, but better.",
 		"badge": "",
 	},
 	{
-		"id": "food", "name": "Snack Shack", "sub": "Cook party-buff meals",
+		"id": "food", "name": "Snack Shack", "sub": "Cook party-buff snacks",
 		"x": 34.0, "y": 74.0, "w": 230.0, "h": 200.0, "hot": "F", "featured": false,
-		"sprite": "230×200 · kitchen", "tip_type": "Cooking · Buffs",
-		"flavor": "A warm meal before the dark. Buffs the whole party for the next delve.",
+		"sprite": "230×200 · snack shack", "tip_type": "Cooking · Buffs",
+		"flavor": "A warm snack before bedtime adventures. Buffs the whole party!",
 		"badge": "",
+	},
+	{
+		"id": "arena", "name": "Stampede Gate", "sub": "Star Stampede · solo runs",
+		"x": 69.0, "y": 82.0, "w": 250.0, "h": 190.0, "hot": "T", "featured": false,
+		"sprite": "250×190 · stampede gate", "tip_type": "Survival · Bullet-heaven",
+		"flavor": "A shimmering gate to the starlit meadow. Bring your best backpack!",
+		"badge": "SOLO MODE", "screen": "survival",
 	},
 ]
 
@@ -383,37 +390,37 @@ const WALKS := [
 ## Town crier ribbon entries: [lit, text_bbcode-ish parts kept simple].
 const CRIER := [
 	{"lit": true, "text": "Daily reset in ", "b": "06:12:40", "suffix": ""},
-	{"lit": false, "text": "Ashen Covenant banner — ", "b": "5d left", "suffix": "", "b_ember": true},
-	{"lit": true, "text": "Guild boss ", "b": "Maw of Ruin", "suffix": " now open"},
-	{"lit": false, "text": "Friend ", "b": "Drossel", "suffix": " sent 5 energy"},
+	{"lit": false, "text": "Starfall Friends banner — ", "b": "5d left", "suffix": "", "b_ember": true},
+	{"lit": true, "text": "Guild boss ", "b": "Grumpy Gus", "suffix": " now open"},
+	{"lit": false, "text": "Friend ", "b": "Doodle", "suffix": " sent 5 energy"},
 ]
 
 ## Daily quests: title, progress, goal, reward (done derives from p >= g).
 const QUESTS := [
-	{"t": "Clear 3 dungeon stages", "p": 3.0, "g": 3.0, "rw": "240 Gold · 40 XP"},
-	{"t": "Summon a hero", "p": 1.0, "g": 1.0, "rw": "1 Soulstone"},
-	{"t": "Cook a party meal", "p": 0.0, "g": 1.0, "rw": "Hearth Token"},
-	{"t": "Deal 5,000,000 damage", "p": 3.1, "g": 5.0, "rw": "120 Gold · Relic Shard"},
-	{"t": "Salvage 5 items at the Forge", "p": 2.0, "g": 5.0, "rw": "Iron ×3"},
+	{"t": "Clear 3 adventure stages", "p": 3.0, "g": 3.0, "rw": "240 Coins · 40 XP"},
+	{"t": "Make a wish at the well", "p": 1.0, "g": 1.0, "rw": "1 Stardrop"},
+	{"t": "Cook a party snack", "p": 0.0, "g": 1.0, "rw": "Hearth Token"},
+	{"t": "Deal 5,000,000 bonk damage", "p": 3.1, "g": 5.0, "rw": "120 Coins · Charm Shard"},
+	{"t": "Recycle 5 items at the Tinker Shop", "p": 2.0, "g": 5.0, "rw": "Tin Bits ×3"},
 ]
 
 ## Notice-board mini leaderboard.
 const BOARD_RANKS := [
-	{"r": 1, "n": "Mournheart", "lv": 88, "p": "412.6M", "me": false},
+	{"r": 1, "n": "Marshmallow", "lv": 88, "p": "412.6M", "me": false},
 	{"r": 2, "n": "Pip (You)", "lv": 47, "p": "188.4M", "me": true},
-	{"r": 3, "n": "Drossel", "lv": 52, "p": "176.0M", "me": false},
-	{"r": 4, "n": "Ironwake", "lv": 61, "p": "162.9M", "me": false},
-	{"r": 5, "n": "Lysa", "lv": 44, "p": "140.2M", "me": false},
+	{"r": 3, "n": "Doodle", "lv": 52, "p": "176.0M", "me": false},
+	{"r": 4, "n": "Waffles", "lv": 61, "p": "162.9M", "me": false},
+	{"r": 5, "n": "Luna Bee", "lv": 44, "p": "140.2M", "me": false},
 ]
 
 ## Kitchen recipes.
 const RECIPES := [
-	{"n": "Emberroot Stew", "r": "epic", "b": "+12% party ATK · 30 min", "have": true},
-	{"n": "Gravewine Roast", "r": "rare", "b": "+8% Crit · 30 min", "have": true},
+	{"n": "Honeyroot Stew", "r": "epic", "b": "+12% party ATK · 30 min", "have": true},
+	{"n": "Berry Glaze Roast", "r": "rare", "b": "+8% Crit · 30 min", "have": true},
 	{"n": "Frostberry Pie", "r": "rare", "b": "+15% Mana regen", "have": false},
-	{"n": "Marrow Broth", "r": "uncommon", "b": "+10% HP · 30 min", "have": true},
-	{"n": "Hollow Bread", "r": "common", "b": "+5% XP gain", "have": true},
-	{"n": "Lantern Tea", "r": "legendary", "b": "+20% all stats · 15 min", "have": false},
+	{"n": "Snuggle Broth", "r": "uncommon", "b": "+10% HP · 30 min", "have": true},
+	{"n": "Butter Bun", "r": "common", "b": "+5% XP gain", "have": true},
+	{"n": "Moonbeam Tea", "r": "legendary", "b": "+20% all stats · 15 min", "have": false},
 ]
 
 # =========================================================================
@@ -423,12 +430,12 @@ const RECIPES := [
 const RARITY_RANK := {"common": 0, "uncommon": 1, "rare": 2, "epic": 3, "legendary": 4, "mythic": 5}
 
 const HEROES_POOL := [
-	{"n": "Ashling", "r": "legendary", "role": "5★ DPS · Pyromancer"},
-	{"n": "Mordrake", "r": "epic", "role": "4★ Tank · Bulwark"},
-	{"n": "Seraphine", "r": "epic", "role": "4★ Healer · Lightbinder"},
-	{"n": "Korr", "r": "rare", "role": "3★ DPS · Reaver"},
-	{"n": "Wisp", "r": "rare", "role": "3★ Support · Lantern"},
-	{"n": "Grub", "r": "common", "role": "Shard · Iron"},
+	{"n": "Pyra", "r": "legendary", "role": "5★ DPS · Emberpuff"},
+	{"n": "Brambles", "r": "epic", "role": "4★ Tank · Thornhugger"},
+	{"n": "Sunny", "r": "epic", "role": "4★ Healer · Dawnsprout"},
+	{"n": "Chomps", "r": "rare", "role": "3★ DPS · Nibbler"},
+	{"n": "Glow", "r": "rare", "role": "3★ Support · Firefly"},
+	{"n": "Pebble", "r": "common", "role": "Shard · Rockling"},
 ]
 
 const GACHA_COST_X1 := 160
@@ -478,27 +485,27 @@ static func gacha_pick(rarity: String, rng: RandomNumberGenerator) -> Dictionary
 
 ## Equipped gear, left column then right column (paperdoll 5+5).
 const GEAR_L := [
-	{"slot": "Helm", "r": "epic", "name": "Cowl of the Hollow", "ilvl": 72, "stats": [["Armour", "+248"], ["Intelligence", "+42"], ["Spell Damage", "+12%"]]},
-	{"slot": "Amulet", "r": "legendary", "name": "Emberglass Pendant", "ilvl": 80, "stats": [["All Attributes", "+30"], ["Fire Damage", "+24%"], ["Crit Multi", "+35%"]]},
-	{"slot": "Body", "r": "epic", "name": "Gravewrought Plate", "ilvl": 75, "stats": [["Armour", "+612"], ["Maximum Life", "+184"], ["Fire Resist", "+38%"]]},
-	{"slot": "Gloves", "r": "rare", "name": "Cinderweave Grips", "ilvl": 68, "stats": [["Attack Speed", "+9%"], ["Dexterity", "+24"]]},
-	{"slot": "Boots", "r": "rare", "name": "Treads of Ash", "ilvl": 66, "stats": [["Movement Speed", "+18%"], ["Maximum Life", "+72"]]},
+	{"slot": "Helm", "r": "epic", "name": "Cap of the Meadow", "ilvl": 72, "stats": [["Armour", "+248"], ["Sparkle", "+42"], ["Sparkle Damage", "+12%"]]},
+	{"slot": "Amulet", "r": "legendary", "name": "Starglass Pendant", "ilvl": 80, "stats": [["All Attributes", "+30"], ["Toasty Damage", "+24%"], ["Crit Multi", "+35%"]]},
+	{"slot": "Body", "r": "epic", "name": "Snugwrought Plate", "ilvl": 75, "stats": [["Armour", "+612"], ["Maximum Life", "+184"], ["Toasty Resist", "+38%"]]},
+	{"slot": "Gloves", "r": "rare", "name": "Berryweave Grips", "ilvl": 68, "stats": [["Attack Speed", "+9%"], ["Nimbleness", "+24"]]},
+	{"slot": "Boots", "r": "rare", "name": "Treads of Fluff", "ilvl": 66, "stats": [["Movement Speed", "+18%"], ["Maximum Life", "+72"]]},
 ]
 const GEAR_R := [
-	{"slot": "Main Hand", "r": "legendary", "name": "Cindergrip Maul", "ilvl": 82, "stats": [["Physical DMG", "470–664"], ["Strength", "+72"], ["Crit Chance", "+8.5%"]]},
-	{"slot": "Off Hand", "r": "epic", "name": "Bulwark of Cinders", "ilvl": 74, "stats": [["Block", "+32%"], ["Armour", "+288"], ["Life", "+96"]]},
-	{"slot": "Ring I", "r": "rare", "name": "Band of Marrow", "ilvl": 64, "stats": [["Cold Resist", "+28%"], ["Mana", "+48"]]},
-	{"slot": "Ring II", "r": "epic", "name": "Loop of Greed", "ilvl": 70, "stats": [["Item Rarity", "+14%"], ["Gold Find", "+22%"]]},
-	{"slot": "Belt", "r": "uncommon", "name": "Girdle of Bone", "ilvl": 60, "stats": [["Maximum Life", "+64"], ["Stun Recovery", "+12%"]]},
+	{"slot": "Main Hand", "r": "legendary", "name": "Bonk Hammer Maul", "ilvl": 82, "stats": [["Bonk DMG", "470–664"], ["Muscle", "+72"], ["Crit Chance", "+8.5%"]]},
+	{"slot": "Off Hand", "r": "epic", "name": "Marshmallow Bulwark", "ilvl": 74, "stats": [["Block", "+32%"], ["Armour", "+288"], ["Life", "+96"]]},
+	{"slot": "Ring I", "r": "rare", "name": "Moonbeam Band", "ilvl": 64, "stats": [["Frosty Resist", "+28%"], ["Mana", "+48"]]},
+	{"slot": "Ring II", "r": "epic", "name": "Berry Loop", "ilvl": 70, "stats": [["Item Rarity", "+14%"], ["Coin Find", "+22%"]]},
+	{"slot": "Belt", "r": "uncommon", "name": "Honey Girdle", "ilvl": 60, "stats": [["Maximum Life", "+64"], ["Stun Recovery", "+12%"]]},
 ]
 
 ## The 5 main attributes: key, name, value, color, description.
 const MAIN_STATS := [
-	{"k": "STR", "name": "Strength", "v": 642, "c": Color("e0584a"), "d": "Physical damage & armour."},
-	{"k": "DEX", "name": "Dexterity", "v": 388, "c": Color("6fcf6a"), "d": "Attack speed, accuracy & evasion."},
-	{"k": "INT", "name": "Intelligence", "v": 514, "c": Color("46c2d4"), "d": "Spell damage & maximum mana."},
-	{"k": "VIT", "name": "Vitality", "v": 470, "c": Color("d6a24a"), "d": "Maximum life & recovery."},
-	{"k": "LCK", "name": "Luck", "v": 196, "c": Color("a661d6"), "d": "Crit chance, item rarity & gold."},
+	{"k": "STR", "name": "Muscle", "v": 642, "c": Color("f25c4c"), "d": "Bonk damage & armour."},
+	{"k": "DEX", "name": "Nimbleness", "v": 388, "c": Color("2bab74"), "d": "Attack speed, accuracy & evasion."},
+	{"k": "INT", "name": "Sparkle", "v": 514, "c": Color("3d95e8"), "d": "Sparkle damage & maximum mana."},
+	{"k": "VIT", "name": "Snuggle", "v": 470, "c": Color("d98d16"), "d": "Maximum life & recovery."},
+	{"k": "LCK", "name": "Luck", "v": 196, "c": Color("b46ef5"), "d": "Crit chance, item rarity & coins."},
 ]
 
 ## Detailed/derived stats: [label, value]. "−"-prefixed values render red.
@@ -506,8 +513,8 @@ const DETAILED := [
 	["Attack DPS", "4.82M"], ["Spell DPS", "3.10M"], ["Crit Chance", "42.4%"], ["Crit Multiplier", "385%"],
 	["Attack Speed", "1.86/s"], ["Cast Speed", "1.42/s"], ["Accuracy", "94%"], ["Life Regen", "2,140/s"],
 	["Maximum Mana", "9,240"], ["Mana Regen", "880/s"], ["Evasion", "6,210"], ["Block Chance", "32%"],
-	["Movement Speed", "+18%"], ["Fire Resist", "+58%"], ["Cold Resist", "+44%"], ["Lightning Resist", "+39%"],
-	["Chaos Resist", "−12%"], ["Item Rarity", "+36%"], ["Gold Find", "+41%"], ["XP Gain", "+12%"],
+	["Movement Speed", "+18%"], ["Toasty Resist", "+58%"], ["Frosty Resist", "+44%"], ["Zappy Resist", "+39%"],
+	["Gloomy Resist", "−12%"], ["Item Rarity", "+36%"], ["Coin Find", "+41%"], ["XP Gain", "+12%"],
 ]
 
 ## Combat summary rows for the character sheet: [icon, label, value, color_key, stats].
@@ -520,40 +527,40 @@ const COMBAT_SUMMARY := [
 ## Inventory bag, keyed by tab id. Items: n, r, t, optional q (stack), s (stats).
 const BAG := {
 	"equipment": [
-		{"n": "Cinder Shard Blade", "r": "epic", "t": "Sword · iLvl 71", "s": [["Physical DMG", "388–520"], ["Fire Damage", "+18%"]]},
-		{"n": "Gravewax Seal", "r": "epic", "t": "Amulet · iLvl 69", "s": [["Maximum Life", "+120"], ["Cast Speed", "+8%"]]},
-		{"n": "Emberglass Band", "r": "legendary", "t": "Ring · iLvl 78", "s": [["Fire Damage", "+22%"], ["Crit Multi", "+28%"]]},
-		{"n": "Hexweave Cowl", "r": "rare", "t": "Helm · iLvl 64", "s": [["Intelligence", "+28"], ["Mana", "+60"]]},
-		{"n": "Ashplate Greaves", "r": "rare", "t": "Boots · iLvl 62", "s": [["Armour", "+180"], ["Move Speed", "+12%"]]},
-		{"n": "Veilwoven Wrap", "r": "rare", "t": "Chest · iLvl 60", "s": [["Evasion", "+240"], ["Cold Resist", "+20%"]]},
-		{"n": "Wyrmhide Belt", "r": "rare", "t": "Belt · iLvl 58", "s": [["Life", "+88"], ["Stun Recovery", "+15%"]]},
-		{"n": "Pitiron Gauntlets", "r": "uncommon", "t": "Gloves · iLvl 55", "s": [["Strength", "+18"], ["Armour", "+96"]]},
-		{"n": "Bone Pauldron", "r": "uncommon", "t": "Shoulder · iLvl 52", "s": [["Armour", "+120"]]},
-		{"n": "Marrow Club", "r": "common", "t": "Mace · iLvl 41", "s": [["Physical DMG", "120–180"]]},
-		{"n": "Tattered Grimoire", "r": "common", "t": "Offhand · iLvl 38", "s": [["Spell Damage", "+6%"]]},
-		{"n": "Sigil of Embers", "r": "epic", "t": "Ring · iLvl 66", "s": [["Ignite Chance", "+12%"], ["Fire Resist", "+18%"]]},
+		{"n": "Twinkle Shard Blade", "r": "epic", "t": "Sword · iLvl 71", "s": [["Bonk DMG", "388–520"], ["Toasty Damage", "+18%"]]},
+		{"n": "Honeywax Seal", "r": "epic", "t": "Amulet · iLvl 69", "s": [["Maximum Life", "+120"], ["Cast Speed", "+8%"]]},
+		{"n": "Starglass Band", "r": "legendary", "t": "Ring · iLvl 78", "s": [["Toasty Damage", "+22%"], ["Crit Multi", "+28%"]]},
+		{"n": "Starweave Cap", "r": "rare", "t": "Helm · iLvl 64", "s": [["Sparkle", "+28"], ["Mana", "+60"]]},
+		{"n": "Puddleplate Greaves", "r": "rare", "t": "Boots · iLvl 62", "s": [["Armour", "+180"], ["Move Speed", "+12%"]]},
+		{"n": "Cloudwoven Wrap", "r": "rare", "t": "Chest · iLvl 60", "s": [["Evasion", "+240"], ["Frosty Resist", "+20%"]]},
+		{"n": "Snailhide Belt", "r": "rare", "t": "Belt · iLvl 58", "s": [["Life", "+88"], ["Stun Recovery", "+15%"]]},
+		{"n": "Tinplate Gauntlets", "r": "uncommon", "t": "Gloves · iLvl 55", "s": [["Muscle", "+18"], ["Armour", "+96"]]},
+		{"n": "Acorn Pauldron", "r": "uncommon", "t": "Shoulder · iLvl 52", "s": [["Armour", "+120"]]},
+		{"n": "Marshmallow Club", "r": "common", "t": "Mace · iLvl 41", "s": [["Bonk DMG", "120–180"]]},
+		{"n": "Doodled Grimoire", "r": "common", "t": "Offhand · iLvl 38", "s": [["Sparkle Damage", "+6%"]]},
+		{"n": "Sigil of Sunbeams", "r": "epic", "t": "Ring · iLvl 66", "s": [["Ignite Chance", "+12%"], ["Toasty Resist", "+18%"]]},
 	],
 	"consumables": [
-		{"n": "Greater Life Flask", "r": "rare", "t": "Flask", "q": 12, "s": [["Restores", "45% Life"]]},
-		{"n": "Mana Draught", "r": "uncommon", "t": "Flask", "q": 8, "s": [["Restores", "60% Mana"]]},
-		{"n": "Emberroot Stew", "r": "epic", "t": "Meal", "q": 3, "s": [["Party ATK", "+12% · 30m"]]},
-		{"n": "Stoneskin Tonic", "r": "rare", "t": "Tonic", "q": 5, "s": [["Armour", "+25% · 10m"]]},
-		{"n": "Scroll of Return", "r": "common", "t": "Scroll", "q": 14, "s": [["Effect", "Teleport to camp"]]},
-		{"n": "Hollow Bread", "r": "common", "t": "Meal", "q": 9, "s": [["XP Gain", "+5% · 30m"]]},
+		{"n": "Big Berry Fizz", "r": "rare", "t": "Flask", "q": 12, "s": [["Restores", "45% Life"]]},
+		{"n": "Mana Lemonade", "r": "uncommon", "t": "Flask", "q": 8, "s": [["Restores", "60% Mana"]]},
+		{"n": "Honeyroot Stew", "r": "epic", "t": "Meal", "q": 3, "s": [["Party ATK", "+12% · 30m"]]},
+		{"n": "Pebbleskin Tonic", "r": "rare", "t": "Tonic", "q": 5, "s": [["Armour", "+25% · 10m"]]},
+		{"n": "Scroll of Homecoming", "r": "common", "t": "Scroll", "q": 14, "s": [["Effect", "Skip back to the meadow"]]},
+		{"n": "Butter Bun", "r": "common", "t": "Meal", "q": 9, "s": [["XP Gain", "+5% · 30m"]]},
 	],
 	"materials": [
-		{"n": "Iron Ingot", "r": "common", "t": "Smithing", "q": 46},
-		{"n": "Ember Dust", "r": "rare", "t": "Smithing", "q": 38},
-		{"n": "Relic Shard", "r": "epic", "t": "Relic-craft", "q": 11},
-		{"n": "Gravesilk Thread", "r": "uncommon", "t": "Tailoring", "q": 23},
-		{"n": "Hollow Marrow", "r": "rare", "t": "Alchemy", "q": 17},
-		{"n": "Cinder Core", "r": "legendary", "t": "Smithing · rare drop", "q": 2},
-		{"n": "Bone Meal", "r": "common", "t": "Alchemy", "q": 64},
+		{"n": "Tin Bits", "r": "common", "t": "Tinkering", "q": 46},
+		{"n": "Sparkle Dust", "r": "rare", "t": "Tinkering", "q": 38},
+		{"n": "Charm Shard", "r": "epic", "t": "Charm-craft", "q": 11},
+		{"n": "Ribbon Thread", "r": "uncommon", "t": "Tailoring", "q": 23},
+		{"n": "Moon Syrup", "r": "rare", "t": "Snack-craft", "q": 17},
+		{"n": "Star Core", "r": "legendary", "t": "Tinkering · rare drop", "q": 2},
+		{"n": "Cookie Crumbs", "r": "common", "t": "Snack-craft", "q": 64},
 	],
 	"quest": [
-		{"n": "Warden's Rusted Key", "r": "epic", "t": "Quest · The Sunken Reliquary", "s": [["Opens", "Reliquary Gate 4-10"]]},
-		{"n": "Pale Census Ledger", "r": "rare", "t": "Quest · Hollowreach Camp", "s": [["Deliver to", "Bulletin Board"]]},
-		{"n": "Ashling's Locket", "r": "legendary", "t": "Quest · Personal", "s": [["Hint", "She won't speak of it."]]},
+		{"n": "Wobbly Old Key", "r": "epic", "t": "Quest · The Glimmer Grove", "s": [["Opens", "Glimmer Gate 4-10"]]},
+		{"n": "Meadow Census Ledger", "r": "rare", "t": "Quest · BinkBonk Meadow", "s": [["Deliver to", "Bulletin Board"]]},
+		{"n": "Pyra's Locket", "r": "legendary", "t": "Quest · Personal", "s": [["Hint", "She won't say where she found it."]]},
 	],
 }
 
@@ -565,18 +572,18 @@ const INV_CELLS := 30
 # =========================================================================
 
 const PETS := [
-	{"n": "Emberwhelp", "r": "legendary", "owned": true, "active": true, "eff": "+8% party Fire Damage", "role": "Drake"},
-	{"n": "Cryptbat", "r": "epic", "owned": true, "active": false, "eff": "+6% Life Leech", "role": "Swarm"},
-	{"n": "Gloomcat", "r": "epic", "owned": true, "active": false, "eff": "+10% Crit vs marked", "role": "Stalker"},
-	{"n": "Tomb Beetle", "r": "rare", "owned": true, "active": false, "eff": "+12% Armour", "role": "Guard"},
-	{"n": "Will-o-Wisp", "r": "rare", "owned": true, "active": false, "eff": "+8% Mana regen", "role": "Lantern"},
-	{"n": "Bone Pup", "r": "uncommon", "owned": true, "active": false, "eff": "+5% Gold Find", "role": "Scout"},
-	{"n": "Ash Sprite", "r": "uncommon", "owned": true, "active": false, "eff": "+4% Rarity", "role": "Spirit"},
-	{"n": "Mire Toad", "r": "common", "owned": true, "active": false, "eff": "+10 Max Life", "role": "Croaker"},
-	{"n": "Dread Owl", "r": "legendary", "owned": false, "active": false, "eff": "Reveals rare loot", "role": "Omen", "unlock_summons": 12},
-	{"n": "Grave Worm", "r": "epic", "owned": false, "active": false, "eff": "+8% XP gain", "role": "Burrower", "unlock_summons": 6},
-	{"n": "Cinder Fox", "r": "rare", "owned": false, "active": false, "eff": "+6% move speed", "role": "Trickster", "unlock_summons": 3},
-	{"n": "Hex Imp", "r": "epic", "owned": false, "active": false, "eff": "Curses on hit", "role": "Fiend", "unlock_summons": 9},
+	{"n": "Toasty", "r": "legendary", "owned": true, "active": true, "eff": "+8% party Toasty Damage", "role": "Dragonpuff"},
+	{"n": "Flappy", "r": "epic", "owned": true, "active": false, "eff": "+6% Life Nibble", "role": "Batling"},
+	{"n": "Mittens", "r": "epic", "owned": true, "active": false, "eff": "+10% Crit vs marked", "role": "Kitty"},
+	{"n": "Clicky", "r": "rare", "owned": true, "active": false, "eff": "+12% Armour", "role": "Beetle Buddy"},
+	{"n": "Glimmer", "r": "rare", "owned": true, "active": false, "eff": "+8% Mana regen", "role": "Wisp"},
+	{"n": "Waggles", "r": "uncommon", "owned": true, "active": false, "eff": "+5% Coin Find", "role": "Puppy"},
+	{"n": "Twinkle", "r": "uncommon", "owned": true, "active": false, "eff": "+4% Rarity", "role": "Sprite"},
+	{"n": "Ribbit", "r": "common", "owned": true, "active": false, "eff": "+10 Max Life", "role": "Toad"},
+	{"n": "Hootie", "r": "legendary", "owned": false, "active": false, "eff": "Sniffs out rare loot", "role": "Owl", "unlock_summons": 12},
+	{"n": "Wiggles", "r": "epic", "owned": false, "active": false, "eff": "+8% XP gain", "role": "Bookworm", "unlock_summons": 6},
+	{"n": "Foxtrot", "r": "rare", "owned": false, "active": false, "eff": "+6% move speed", "role": "Fox", "unlock_summons": 3},
+	{"n": "Impy", "r": "epic", "owned": false, "active": false, "eff": "Pranks foes on hit", "role": "Imp", "unlock_summons": 9},
 ]
 
 
@@ -601,9 +608,9 @@ static func pet_unlock_need(i: int) -> int:
 
 ## Stage-milestone relics that materialize into the empty equipped slots.
 const RELIC_STAGE_UNLOCKS := [
-	{"idx": 4, "at": 450, "n": "Widow's Lantern", "r": "legendary",
-		"eff": "+10% Gold Find · +6% Item Rarity"},
-	{"idx": 5, "at": 520, "n": "Pale Idol", "r": "epic",
+	{"idx": 4, "at": 450, "n": "Firefly Lantern", "r": "legendary",
+		"eff": "+10% Coin Find · +6% Item Rarity"},
+	{"idx": 5, "at": 520, "n": "Moon Idol", "r": "epic",
 		"eff": "+9% All Damage"},
 ]
 
@@ -619,19 +626,19 @@ static func live_relics() -> Array:
 	return out
 
 const RELICS := [
-	{"n": "Hollow Crown", "r": "legendary", "eff": "+12% All Damage · +60 Max Life", "owned": true, "empty": false},
-	{"n": "Gravewrought Sigil", "r": "epic", "eff": "+18% Crit Multiplier", "owned": true, "empty": false},
-	{"n": "Ashen Tear", "r": "epic", "eff": "+22% Fire Damage", "owned": true, "empty": false},
-	{"n": "Coil of the Deep", "r": "rare", "eff": "+30 Mana · +8% Cast Speed", "owned": true, "empty": false},
+	{"n": "Sunny Crown", "r": "legendary", "eff": "+12% All Damage · +60 Max Life", "owned": true, "empty": false},
+	{"n": "Star Sigil", "r": "epic", "eff": "+18% Crit Multiplier", "owned": true, "empty": false},
+	{"n": "Honey Drop", "r": "epic", "eff": "+22% Toasty Damage", "owned": true, "empty": false},
+	{"n": "Ribbon of Tides", "r": "rare", "eff": "+30 Mana · +8% Cast Speed", "owned": true, "empty": false},
 	{"n": "", "r": "common", "eff": "", "owned": false, "empty": true},
 	{"n": "", "r": "common", "eff": "", "owned": false, "empty": true},
 ]
 
 const RELIC_COLL := [
-	{"n": "Widow's Lantern", "r": "legendary"}, {"n": "Pale Idol", "r": "epic"},
-	{"n": "Rusted Crown", "r": "rare"}, {"n": "Bog Charm", "r": "uncommon"},
-	{"n": "Cracked Vial", "r": "common"}, {"n": "Sunken Bell", "r": "rare"},
-	{"n": "Ember Knot", "r": "epic"}, {"n": "Marrow Die", "r": "uncommon"},
+	{"n": "Firefly Lantern", "r": "legendary"}, {"n": "Moon Idol", "r": "epic"},
+	{"n": "Tin Crown", "r": "rare"}, {"n": "Clover Charm", "r": "uncommon"},
+	{"n": "Fizzy Vial", "r": "common"}, {"n": "Jingle Bell", "r": "rare"},
+	{"n": "Sun Knot", "r": "epic"}, {"n": "Lucky Die", "r": "uncommon"},
 ]
 
 # =========================================================================
@@ -639,16 +646,16 @@ const RELIC_COLL := [
 # =========================================================================
 
 const SEASON := {
-	"num": "III", "name": "Emberfall", "ends": "12d 04h 38m",
-	"you": {"tier": "Emberlord", "next": "Hollow Sovereign", "pct": "Top 0.2%", "to_next": 1, "prog": 88},
+	"num": "III", "name": "Starfall", "ends": "12d 04h 38m",
+	"you": {"tier": "Honey Knight", "next": "Star Sovereign", "pct": "Top 0.2%", "to_next": 1, "prog": 88},
 }
 
 const TIERS := [
-	{"name": "Hollow Sovereign", "rar": "legendary", "range": "Top 10", "reward": "Mythic Cache · Title", "you": false},
-	{"name": "Emberlord", "rar": "epic", "range": "Top 50", "reward": "Epic Cache · 1,200 Gold", "you": true},
-	{"name": "Goldmark", "rar": "rare", "range": "Top 500", "reward": "Rare Cache · 600 Gold", "you": false},
-	{"name": "Ironclad", "rar": "uncommon", "range": "Top 5,000", "reward": "Uncommon Cache", "you": false},
-	{"name": "Ashbound", "rar": "common", "range": "All Delvers", "reward": "Participation Cache", "you": false},
+	{"name": "Star Sovereign", "rar": "legendary", "range": "Top 10", "reward": "Mythic Gift Box · Title", "you": false},
+	{"name": "Honey Knight", "rar": "epic", "range": "Top 50", "reward": "Epic Gift Box · 1,200 Coins", "you": true},
+	{"name": "Minty Mate", "rar": "rare", "range": "Top 500", "reward": "Rare Gift Box · 600 Coins", "you": false},
+	{"name": "Cozy Cub", "rar": "uncommon", "range": "Top 5,000", "reward": "Uncommon Gift Box", "you": false},
+	{"name": "Sleepy Snail", "rar": "common", "range": "All Adventurers", "reward": "Participation Gift Box", "you": false},
 ]
 
 const CATS := [
@@ -656,6 +663,7 @@ const CATS := [
 	{"key": "stage", "label": "Deepest Stage", "hot": "W", "sub": "Deepest Stage"},
 	{"key": "boss", "label": "Boss Damage", "hot": "E", "sub": "Boss Damage"},
 	{"key": "weekly", "label": "Weekly Climb", "hot": "R", "sub": "Ranks Climbed"},
+	{"key": "stampede", "label": "Stampede", "hot": "T", "sub": "Best Run Score"},
 ]
 
 const SCOPES := [["global", "Global"], ["friends", "Friends"], ["guild", "Guild"]]
@@ -668,25 +676,25 @@ const GUILDS := {
 	"TMB": {"name": "Snug Bugs", "c": Color("6fcf6a")},
 }
 
-## One dataset; each category sorts the same delvers differently.
-## stage is [act, sub]; power/boss in millions.
+## One dataset; each category sorts the same adventurers differently.
+## stage is [act, sub]; power/boss in millions; stampede = best Star Stampede run.
 const PLAYERS := [
-	{"name": "Mournheart", "guild": "VIG", "lv": 88, "tier": "Hollow Sovereign", "power": 412.6, "stage": [9, 12], "boss": 88.4, "weekly": 142, "trend": 0, "you": false, "friend": false},
-	{"name": "Sablewing", "guild": "HEX", "lv": 84, "tier": "Hollow Sovereign", "power": 388.0, "stage": [9, 4], "boss": 79.2, "weekly": 96, "trend": 1, "you": false, "friend": true},
-	{"name": "Ironwake", "guild": "ASH", "lv": 81, "tier": "Hollow Sovereign", "power": 362.9, "stage": [8, 40], "boss": 91.0, "weekly": 210, "trend": 2, "you": false, "friend": false},
-	{"name": "Drossel", "guild": "VIG", "lv": 79, "tier": "Hollow Sovereign", "power": 344.2, "stage": [8, 38], "boss": 71.5, "weekly": 54, "trend": -1, "you": false, "friend": true},
-	{"name": "Lysa Vane", "guild": "GLD", "lv": 77, "tier": "Hollow Sovereign", "power": 318.7, "stage": [8, 44], "boss": 66.1, "weekly": 118, "trend": 1, "you": false, "friend": false},
-	{"name": "Korrath", "guild": "TMB", "lv": 74, "tier": "Hollow Sovereign", "power": 289.4, "stage": [8, 22], "boss": 61.8, "weekly": 33, "trend": 0, "you": false, "friend": false},
-	{"name": "Grimsel", "guild": "ASH", "lv": 72, "tier": "Hollow Sovereign", "power": 265.0, "stage": [8, 15], "boss": 58.2, "weekly": 175, "trend": 1, "you": false, "friend": false},
-	{"name": "Hollowfen", "guild": "HEX", "lv": 70, "tier": "Hollow Sovereign", "power": 243.1, "stage": [8, 8], "boss": 54.0, "weekly": 60, "trend": -2, "you": false, "friend": false},
-	{"name": "Thornard", "guild": "GLD", "lv": 67, "tier": "Hollow Sovereign", "power": 226.8, "stage": [7, 44], "boss": 49.7, "weekly": 88, "trend": 1, "you": false, "friend": true},
-	{"name": "Mariss", "guild": "VIG", "lv": 64, "tier": "Hollow Sovereign", "power": 204.5, "stage": [7, 36], "boss": 45.2, "weekly": 41, "trend": 0, "you": false, "friend": false},
-	{"name": "Pip", "guild": "ASH", "lv": 47, "tier": "Emberlord", "power": 188.4, "stage": [7, 40], "boss": 96.8, "weekly": 224, "trend": 3, "you": true, "friend": true},
-	{"name": "Dunmore", "guild": "TMB", "lv": 61, "tier": "Emberlord", "power": 176.0, "stage": [7, 18], "boss": 37.1, "weekly": 22, "trend": -1, "you": false, "friend": false},
-	{"name": "Ashveil", "guild": "ASH", "lv": 58, "tier": "Emberlord", "power": 162.9, "stage": [7, 10], "boss": 33.6, "weekly": 150, "trend": 1, "you": false, "friend": true},
-	{"name": "Pyrrich", "guild": "HEX", "lv": 55, "tier": "Emberlord", "power": 150.2, "stage": [6, 40], "boss": 30.0, "weekly": 18, "trend": 0, "you": false, "friend": false},
-	{"name": "Gravewend", "guild": "GLD", "lv": 52, "tier": "Goldmark", "power": 138.4, "stage": [6, 33], "boss": 27.4, "weekly": 73, "trend": 1, "you": false, "friend": false},
-	{"name": "Sister Cael", "guild": "TMB", "lv": 49, "tier": "Goldmark", "power": 126.1, "stage": [6, 25], "boss": 24.2, "weekly": 29, "trend": -1, "you": false, "friend": true},
+	{"name": "Marshmallow", "guild": "VIG", "lv": 88, "tier": "Star Sovereign", "power": 412.6, "stage": [9, 12], "boss": 88.4, "weekly": 142, "stampede": 48210, "trend": 0, "you": false, "friend": false},
+	{"name": "Sprinkles", "guild": "HEX", "lv": 84, "tier": "Star Sovereign", "power": 388.0, "stage": [9, 4], "boss": 79.2, "weekly": 96, "stampede": 36400, "trend": 1, "you": false, "friend": true},
+	{"name": "Waffles", "guild": "ASH", "lv": 81, "tier": "Star Sovereign", "power": 362.9, "stage": [8, 40], "boss": 91.0, "weekly": 210, "stampede": 41050, "trend": 2, "you": false, "friend": false},
+	{"name": "Doodle", "guild": "VIG", "lv": 79, "tier": "Star Sovereign", "power": 344.2, "stage": [8, 38], "boss": 71.5, "weekly": 54, "stampede": 31220, "trend": -1, "you": false, "friend": true},
+	{"name": "Luna Bee", "guild": "GLD", "lv": 77, "tier": "Star Sovereign", "power": 318.7, "stage": [8, 44], "boss": 66.1, "weekly": 118, "stampede": 27800, "trend": 1, "you": false, "friend": false},
+	{"name": "Biscuit", "guild": "TMB", "lv": 74, "tier": "Star Sovereign", "power": 289.4, "stage": [8, 22], "boss": 61.8, "weekly": 33, "stampede": 9400, "trend": 0, "you": false, "friend": false},
+	{"name": "Gumdrop", "guild": "ASH", "lv": 72, "tier": "Star Sovereign", "power": 265.0, "stage": [8, 15], "boss": 58.2, "weekly": 175, "stampede": 22150, "trend": 1, "you": false, "friend": false},
+	{"name": "Hoppy", "guild": "HEX", "lv": 70, "tier": "Star Sovereign", "power": 243.1, "stage": [8, 8], "boss": 54.0, "weekly": 60, "stampede": 18700, "trend": -2, "you": false, "friend": false},
+	{"name": "Toffee", "guild": "GLD", "lv": 67, "tier": "Star Sovereign", "power": 226.8, "stage": [7, 44], "boss": 49.7, "weekly": 88, "stampede": 15300, "trend": 1, "you": false, "friend": true},
+	{"name": "Mochi", "guild": "VIG", "lv": 64, "tier": "Star Sovereign", "power": 204.5, "stage": [7, 36], "boss": 45.2, "weekly": 41, "stampede": 7900, "trend": 0, "you": false, "friend": false},
+	{"name": "Pip", "guild": "ASH", "lv": 47, "tier": "Honey Knight", "power": 188.4, "stage": [7, 40], "boss": 96.8, "weekly": 224, "stampede": 0, "trend": 3, "you": true, "friend": true},
+	{"name": "Dumpling", "guild": "TMB", "lv": 61, "tier": "Honey Knight", "power": 176.0, "stage": [7, 18], "boss": 37.1, "weekly": 22, "stampede": 5200, "trend": -1, "you": false, "friend": false},
+	{"name": "Acorn", "guild": "ASH", "lv": 58, "tier": "Honey Knight", "power": 162.9, "stage": [7, 10], "boss": 33.6, "weekly": 150, "stampede": 12300, "trend": 1, "you": false, "friend": true},
+	{"name": "Pickle", "guild": "HEX", "lv": 55, "tier": "Honey Knight", "power": 150.2, "stage": [6, 40], "boss": 30.0, "weekly": 18, "stampede": 3100, "trend": 0, "you": false, "friend": false},
+	{"name": "Gingersnap", "guild": "GLD", "lv": 52, "tier": "Minty Mate", "power": 138.4, "stage": [6, 33], "boss": 27.4, "weekly": 73, "stampede": 6800, "trend": 1, "you": false, "friend": false},
+	{"name": "Cocoa", "guild": "TMB", "lv": 49, "tier": "Minty Mate", "power": 126.1, "stage": [6, 25], "boss": 24.2, "weekly": 29, "stampede": 2400, "trend": -1, "you": false, "friend": true},
 ]
 
 ## Sort key for a player in a category.
@@ -698,6 +706,8 @@ static func lb_sort_key(p: Dictionary, cat: String) -> float:
 			return float(p["boss"])
 		"weekly":
 			return float(p["weekly"])
+		"stampede":
+			return float(p.get("stampede", 0))
 		_:
 			return float(p["power"])
 
@@ -711,6 +721,9 @@ static func lb_fmt_val(p: Dictionary, cat: String) -> String:
 			return "%.1fM" % float(p["boss"])
 		"weekly":
 			return "+%d" % int(p["weekly"])
+		"stampede":
+			var v := int(p.get("stampede", 0))
+			return Style.group_int(v) if v > 0 else "—"
 		_:
 			return "%.1fM" % float(p["power"])
 
@@ -736,11 +749,11 @@ const ARMS := [
 ]
 
 const MINOR := {
-	"STR": ["+10 Strength", "+8 Physical Damage", "+12 Armour", "+6% Melee Damage"],
-	"DEX": ["+10 Dexterity", "+6% Attack Speed", "+8 Accuracy", "+4% Evasion"],
-	"INT": ["+10 Intelligence", "+12 Maximum Mana", "+6% Spell Damage", "+5% Cast Speed"],
+	"STR": ["+10 Muscle", "+8 Bonk Damage", "+12 Armour", "+6% Bonk Damage"],
+	"DEX": ["+10 Nimbleness", "+6% Attack Speed", "+8 Accuracy", "+4% Evasion"],
+	"INT": ["+10 Sparkle", "+12 Maximum Mana", "+6% Sparkle Damage", "+5% Cast Speed"],
 	"VIT": ["+14 Maximum Life", "+8 Life Regen", "+10 Armour", "+4% Life Recovery"],
-	"LUCK": ["+8 Luck", "+4% Item Rarity", "+3% Crit Chance", "+5% Gold Find"],
+	"LUCK": ["+8 Luck", "+4% Item Rarity", "+3% Crit Chance", "+5% Coin Find"],
 }
 
 # Unique NOTABLE talents (PoE-style): named nodes with strong, distinct
@@ -749,40 +762,40 @@ const MINOR := {
 # tree reads as a web of distinct skills (assigned without repetition).
 const NOTABLE := {
 	"Might": [
-		["Reaver's Wrath", "+24% Melee Damage · +30 Strength"],
+		["Reaver's Wrath", "+24% Bonk Damage · +30 Muscle"],
 		["Ironhide", "+18% Armour · +40 Maximum Life"],
-		["Bonecrusher", "+20% Melee Damage · +8% Stun"],
-		["Titan's Grip", "+35 Strength · +12% Physical Damage"],
-		["Bloodhunger", "+15% Melee Damage · Leech 4% of damage as Life"],
-		["Warbringer", "+10% Attack Speed · +18% Melee Damage"],
-		["Crushing Blows", "+25% Crit Multiplier · +6% Melee Damage"],
+		["Bonecrusher", "+20% Bonk Damage · +8% Stun"],
+		["Titan's Grip", "+35 Muscle · +12% Bonk Damage"],
+		["Bloodhunger", "+15% Bonk Damage · Leech 4% of damage as Life"],
+		["Warbringer", "+10% Attack Speed · +18% Bonk Damage"],
+		["Crushing Blows", "+25% Crit Multiplier · +6% Bonk Damage"],
 		["Unflinching", "+60 Maximum Life · Cannot be knocked back"],
-		["Berserker's Call", "+22% Melee Damage · stronger below half Life"],
-		["Mountainous", "+24% Armour · +20 Strength"],
+		["Berserker's Call", "+22% Bonk Damage · stronger below half Life"],
+		["Mountainous", "+24% Armour · +20 Muscle"],
 	],
 	"Precision": [
 		["Deadeye", "+12% Crit Multiplier · +20 Accuracy"],
 		["Fleetfoot", "+10% Attack Speed · +8% Evasion"],
 		["Hawkeye", "+18% Accuracy · +6% Crit Chance"],
 		["Phantom Step", "+12% Evasion · +6% Movement Speed"],
-		["Lacerate", "+15 Dexterity · +12% Attack Speed · Bleed on hit"],
+		["Lacerate", "+15 Nimbleness · +12% Attack Speed · Bleed on hit"],
 		["Twinstrike", "+12% Attack Speed · chance to strike twice"],
 		["Vital Aim", "+8% Crit Chance · +20% damage to full-life foes"],
 		["Windrunner", "+14% Movement Speed · +8% Attack Speed"],
 		["Pinpoint", "+25% Crit Multiplier · +15 Accuracy"],
-		["Evasive Dance", "+16% Evasion · +20 Dexterity"],
+		["Evasive Dance", "+16% Evasion · +20 Nimbleness"],
 	],
 	"Arcana": [
-		["Manaweaver", "+30 Maximum Mana · +12% Spell Damage"],
-		["Hexbloom", "+20 Intelligence · Curses spread to nearby foes"],
-		["Spellfire", "+18% Spell Damage · +6% Cast Speed"],
-		["Mind Over Matter", "+24 Intelligence · pay 20% of damage from Mana"],
-		["Arcane Surge", "+25% Spell Damage after spending Mana"],
+		["Manaweaver", "+30 Maximum Mana · +12% Sparkle Damage"],
+		["Hexbloom", "+20 Sparkle · Curses spread to nearby foes"],
+		["Spellfire", "+18% Sparkle Damage · +6% Cast Speed"],
+		["Mind Over Matter", "+24 Sparkle · pay 20% of damage from Mana"],
+		["Arcane Surge", "+25% Sparkle Damage after spending Mana"],
 		["Frostbite", "+18% Cold Damage · +8% Freeze chance"],
-		["Soul Siphon", "+12% Spell Damage · cursed kills restore Mana"],
-		["Runescarred", "+24 Intelligence · +10% Spell Damage"],
-		["Overcharge", "+30% Spell Damage · -10% Cast Speed"],
-		["Whispering Doom", "+15 Intelligence · apply an additional Curse"],
+		["Soul Siphon", "+12% Sparkle Damage · cursed kills restore Mana"],
+		["Runescarred", "+24 Sparkle · +10% Sparkle Damage"],
+		["Overcharge", "+30% Sparkle Damage · -10% Cast Speed"],
+		["Whispering Doom", "+15 Sparkle · apply an additional Curse"],
 	],
 	"Endurance": [
 		["Bulwark", "+60 Maximum Life · +14% Block"],
@@ -791,34 +804,34 @@ const NOTABLE := {
 		["Sanguine", "+80 Maximum Life · +6% Life Regen"],
 		["Indomitable", "+12% Block · Cannot be Frozen"],
 		["Wellspring", "+20% Life Regen · +40 Maximum Life"],
-		["Thick Skin", "+24% Armour · +30 Vitality"],
+		["Thick Skin", "+24% Armour · +30 Snuggle"],
 		["Second Wind", "+50 Maximum Life · recover Life on a killing blow"],
 		["Bastion", "+18% Block · +50 Maximum Life"],
-		["Lifeblood", "+30% Life Recovery · +20 Vitality"],
+		["Lifeblood", "+30% Life Recovery · +20 Snuggle"],
 	],
 	"Fortune": [
-		["Goldtongue", "+18% Gold Find · +6% Item Rarity"],
+		["Goldtongue", "+18% Coin Find · +6% Item Rarity"],
 		["Fated", "+8% Crit Chance · +12% Item Rarity"],
-		["Greedy", "+24% Gold Find · +10 Luck"],
-		["Treasurehunter", "+14% Item Rarity · +8% Gold Find"],
+		["Greedy", "+24% Coin Find · +10 Luck"],
+		["Treasurehunter", "+14% Item Rarity · +8% Coin Find"],
 		["Lucky Strike", "+10% Crit Chance · +8 Luck"],
 		["Windfall", "+10% Item Rarity · slain foes drop more"],
-		["Silver Tongue", "+30% Gold Find · -5% Item Rarity"],
+		["Silver Tongue", "+30% Coin Find · -5% Item Rarity"],
 		["Charmed", "+12% Item Rarity · +6% Crit Multiplier"],
-		["Prospector", "+20% Gold Find · +5% XP Gain"],
+		["Prospector", "+20% Coin Find · +5% XP Gain"],
 		["Cardsharp", "+14% Crit Chance · +10% Item Rarity"],
 	],
 	"Ruin": [
-		["Cinderbrand", "+18% Fire Damage · Ignites deal +40% damage"],
-		["Scorched Earth", "+12% Fire Damage · +25% Burn duration"],
-		["Immolate", "+20% Fire Damage · Ignite on Crit"],
-		["Pyroclasm", "+28% Fire Damage · -8% Maximum Life"],
-		["Wildfire", "+15% Fire Damage · Ignites spread to nearby foes"],
-		["Emberheart", "+15% Fire Damage · recover Life when igniting"],
-		["Conflagration", "+10% Fire Damage · +30% Burn damage"],
-		["Ashbringer", "+22% Fire Damage · +20 Strength"],
-		["Searing Touch", "+18% Fire Damage · +6% Cast Speed"],
-		["Funeral Pyre", "+12% Fire Damage · burning kills heal you"],
+		["Cinderbrand", "+18% Toasty Damage · Ignites deal +40% damage"],
+		["Scorched Earth", "+12% Toasty Damage · +25% Burn duration"],
+		["Immolate", "+20% Toasty Damage · Ignite on Crit"],
+		["Pyroclasm", "+28% Toasty Damage · -8% Maximum Life"],
+		["Wildfire", "+15% Toasty Damage · Ignites spread to nearby foes"],
+		["Emberheart", "+15% Toasty Damage · recover Life when igniting"],
+		["Conflagration", "+10% Toasty Damage · +30% Burn damage"],
+		["Ashbringer", "+22% Toasty Damage · +20 Muscle"],
+		["Searing Touch", "+18% Toasty Damage · +6% Cast Speed"],
+		["Funeral Pyre", "+12% Toasty Damage · burning kills heal you"],
 	],
 }
 
@@ -826,9 +839,9 @@ const NOTABLE := {
 # placed at each arm's tip (chosen without repetition).
 const KEYSTONE := {
 	"Might": [
-		["Avatar of Fury", "Cannot be Stunned. +20% Melee Damage, but -30% Maximum Life."],
-		["Glass Cannon", "+40% Physical Damage, but -25% Armour."],
-		["Endless Onslaught", "+2% Melee Damage per nearby foe (no life on the wall)."],
+		["Avatar of Fury", "Cannot be Stunned. +20% Bonk Damage, but -30% Maximum Life."],
+		["Glass Cannon", "+40% Bonk Damage, but -25% Armour."],
+		["Endless Onslaught", "+2% Bonk Damage per nearby foe (no life on the wall)."],
 	],
 	"Precision": [
 		["Perfect Aim", "Critical strikes never miss and gain +50% Crit Multiplier."],
@@ -838,7 +851,7 @@ const KEYSTONE := {
 	"Arcana": [
 		["Eldritch Battery", "Spend Life as Mana when Mana is depleted."],
 		["Blood Magic", "Skills cost Life instead of Mana. +40 Maximum Life."],
-		["Archmage", "+1% Spell Damage per 10 unreserved Mana."],
+		["Archmage", "+1% Sparkle Damage per 10 unreserved Mana."],
 	],
 	"Endurance": [
 		["Unbreakable", "Armour also mitigates elemental damage."],
@@ -848,12 +861,12 @@ const KEYSTONE := {
 	"Fortune": [
 		["Hand of Fate", "Doubles rarity bonuses, halves item quantity."],
 		["Gambler's Ruin", "Crits deal +100%, but non-crits deal -30%."],
-		["Midas Touch", "+60% Gold Find, but you cannot pick up items."],
+		["Midas Touch", "+60% Coin Find, but you cannot pick up items."],
 	],
 	"Ruin": [
 		["Pyre Heart", "Killing a burning enemy spreads the flames."],
 		["Chaos Incarnate", "All your damage is converted to Fire."],
-		["Rite of Ruin", "+50% Fire Damage, but you also Burn each tick."],
+		["Rite of Ruin", "+50% Toasty Damage, but you also Burn each tick."],
 	],
 }
 
@@ -906,7 +919,7 @@ static func build_tree() -> Dictionary:
 		nodes.append({"id": nid, "x": x, "y": y, "type": type, "ai": ai, "label": label, "eff": eff})
 		return nid
 
-	var center: int = add.call(0.0, 0.0, "start", -1, "The Hollow Core", "The seat of your power. Allocate outward.")
+	var center: int = add.call(0.0, 0.0, "start", -1, "The Snug Heart", "The seat of your power. Allocate outward.")
 
 	# Per-arm shuffled pools so every NOTABLE / KEYSTONE in the tree is UNIQUE
 	# (PoE-style: no two nodes share a name). Pop as we place; if a pool runs
@@ -980,36 +993,36 @@ static func build_tree() -> Dictionary:
 ## screen's narrator panel (Path of Exile character-select tone).
 const CLASSES := [
 	{
-		"id": "warrior", "name": "Warrior", "title": "the Unbroken",
+		"id": "warrior", "name": "Warrior", "title": "the Big-Hearted",
 		"attrs": "STR · VIT", "sprite": "200×320\nwarrior",
 		"bonus": {"strength": 60, "vitality": 30},
-		"tagline": "An anvil that hits back.",
-		"desc": "Iron was his cradle and war his only tutor. Where others see a wall of howling dead, the Warrior sees a queue. He walks into the dark front-first, daring it to push back — and the dark, eventually, learns better.",
-		"stats": [["Role", "Melee · Bruiser"], ["Favors", "Strength, Vitality"], ["Weapon", "Mauls & Greatblades"]],
+		"tagline": "A hug that hits back.",
+		"desc": "Raised on porridge and pillow forts, the Warrior walks in front so nobody else has to. Baddies bounce off that big shield, then get a friendly BONK to think about. Steady, snuggly, and completely unbudgeable.",
+		"stats": [["Role", "Melee · Bruiser"], ["Favors", "Muscle, Snuggle"], ["Weapon", "Big Bonk Hammers"]],
 	},
 	{
-		"id": "mage", "name": "Mage", "title": "the Cinderborn",
+		"id": "mage", "name": "Mage", "title": "the Plucky",
 		"attrs": "INT", "sprite": "200×320\nmage",
 		"bonus": {"intelligence": 70, "maximum_mana": 800},
-		"tagline": "The flame remembers everything.",
-		"desc": "She traded her name to a dying star and came back speaking in embers. The Mage does not cast spells so much as remind the world how it ought to burn. Keep her fed with mana and stand well behind her.",
-		"stats": [["Role", "Ranged · Burst"], ["Favors", "Intelligence"], ["Weapon", "Staves & Grimoires"]],
+		"tagline": "Sparkles solve everything.",
+		"desc": "A certified Sparkmage with a wand full of fizzy starlight. Every bolt pops like a tiny firework and smells faintly of toasted marshmallow. Keep the mana lemonade coming and stand back — it gets glittery.",
+		"stats": [["Role", "Ranged · Burst"], ["Favors", "Sparkle"], ["Weapon", "Star Wands & Storybooks"]],
 	},
 	{
-		"id": "hunter", "name": "Hunter", "title": "the Far-Eyed",
+		"id": "hunter", "name": "Hunter", "title": "the Keen-Eyed",
 		"attrs": "DEX", "sprite": "200×320\nhunter",
 		"bonus": {"dexterity": 60, "attack_speed_flat": 0},
-		"tagline": "Every shadow has a throat.",
-		"desc": "Raised in the tree-line where the lanterns fail, the Hunter learned that patience kills more surely than rage. Her arrows arrive before the question is finished. Nothing in the Hollow outruns her aim — some things just die tired.",
-		"stats": [["Role", "Ranged · Sustained"], ["Favors", "Dexterity"], ["Weapon", "Bows & Spears"]],
+		"tagline": "Never misses snack time.",
+		"desc": "Grew up in the berry brambles playing hide-and-seek with the fireflies. Arrows tipped with acorns arrive right on schedule, every time. Nothing in the meadow outruns that aim — some things just nap mid-chase.",
+		"stats": [["Role", "Ranged · Sustained"], ["Favors", "Nimbleness"], ["Weapon", "Twig Bows & Acorn Arrows"]],
 	},
 	{
-		"id": "rogue", "name": "Rogue", "title": "the Twice-Hanged",
+		"id": "rogue", "name": "Rogue", "title": "the Sneaky",
 		"attrs": "LCK · DEX", "sprite": "200×320\nrogue",
 		"bonus": {"luck": 50, "dexterity": 30},
-		"tagline": "Fortune favors the felonious.",
-		"desc": "They hanged him twice and the rope apologized both times. The Rogue treats fate like a pocket to be picked — crits land oftener, loot gleams brighter, and doors forget to be locked. Trust him exactly as far as the gold goes.",
-		"stats": [["Role", "Melee · Crit & Greed"], ["Favors", "Luck, Dexterity"], ["Weapon", "Daggers & Knives"]],
+		"tagline": "Finders keepers, giggling.",
+		"desc": "Tiptoes everywhere, even at breakfast. The Rogue treats luck like a cookie jar with a loose lid — crits land oftener, loot gleams brighter, and locked doors mysteriously wander open. Shares the loot. Usually.",
+		"stats": [["Role", "Melee · Crit & Giggles"], ["Favors", "Luck, Nimbleness"], ["Weapon", "Butter Knives & Bonk Sticks"]],
 	},
 ]
 
@@ -1032,14 +1045,14 @@ const FACTIONS := [
 		"id": "EMB", "name": "Emberwatch",
 		"creed": "Keep the fire. The fire keeps you.",
 		"pros": ["+15% Maximum Life", "+12% Armour"],
-		"cons": ["-8% Attack Speed", "-10% Gold Find"],
+		"cons": ["-8% Attack Speed", "-10% Coin Find"],
 		"special": {"offline_cap_bonus_hours": 2},
 		"fit": "warrior", "rival": "HLW",
 	},
 	{
 		"id": "ASH", "name": "Waffle Squad",
 		"creed": "What burns, purifies.",
-		"pros": ["+14% Fire Damage", "+8% All Damage", "+6% Crit Chance"],
+		"pros": ["+14% Toasty Damage", "+8% All Damage", "+6% Crit Chance"],
 		"cons": ["-12% Armour"],
 		"special": {"forge_iron_cost_mult": 1.25},
 		"fit": "mage", "rival": "EMB",
@@ -1047,7 +1060,7 @@ const FACTIONS := [
 	{
 		"id": "HLW", "name": "The Hollowed",
 		"creed": "It only keeps what you still want.",
-		"pros": ["+18% Gold Find", "+12% Item Rarity"],
+		"pros": ["+18% Coin Find", "+12% Item Rarity"],
 		"cons": ["-10% Maximum Life"],
 		"special": {"chest_rarity_band_bonus": 1, "enemy_hp_mult": 1.06},
 		"fit": "rogue", "rival": "LNT",
@@ -1069,25 +1082,25 @@ const FACTIONS := [
 
 ## Fake delvers populating mock open parties (BackendClient mock mode).
 const MOCK_DELVERS := [
-	{"name": "Maraketh", "class_id": "hunter", "lv": 52},
-	{"name": "Oswin", "class_id": "warrior", "lv": 49},
-	{"name": "Seline", "class_id": "mage", "lv": 55},
-	{"name": "Corvus", "class_id": "rogue", "lv": 44},
-	{"name": "Brennor", "class_id": "warrior", "lv": 58},
-	{"name": "Ysolde", "class_id": "mage", "lv": 41},
-	{"name": "Fenwick", "class_id": "hunter", "lv": 47},
-	{"name": "Mirelle", "class_id": "rogue", "lv": 51},
-	{"name": "Galt", "class_id": "warrior", "lv": 38},
-	{"name": "Nerissa", "class_id": "mage", "lv": 60},
-	{"name": "Padraic", "class_id": "hunter", "lv": 45},
-	{"name": "Vesna", "class_id": "rogue", "lv": 53},
-	{"name": "Aldous", "class_id": "warrior", "lv": 50},
-	{"name": "Tamsin", "class_id": "hunter", "lv": 42},
+	{"name": "Poppy", "class_id": "hunter", "lv": 52},
+	{"name": "Basil", "class_id": "warrior", "lv": 49},
+	{"name": "Clover", "class_id": "mage", "lv": 55},
+	{"name": "Jinx", "class_id": "rogue", "lv": 44},
+	{"name": "Barley", "class_id": "warrior", "lv": 58},
+	{"name": "Tulip", "class_id": "mage", "lv": 41},
+	{"name": "Fennel", "class_id": "hunter", "lv": 47},
+	{"name": "Minty", "class_id": "rogue", "lv": 51},
+	{"name": "Gus", "class_id": "warrior", "lv": 38},
+	{"name": "Nutmeg", "class_id": "mage", "lv": 60},
+	{"name": "Pudding", "class_id": "hunter", "lv": 45},
+	{"name": "Velvet", "class_id": "rogue", "lv": 53},
+	{"name": "Alfie", "class_id": "warrior", "lv": 50},
+	{"name": "Taffy", "class_id": "hunter", "lv": 42},
 ]
 
 const MOCK_PARTY_NAMES := [
-	"Gravewalkers", "Ember Pact", "The Hollow Court", "Ashveil Company",
-	"Last Lantern", "Sons of the Sunken", "Marrowguard", "Pale Riders",
+	"Snack Attackers", "Star Hoppers", "The Cozy Crew", "Meadow Mates",
+	"Firefly Friends", "Sleepy Snails", "Bonk Brigade", "Waffle Wanderers",
 ]
 
 # =========================================================================
@@ -1237,7 +1250,7 @@ static func tip_stats(item: Dictionary, extra: Array = []) -> Array:
 	var out := (item.get("s", []) as Array).duplicate()
 	var bh := item_bullet_hell(item)
 	if not bh.is_empty():
-		out.append(["✦ Survival", ""])
+		out.append(["✦ Stampede", ""])
 		for pair in bh:
 			out.append([String(pair[0]), String(pair[1])])
 	for e in extra:
@@ -1261,13 +1274,13 @@ const _ITEM_BASES := {
 	"Ring": ["Band", "Loop", "Coil", "Knot"],
 	"Belt": ["Girdle", "Cord", "Chain", "Sash"],
 }
-const _ITEM_PREFIXES := ["Ashen", "Hollow", "Grave", "Ember", "Marrow", "Cinder", "Pale", "Sunken", "Wyrmhide", "Hexwoven", "Iron", "Gloom"]
-const _MYTHIC_NAMES := ["Worldsplitter", "Crown of the Last Ember", "Heart of the Hollow King", "The Unforgiven Edge", "Veil of Endless Night", "Sovereign's Burden"]
+const _ITEM_PREFIXES := ["Sunny", "Moonbeam", "Berry", "Honey", "Twinkle", "Cozy", "Sprout", "Puddle", "Marshmallow", "Clover", "Tin", "Snug"]
+const _MYTHIC_NAMES := ["Starsplitter", "Crown of the First Star", "Heart of the Meadow King", "The Legendary Spatula", "Blanket of Endless Naps", "Sovereign's Snuggie"]
 # Flat coefficients calibrated against the design gear anchors (epic ilvl
 # 72-75: Armour 248-612, Life 184, attrs 42; legendary 82: STR 72; rare 64:
 # Mana 48): value ≈ coef × ilvl × rarity_power × 0.8-1.2.
-const _FLAT_AFFIXES := [["Armour", 4.0], ["Maximum Life", 2.2], ["Strength", 0.6], ["Dexterity", 0.6], ["Intelligence", 0.6], ["Vitality", 0.6], ["Luck", 0.4], ["Maximum Mana", 0.8], ["Evasion", 3.0], ["Life Regen", 1.4]]
-const _PCT_AFFIXES := [["Attack Speed", 4.0, 14.0], ["Crit Chance", 3.0, 10.0], ["Crit Multi", 8.0, 35.0], ["Fire Damage", 6.0, 26.0], ["Spell Damage", 6.0, 24.0], ["Melee Damage", 6.0, 24.0], ["Gold Find", 6.0, 28.0], ["Item Rarity", 4.0, 18.0], ["Movement Speed", 4.0, 18.0], ["Fire Resist", 8.0, 38.0], ["Cold Resist", 8.0, 38.0], ["Lightning Resist", 8.0, 38.0]]
+const _FLAT_AFFIXES := [["Armour", 4.0], ["Maximum Life", 2.2], ["Muscle", 0.6], ["Nimbleness", 0.6], ["Sparkle", 0.6], ["Snuggle", 0.6], ["Luck", 0.4], ["Maximum Mana", 0.8], ["Evasion", 3.0], ["Life Regen", 1.4]]
+const _PCT_AFFIXES := [["Attack Speed", 4.0, 14.0], ["Crit Chance", 3.0, 10.0], ["Crit Multi", 8.0, 35.0], ["Toasty Damage", 6.0, 26.0], ["Sparkle Damage", 6.0, 24.0], ["Bonk Damage", 6.0, 24.0], ["Coin Find", 6.0, 28.0], ["Item Rarity", 4.0, 18.0], ["Movement Speed", 4.0, 18.0], ["Toasty Resist", 8.0, 38.0], ["Frosty Resist", 8.0, 38.0], ["Zappy Resist", 8.0, 38.0]]
 const _AFFIX_COUNT := {"common": 1, "uncommon": 2, "rare": 2, "epic": 3, "legendary": 4, "mythic": 5}
 const _RARITY_POWER := {"common": 0.7, "uncommon": 0.85, "rare": 1.0, "epic": 1.25, "legendary": 1.6, "mythic": 2.2}
 
@@ -1303,7 +1316,7 @@ static func generate_item(ilvl: int, rarity: String, rng: RandomNumberGenerator,
 	if slot == "Main Hand":
 		var lo := roundi((20.0 + float(ilvl) * 6.0) * power)
 		var hi := roundi(float(lo) * (1.35 + rng.randf() * 0.2))
-		stats.append(["Physical DMG", "%d–%d" % [lo, hi]])
+		stats.append(["Bonk DMG", "%d–%d" % [lo, hi]])
 
 	var used := {}
 	var want: int = int(_AFFIX_COUNT[rarity]) + (1 if slot == "Main Hand" else 0)

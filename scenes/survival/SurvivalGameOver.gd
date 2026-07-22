@@ -84,7 +84,7 @@ func _finalize() -> void:
 	var d: Dictionary = res.get("data", {})
 	var drops: Array = d.get("drops", [])
 	var gold := int(d.get("gold", 0))
-	_status_lbl.text = "Banked %d drop%s · +%s gold" % [drops.size(), ("" if drops.size() == 1 else "s"), Style.group_int(gold)]
+	_status_lbl.text = "Banked %d drop%s · +%s coins" % [drops.size(), ("" if drops.size() == 1 else "s"), Style.group_int(gold)]
 	for it in drops:
 		var item: Dictionary = it
 		var rar := String(item.get("r", "common"))

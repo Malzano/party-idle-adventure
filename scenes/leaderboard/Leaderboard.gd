@@ -360,7 +360,7 @@ func _build_table() -> Control:
 	thead.add_child(hrow)
 	hrow.add_child(_thead_cell("Rank", 64))
 	hrow.add_child(_thead_cell("", 44))
-	var delver := _thead_cell("Delver", 0)
+	var delver := _thead_cell("Adventurer", 0)
 	delver.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hrow.add_child(delver)
 	hrow.add_child(_thead_cell("Division", 190))
@@ -491,7 +491,7 @@ func _rebuild() -> void:
 		for m in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
 			pad.add_theme_constant_override(m, 30)
 		pad.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		var empty := Style.display_label("No delvers in this scope yet.", 13, Palette.TX_MUTE, true)
+		var empty := Style.display_label("No adventurers in this scope yet.", 13, Palette.TX_MUTE, true)
 		empty.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		empty.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		pad.add_child(empty)

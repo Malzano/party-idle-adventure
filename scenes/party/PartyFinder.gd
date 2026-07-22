@@ -274,7 +274,7 @@ func _rebuild_mine() -> void:
 ## Solo: name it and forge one.
 func _build_forge_form() -> void:
 	var blurb := Style.body_label(
-		"You delve alone. Forge a party and other delvers can rally to your banner — everyone's progress stays in step while the fight runs.",
+		"You adventure alone. Start a party and other adventurers can hop in — everyone's progress stays in step while the fight runs.",
 		13, Palette.TX_DIM)
 	blurb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_mine_body.add_child(blurb)
@@ -418,7 +418,7 @@ func _rebuild_list(open_parties: Array) -> void:
 
 	if open_parties.is_empty():
 		var empty := Style.body_label(
-			"The Hollow is quiet — no open parties right now. Forge your own and the banner goes up here.",
+			"The meadow is quiet — no open parties right now. Start your own and the banner goes up here.",
 			13, Palette.TX_MUTE)
 		empty.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		_list_body.add_child(empty)
@@ -552,7 +552,7 @@ func _rebuild_social(friends_res: Dictionary, guild_res: Dictionary) -> void:
 		var friends: Array = data.get("friends", [])
 		if friends.is_empty():
 			_social_body.add_child(Style.body_label(
-				"No friends yet — trade codes with other delvers.", 12, Palette.TX_MUTE))
+				"No friends yet — trade codes with other adventurers.", 12, Palette.TX_MUTE))
 		for f_v in friends:
 			_social_body.add_child(_friend_row(f_v))
 
@@ -603,7 +603,7 @@ func _rebuild_social(friends_res: Dictionary, guild_res: Dictionary) -> void:
 		gmeta.add_theme_constant_override("separation", 1)
 		gmeta.add_child(Style.display_label(String(g["name"]), 15, Palette.GOLD_BRIGHT))
 		gmeta.add_child(Style.body_label(
-			"%d delvers sworn" % (g["members"] as Array).size(), 11, Palette.TX_MUTE))
+			"%d pals aboard" % (g["members"] as Array).size(), 11, Palette.TX_MUTE))
 		grow.add_child(gmeta)
 		_social_body.add_child(grow)
 	else:

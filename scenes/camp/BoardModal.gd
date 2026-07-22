@@ -122,7 +122,7 @@ func _rebuild_mail() -> void:
 		return
 	var mail: Array = res["data"].get("mail", [])
 	if mail.is_empty():
-		_mail_list.add_child(Style.body_label("No letters. The Hollow keeps its silence.", 12, Palette.TX_MUTE))
+		_mail_list.add_child(Style.body_label("No letters yet. The mailbox is snoozing.", 12, Palette.TX_MUTE))
 		return
 	for m_v in mail:
 		_mail_list.add_child(_mail_row(m_v))
@@ -153,7 +153,7 @@ func _mail_row(m: Dictionary) -> Control:
 		bits.append(String(m["tier"]))
 	var rewards: Array[String] = []
 	if int(granted.get("gold", 0)) > 0:
-		rewards.append("%s gold" % Style.group_int(int(granted["gold"])))
+		rewards.append("%s coins" % Style.group_int(int(granted["gold"])))
 	for it in granted.get("items", []):
 		rewards.append(String(it))
 	if not rewards.is_empty():
@@ -411,12 +411,12 @@ func _build_dungeon() -> Control:
 	var head := VBoxContainer.new()
 	head.add_theme_constant_override("separation", 2)
 	head.add_child(Style.display_label("The Sunken Reliquary", 24, Palette.GOLD_BRIGHT, true))
-	head.add_child(Style.body_label("Today · Gold Rush — %d× gold drops" % mult, 12, Palette.EMBER))
+	head.add_child(Style.body_label("Today · Coin Rush — %d× coin drops" % mult, 12, Palette.EMBER_DEEP))
 	meta.add_child(head)
 
 	var mods := HBoxContainer.new()
 	mods.add_theme_constant_override("separation", 8)
-	mods.add_child(Style.make_role_tag("tank", "+%d%% Gold" % ((mult - 1) * 100)))
+	mods.add_child(Style.make_role_tag("tank", "+%d%% Coins" % ((mult - 1) * 100)))
 	mods.add_child(Style.make_role_tag("mage", "Frost-warded foes"))
 	var att_chip := Style.make_role_tag("dps", "%d attempts left" % GameState.dungeon_attempts)
 	_attempts_lbl = att_chip.get_child(0) as Label
@@ -450,7 +450,7 @@ func _build_dungeon() -> Control:
 	Tip.attach(_enter_btn, func() -> Dictionary:
 		return {
 			"name": "Daily Dungeon",
-			"type": "Gold Rush · %d× gold for %ds" % [mult, Balance.inum("energy.dungeon_buff_seconds", 60)],
+			"type": "Coin Rush · %d× coins for %ds" % [mult, Balance.inum("energy.dungeon_buff_seconds", 60)],
 			"rarity": "epic",
 			"stats": [
 				["Energy cost", str(Balance.inum("energy.dungeon_cost", 20))],
