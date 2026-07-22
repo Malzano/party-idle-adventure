@@ -1,14 +1,15 @@
 extends Control
 ## CAMP hub screen (camp.jsx CampScreen) — lives in its own OS window.
 ##
-## Torchlit Hollowreach Camp: night-sky radial, twinkling stars, horizon ruin
-## silhouettes, ground plane with column striping, central campfire with
-## trodden-path glows, drifting embers, four clickable buildings (hover lift +
-## ember glow, nameplates, hotkey chips), the Town Crier ribbon, and the four
-## building modals (Summoning Altar / Notice Board / Crafting House /
-## Hearthfire Kitchen). Q/E/R/F open buildings; Esc inside a modal closes the
-## modal (consumed), Esc with no modal falls through so the window shell
-## closes the Camp window.
+## Cozy BinkBonk Meadow at night: navy starry sky with a big soft moon,
+## twinkling stars, rounded horizon hills, a night-grass meadow, the Snug
+## Hearth campfire with trodden-path glows, drifting firefly sparkles, five
+## clickable buildings (hover lift + peach glow, nameplates, hotkey chips),
+## the Town Crier ribbon, and the building modals (Wishing Well / Bulletin
+## Board / Tinker Shop / Snack Shack) — plus the Stampede Gate, which opens
+## the Star Stampede survival window. Q/E/R/F/T act on buildings; Esc inside
+## a modal closes the modal (consumed), Esc with no modal falls through so
+## the window shell closes the Camp window.
 
 const _FX := preload("res://scenes/camp/CampFx.gd")
 const _GachaModalScript := preload("res://scenes/camp/GachaModal.gd")
@@ -55,6 +56,9 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		KEY_F:
 			_open("food")
 			get_viewport().set_input_as_handled()
+		KEY_T:
+			_open("arena")
+			get_viewport().set_input_as_handled()
 
 
 func _open(id: String) -> void:
@@ -70,6 +74,11 @@ func _open(id: String) -> void:
 			m = _ForgeModalScript.new()
 		"food":
 			m = _KitchenModalScript.new()
+		"arena":
+			# The Stampede Gate is a doorway, not a modal — it opens the Star
+			# Stampede window (loadout first; the run starts from there).
+			WindowManager.open(WindowManager.WIN_SURVIVAL)
+			return
 	if m == null:
 		return
 	add_child(m)
@@ -139,11 +148,11 @@ func _build_campfire() -> void:
 	fire.add_child(ps)
 	ps.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	Tip.attach(fire, {
-		"name": "Hollow Hearth",
+		"name": "Snug Hearth",
 		"type": "Camp centerpiece",
 		"rarity": "legendary",
 		"stats": [["Rested bonus", "+5% XP"]],
-		"flavor": "The fire that holds the dark at bay. Heroes gather here between delves.",
+		"flavor": "The comfiest spot in the meadow. The party toasts marshmallows here between adventures.",
 	})
 	add_child(fire)
 
@@ -162,13 +171,13 @@ func _build_title() -> void:
 	box.position = Vector2(28, 84)
 	box.add_theme_constant_override("separation", 2)
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var title := Style.display_label("Hollowreach Camp", 40, Palette.GOLD_BRIGHT, true)
-	title.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.85))
+	var title := Style.display_label("BinkBonk Meadow", 40, Palette.GOLD_BRIGHT, true)
+	title.add_theme_color_override("font_shadow_color", Color(0.1, 0.08, 0.2, 0.85))
 	title.add_theme_constant_override("shadow_offset_x", 0)
 	title.add_theme_constant_override("shadow_offset_y", 3)
 	title.add_theme_constant_override("shadow_outline_size", 8)
 	box.add_child(title)
-	box.add_child(Style.body_label("Camp Level 8 · 4 buildings · 2 expansions locked", 13, Palette.TX_MUTE))
+	box.add_child(Style.body_label("Camp Level 8 · 5 shops · 1 plot to unlock", 13, Palette.TX_FAINT))
 	add_child(box)
 
 
@@ -205,8 +214,11 @@ func _make_building(b: Dictionary) -> Control:
 		fglow.size = Vector2(w * 0.6, h * 0.5)
 		fglow.position = Vector2(w * 0.5 - fglow.size.x * 0.5, h * 0.58 - fglow.size.y * 0.5)
 		root.add_child(fglow)
-		# Tutorial finale (step 14) spotlights the featured Summoning Altar.
+		# Tutorial finale (step 15) spotlights the featured Wishing Well.
 		TutorialOverlay.register_anchor("camp.altar", root)
+	if id == "arena":
+		# Tutorial beat 14 spotlights the Stampede Gate.
+		TutorialOverlay.register_anchor("camp.gate", root)
 
 	# Sprite border (hover → ember glow).
 	var border := Panel.new()
@@ -223,9 +235,9 @@ func _make_building(b: Dictionary) -> Control:
 		var badge := PanelContainer.new()
 		var bsb := StyleBoxFlat.new()
 		bsb.bg_color = Palette.EMBER
-		bsb.set_border_width_all(1)
-		bsb.border_color = Color("3a1d08")
-		bsb.set_corner_radius_all(2)
+		bsb.set_border_width_all(2)
+		bsb.border_color = Palette.EMBER_DEEP
+		bsb.set_corner_radius_all(8)
 		bsb.content_margin_left = 6
 		bsb.content_margin_right = 6
 		bsb.content_margin_top = 4
@@ -234,23 +246,23 @@ func _make_building(b: Dictionary) -> Control:
 		bsb.shadow_size = int(12 * Palette.GLOW)
 		badge.add_theme_stylebox_override("panel", bsb)
 		badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		badge.add_child(Style.pixel_label(String(b["badge"]), 8, Color("1c0f04")))
+		badge.add_child(Style.pixel_label(String(b["badge"]), 8, Color.WHITE))
 		root.add_child(badge)
 		badge.resized.connect(func() -> void:
 			badge.position = Vector2(w - badge.size.x + 6.0, -8.0))
 
-	# Nameplate (overlaps the sprite by 16px).
+	# Nameplate (overlaps the sprite by 16px) — a warm cream card on the night.
 	var plate := PanelContainer.new()
 	var psb := StyleBoxFlat.new()
-	psb.bg_color = Color("191510")
-	psb.set_border_width_all(1)
+	psb.bg_color = Palette.BG_3
+	psb.set_border_width_all(2)
 	psb.border_color = Palette.IRON_EDGE
-	psb.set_corner_radius_all(4)
+	psb.set_corner_radius_all(12)
 	psb.content_margin_left = 16
 	psb.content_margin_right = 16
 	psb.content_margin_top = 9
 	psb.content_margin_bottom = 8
-	psb.shadow_color = Color(0, 0, 0, 0.6)
+	psb.shadow_color = Color(0.08, 0.08, 0.2, 0.5)
 	psb.shadow_size = 8
 	psb.shadow_offset = Vector2(0, 6)
 	plate.add_theme_stylebox_override("panel", psb)
@@ -261,7 +273,7 @@ func _make_building(b: Dictionary) -> Control:
 	pcol.add_theme_constant_override("separation", 2)
 	pcol.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	plate.add_child(pcol)
-	var nm := Style.display_label(String(b["name"]), 17, Palette.GOLD_BRIGHT, true)
+	var nm := Style.display_label(String(b["name"]), 17, Palette.GOLD_DIM, true)
 	nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	pcol.add_child(nm)
 	var sub := Style.body_label(String(b["sub"]), 10, Palette.TX_MUTE)
@@ -278,7 +290,7 @@ func _make_building(b: Dictionary) -> Control:
 	enter_pad.visible = false
 	enter_pad.add_child(enter_row)
 	enter_row.add_child(Style.make_keycap(hot))
-	var enter_lbl := Style.body_label("ENTER", 10, Palette.EMBER)
+	var enter_lbl := Style.body_label("ENTER", 10, Palette.EMBER_DEEP)
 	enter_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	enter_row.add_child(enter_lbl)
 	pcol.add_child(enter_pad)
@@ -404,7 +416,7 @@ func _crier_row(e: Dictionary) -> Control:
 # Backdrop layers (draw-driven, decorative — all MOUSE_FILTER_IGNORE)
 # =========================================================================
 
-## Night sky: radial from warm horizon-brown at top-center to near-black.
+## Cozy night sky: navy radial + a big soft moon (top-right) with a warm halo.
 class _Sky:
 	extends Control
 
@@ -415,9 +427,19 @@ class _Sky:
 		resized.connect(queue_redraw)
 
 	func _draw() -> void:
-		draw_rect(Rect2(Vector2.ZERO, size), Color("0a0807"))
+		draw_rect(Rect2(Vector2.ZERO, size), Color("1c2140"))
 		_CFX.radial(self, Vector2(size.x * 0.5, 0.0), Vector2(size.x * 0.8, size.y * 1.2),
-			[[0.0, Color("2a1d12")], [0.45, Color("140f0a")], [1.0, Color("0a0807")]])
+			[[0.0, Color("343c6e")], [0.45, Color("262c52")], [1.0, Color("1c2140")]])
+		# The moon: soft halo rings, a cream disc, and a few sleepy craters.
+		var mc := Vector2(size.x * 0.78, size.y * 0.34)
+		for i in 5:
+			draw_circle(mc, 96.0 - float(i) * 8.0, Color(1.0, 0.95, 0.82, 0.028))
+		draw_circle(mc, 56.0, Color("fff3da"))
+		draw_circle(mc, 56.0, Color(1.0, 0.98, 0.9, 0.35))  # gentle bloom
+		var crater := Color(0.87, 0.79, 0.63, 0.55)
+		draw_circle(mc + Vector2(-18.0, -10.0), 9.0, crater)
+		draw_circle(mc + Vector2(14.0, 16.0), 6.0, crater)
+		draw_circle(mc + Vector2(20.0, -20.0), 4.5, crater)
 
 
 ## 18 twinkling 2px stars in the top 40% band (y within its top 80%).
@@ -447,17 +469,20 @@ class _Stars:
 	func _draw() -> void:
 		for s: Dictionary in _stars:
 			var f := 0.5 - 0.5 * cos(TAU * (_t + float(s["phase"])) / float(s["dur"]))
-			var a := lerpf(0.18, 0.65, f)
-			draw_rect(
-				Rect2(float(s["x"]) * size.x, float(s["y"]) * size.y, 2.0, 2.0),
-				Color(207.0 / 255.0, 195.0 / 255.0, 164.0 / 255.0, a))
+			var a := lerpf(0.25, 0.95, f)
+			var p := Vector2(float(s["x"]) * size.x, float(s["y"]) * size.y)
+			draw_rect(Rect2(p, Vector2(2.0, 2.0)), Color(1.0, 0.96, 0.82, a))
+			# The brightest twinkles get a tiny 4-point sparkle.
+			if f > 0.8:
+				var sp := Color(1.0, 0.96, 0.82, (f - 0.8) * 3.0)
+				draw_rect(Rect2(p + Vector2(-3.0, 0.0), Vector2(8.0, 1.0)), sp)
+				draw_rect(Rect2(p + Vector2(0.0, -3.0), Vector2(1.0, 8.0)), sp)
 
 
-## Horizon ruin silhouettes, bottom-aligned to the 57.5% line.
+## Rounded horizon hills (the gothic ruins retired), bottom-aligned to the
+## 57.5% line — soft navy mounds with a faint moonlit rim.
 class _Ruins:
 	extends Control
-
-	const _CFX := preload("res://scenes/camp/CampFx.gd")
 
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -465,15 +490,15 @@ class _Ruins:
 
 	func _draw() -> void:
 		for r: Dictionary in GameContent.RUINS:
-			var w := float(r["w"])
-			var h := float(r["h"])
+			var w := float(r["w"]) * 2.2   # hills read wider than the old towers
+			var h := float(r["h"]) * 0.8   # and squatter
 			var x := float(r["l"]) / 100.0 * size.x
-			var rect := Rect2(x, size.y - h, w, h)
-			_CFX.vgrad(self, rect,
-				Color(14.0 / 255.0, 12.0 / 255.0, 9.0 / 255.0, 0.9),
-				Color(10.0 / 255.0, 8.0 / 255.0, 7.0 / 255.0, 0.9))
-			draw_rect(Rect2(rect.position, Vector2(w, 1.0)),
-				Color(120.0 / 255.0, 104.0 / 255.0, 72.0 / 255.0, 0.072))
+			var c := Vector2(x + w * 0.5, size.y)
+			# A soft mound: a squashed disc sunk to the horizon line.
+			draw_set_transform(c, 0.0, Vector2(1.0, h / (w * 0.5)))
+			draw_circle(Vector2.ZERO, w * 0.5, Color("232a52"))
+			draw_arc(Vector2.ZERO, w * 0.5 - 1.5, PI, TAU, 24, Color(1.0, 0.93, 0.74, 0.10), 3.0)
+			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 ## Ground plane: warm radial at top-center over a dark vertical gradient,
@@ -488,9 +513,10 @@ class _Ground:
 		resized.connect(queue_redraw)
 
 	func _draw() -> void:
-		_CFX.vgrad(self, Rect2(Vector2.ZERO, size), Color("1a1610"), Color("0c0a08"))
+		# Night-grass meadow: deep green fading to the navy dark.
+		_CFX.vgrad(self, Rect2(Vector2.ZERO, size), Color("24413a"), Color("14231e"))
 		_CFX.radial(self, Vector2(size.x * 0.5, 0.0), Vector2(size.x * 0.6, size.y * 0.8),
-			[[0.0, Palette.with_alpha(Palette.EMBER, 0.10)], [0.7, Palette.with_alpha(Palette.EMBER, 0.0)]])
+			[[0.0, Palette.with_alpha(Palette.EMBER, 0.12)], [0.7, Palette.with_alpha(Palette.EMBER, 0.0)]])
 		# Inset top shadow.
 		_CFX.vgrad(self, Rect2(0.0, 0.0, size.x, 70.0), Color(0, 0, 0, 0.5), Color(0, 0, 0, 0.0))
 		# 64px column striping, masked so it fades in over the first 40%.

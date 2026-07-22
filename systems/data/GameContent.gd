@@ -382,9 +382,11 @@ const RUINS := [
 ]
 
 ## Trodden-path glows radiating from the campfire: length px, rotation deg.
+## (5th path → the Stampede Gate.)
 const WALKS := [
 	{"len": 690.0, "rot": 180.0}, {"len": 380.0, "rot": -110.0},
 	{"len": 465.0, "rot": -19.0}, {"len": 445.0, "rot": 161.0},
+	{"len": 320.0, "rot": 48.0},
 ]
 
 ## Town crier ribbon entries: [lit, text_bbcode-ish parts kept simple].
