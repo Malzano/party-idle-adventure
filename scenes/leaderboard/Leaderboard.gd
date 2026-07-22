@@ -27,7 +27,7 @@ func _ready() -> void:
 	_rebuild()
 
 
-## Q/W/E/R hotkeys switch the ranking category (consumed so the window-level
+## Q/W/E/R/T hotkeys switch the ranking category (consumed so the window-level
 ## fallback never sees them). Esc is handled by WindowManager's popup keys.
 func _unhandled_key_input(event: InputEvent) -> void:
 	var k := event as InputEventKey
@@ -45,6 +45,9 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 		KEY_R:
 			_set_cat("weekly")
+			get_viewport().set_input_as_handled()
+		KEY_T:
+			_set_cat("stampede")
 			get_viewport().set_input_as_handled()
 
 
@@ -905,6 +908,7 @@ func _row_tip(p: Dictionary, rank: int) -> Dictionary:
 			["Deepest Stage", "%d-%02d" % [int(p["stage"][0]), int(p["stage"][1])]],
 			["Boss Damage", "%.1fM" % float(p["boss"])],
 			["Weekly Climb", "+%d" % int(p["weekly"])],
+			["Stampede Best", Style.group_int(int(p.get("stampede", 0))) if int(p.get("stampede", 0)) > 0 else "no runs yet"],
 		],
 		"flavor": gname + (" · Friend" if bool(p["friend"]) else ""),
 	}

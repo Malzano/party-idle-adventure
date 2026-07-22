@@ -338,6 +338,13 @@ func quest_claim(quest_id: int) -> Dictionary:
 func leaderboard(cat: String, scope: String) -> Dictionary:
 	if mock:
 		var pool: Array = GameContent.PLAYERS.duplicate()
+		# The YOU row carries the live Stampede best (persisted survival_best) so
+		# the new category reflects real runs; "—" renders for players with none.
+		for i in pool.size():
+			if bool((pool[i] as Dictionary).get("you", false)):
+				var me: Dictionary = (pool[i] as Dictionary).duplicate()
+				me["stampede"] = maxi(int(me.get("stampede", 0)), GameState.survival_best)
+				pool[i] = me
 		if scope == "friends":
 			pool = pool.filter(func(p: Dictionary) -> bool: return bool(p["friend"]) or bool(p["you"]))
 		elif scope == "guild":
@@ -394,6 +401,9 @@ func season() -> Dictionary:
 ## so the mode always pays out — drops grow the bag, which is NOT bounded by the
 ## summons anti-cheat (lib/caps.ts), so locally-added drops never trip a 422.
 func survival_complete(score: int, kills: int, stage: int, duration: float) -> Dictionary:
+	# The personal Stampede best persists in the save (feeds the leaderboard's
+	# YOU row) regardless of mock/live transport.
+	GameState.survival_best = maxi(GameState.survival_best, score)
 	if mock:
 		return _survival_local(score, kills, stage, duration)
 	var res: Dictionary = await _api("POST", "/v1/survival/complete-run", {

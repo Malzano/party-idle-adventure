@@ -87,6 +87,8 @@ var energy_max: int = 120
 var act: int = 1
 var stage: int = 1
 var max_stage: int = 101
+## Best Star Stampede (Survival) run score — feeds the Stampede leaderboard.
+var survival_best: int = 0
 
 # --- Gacha ----------------------------------------------------------------------
 var pity: int = 0
@@ -477,6 +479,7 @@ func reset_to_defaults() -> void:
 	act = 1
 	stage = 1
 	max_stage = 101
+	survival_best = 0
 	pity = 0
 	talents_allocated = []
 	active_pet = 0
@@ -844,6 +847,7 @@ func to_dict() -> Dictionary:
 		"act": act,
 		"stage": stage,
 		"max_stage": max_stage,
+		"survival_best": survival_best,
 		"pity": pity,
 		"talents_allocated": talents_allocated,
 		"active_pet": active_pet,
@@ -893,6 +897,7 @@ func from_dict(data: Dictionary) -> void:
 	act = int(data.get("act", act))
 	stage = int(data.get("stage", stage))
 	max_stage = int(data.get("max_stage", max_stage))
+	survival_best = int(data.get("survival_best", survival_best))
 	pity = int(data.get("pity", pity))
 	talents_allocated.clear()
 	for v in data.get("talents_allocated", []):
