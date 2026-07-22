@@ -1225,11 +1225,89 @@ static func item_footprint(item: Dictionary) -> Vector2i:
 	return Vector2i(w, h)
 
 
-## --- Bullet-hell (Survival) stat --------------------------------------------
+## --- Bullet-hell (Star Stampede) stat ---------------------------------------
 ## Every equipment also DEFINES one Survival-only stat. It is stored apart from
 ## the idle "s" stats (so it never leaks into idle power) and only feeds the
 ## bullet-hell side mode. Vampire-survivors-flavoured affixes.
-const _BH_AFFIXES := ["Surge Damage", "Blast Area", "Projectile Speed", "Pickup Radius", "Fire Rate", "Dash Charge"]
+## "Cozy Vitality" (+% max HP) is the BinkBonk-era addition.
+const _BH_AFFIXES := ["Surge Damage", "Blast Area", "Projectile Speed", "Pickup Radius", "Fire Rate", "Dash Charge", "Cozy Vitality"]
+
+## Backpack adjacency synergies (Star Stampede loadout): when two packed pieces
+## of these SLOT kinds sit orthogonally adjacent in the bag grid, the pair grants
+## a bonus affix. Mirrors the prototype's charm pairs, mapped onto gear slots.
+const BAG_SYNERGIES := [
+	{"a": "Main Hand", "b": "Boots", "desc": "Runny-bonk combo", "affix": ["Surge Damage", 8]},
+	{"a": "Amulet", "b": "Ring", "desc": "Sticky splash zone", "affix": ["Pickup Radius", 15]},
+	{"a": "Gloves", "b": "Belt", "desc": "Featherlight bolts", "affix": ["Fire Rate", 10]},
+	{"a": "Helm", "b": "Off Hand", "desc": "Cozy and lucky", "affix": ["Cozy Vitality", 10]},
+]
+
+
+## The bag pieces currently PACKED into the backpack grid (they carry a "bp"
+## [x, y] cell stamped by the Bag tab; layout persists in the save).
+static func survival_packed_items() -> Array:
+	var out: Array = []
+	for it_v in GameState.bag_equipment:
+		var it: Dictionary = it_v
+		if it.has("bp") and it["bp"] is Array and (it["bp"] as Array).size() == 2:
+			out.append(it)
+	return out
+
+
+## The occupied grid cells of a packed item (from its "bp" anchor + shape).
+static func _packed_cells(it: Dictionary) -> Array:
+	var bp: Array = it["bp"]
+	var out: Array = []
+	for c in item_shape_cells(it):
+		out.append(Vector2i(int(bp[0]) + int(c.x), int(bp[1]) + int(c.y)))
+	return out
+
+
+## Normalize a slot for synergy matching ("Ring I/II" → "Ring").
+static func _syn_slot(it: Dictionary) -> String:
+	var s := String(it.get("slot", ""))
+	if s.begins_with("Ring"):
+		return "Ring"
+	return s
+
+
+## Live adjacency synergies among the packed pieces:
+## [{a_item, b_item, desc, affix:[name, percent]}]. Each pair rule fires at most
+## once (the first adjacent pair found), mirroring the prototype.
+static func survival_synergies(packed: Array = []) -> Array:
+	var items := packed if not packed.is_empty() else survival_packed_items()
+	var out: Array = []
+	for rule_v in BAG_SYNERGIES:
+		var rule: Dictionary = rule_v
+		var found := false
+		for i in items.size():
+			if found:
+				break
+			var a: Dictionary = items[i]
+			if _syn_slot(a) != String(rule["a"]):
+				continue
+			var a_cells := _packed_cells(a)
+			for j in items.size():
+				if j == i:
+					continue
+				var b: Dictionary = items[j]
+				if _syn_slot(b) != String(rule["b"]):
+					continue
+				if _cells_adjacent(a_cells, _packed_cells(b)):
+					out.append({"a_item": a, "b_item": b, "desc": String(rule["desc"]),
+						"affix": (rule["affix"] as Array).duplicate()})
+					found = true
+					break
+	return out
+
+
+static func _cells_adjacent(a_cells: Array, b_cells: Array) -> bool:
+	for a in a_cells:
+		for b in b_cells:
+			var d: Vector2i = (a as Vector2i) - (b as Vector2i)
+			if absi(d.x) + absi(d.y) == 1:
+				return true
+	return false
 
 
 static func _bh_value(ilvl: int, power: float, seed_i: int) -> int:

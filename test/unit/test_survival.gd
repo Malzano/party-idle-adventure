@@ -191,6 +191,64 @@ func test_scene_builds_and_ticks() -> void:
 	assert_true(s._sim.alive, "delver survives the brief smoke window")
 
 
+func test_gems_grant_real_xp_levels() -> void:
+	# Star Stampede levelling: gems feed real XP (8 + level·4 per level); each
+	# level gives +4% damage, a heal, and a level_flash for the HUD.
+	var sim := SurvivalSim.new(PlayerStats.compute(), "hunter", 21)
+	assert_eq(sim.level, 1)
+	var before := sim.base_hit
+	sim.gain_xp(SurvivalSim.xp_need(1))
+	assert_eq(sim.level, 2, "enough XP climbs a level")
+	assert_gt(sim.base_hit, before, "a level-up grants +4% damage")
+	assert_gt(sim.level_flash, 0.0, "the HUD gets a gold flash to render")
+
+
+func test_hits_shake_the_screen_then_decay() -> void:
+	var sim := SurvivalSim.new(PlayerStats.compute(), "hunter", 22)
+	sim.max_hp = 1.0e9
+	sim.hp = sim.max_hp
+	sim.enemies.append({"pos": sim.player, "hp": 9999.0, "max": 9999.0, "spd": 0.0, "r": 22.0, "dmg": 20.0})
+	sim.tick(0.05, Vector2.ZERO)
+	assert_gt(sim.shake, 0.0, "a contact hit thumps the screen")
+	var peak := sim.shake
+	sim.enemies.clear()
+	for _i in 10:
+		sim.tick(0.05, Vector2.ZERO)
+	assert_lt(sim.shake, peak, "the shake decays over time")
+
+
+func test_packed_backpack_powers_the_run_with_synergies() -> void:
+	# Only PACKED pieces (carrying a "bp" cell) count once anything is packed —
+	# plus adjacency synergies. The unpacked +100% ring must NOT contribute.
+	GameState.bag_equipment = [
+		{"n": "Bonk Hammer", "r": "epic", "slot": "Main Hand", "ilvl": 10, "s": [],
+			"shape": "wpn1h", "bh": [["Surge Damage", "+10%"]], "bp": [0, 0]},
+		{"n": "Sprint Socks", "r": "rare", "slot": "Boots", "ilvl": 10, "s": [],
+			"bh": [["Dash Charge", "+20%"]], "bp": [1, 0]},
+		{"n": "Mega Ring", "r": "epic", "slot": "Ring", "ilvl": 10, "s": [],
+			"bh": [["Surge Damage", "+100%"]]},
+	]
+	var packed := GameContent.survival_packed_items()
+	assert_eq(packed.size(), 2, "two pieces carry a bp stamp")
+	var syns := GameContent.survival_synergies(packed)
+	assert_eq(syns.size(), 1, "adjacent hammer+boots fire the Runny-bonk combo")
+	assert_eq(String((syns[0]["affix"] as Array)[0]), "Surge Damage")
+	var sim := SurvivalSim.new(PlayerStats.compute(), "hunter", 23)
+	# Surge total = 10% (hammer) + 8% (synergy); the unpacked +100% is ignored.
+	var expect := 12.0 * (1.0 + 0.05 * float(GameState.player_level - 1) + 0.18)
+	assert_almost_eq(sim.base_hit, expect, 0.01, "packed-only affixes + the synergy power the run")
+
+
+func test_cozy_vitality_scales_max_hp() -> void:
+	GameState.bag_equipment = [
+		{"n": "Marshmallow Shield", "r": "epic", "slot": "Off Hand", "ilvl": 10, "s": [],
+			"bh": [["Cozy Vitality", "+20%"]], "bp": [0, 0]},
+	]
+	var sim := SurvivalSim.new(PlayerStats.compute(), "hunter", 24)
+	var base := 100.0 + 12.0 * float(GameState.player_level - 1)
+	assert_almost_eq(sim.max_hp, base * 1.2, 0.01, "Cozy Vitality maps onto max HP")
+
+
 func test_combat3dview_swaps_placeholder_for_registered_model() -> void:
 	# Proves the model pipeline end-to-end in Godot: a registered PackedScene
 	# replaces the tinted placeholder primitive under the pooled ground-anchor —

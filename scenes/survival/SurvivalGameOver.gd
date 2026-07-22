@@ -1,9 +1,11 @@
 extends "res://scenes/camp/ModalShell.gd"
-## Run-over summary: final score/kills/stage/time, then finalize with the backend
-## (records the score + collects drops into the bag) and shows the Survival board.
-## RETRY restarts the run; RETURN closes the Survival window.
+## Run-over summary ("All Tuckered Out!"): final score/bonks/stage/time, then
+## finalize with the backend (records the score + collects the Goodie Bag into
+## the bag) and shows the Stampede Rankings. TRY AGAIN restarts the run;
+## BACK TO LOADOUT returns to the backpack screen.
 
 signal retry_requested
+signal loadout_requested
 
 var run_score: int = 0
 var run_kills: int = 0
@@ -16,15 +18,19 @@ var _board_box: VBoxContainer
 
 
 func _build_body(body: VBoxContainer) -> void:
+	var sub := Style.body_label("You fought bravely — time for a nap and a snack.", 13, Palette.TX_MUTE)
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	body.add_child(sub)
+
 	# Headline stats.
 	var grid := GridContainer.new()
 	grid.columns = 4
 	grid.add_theme_constant_override("h_separation", 28)
 	grid.add_theme_constant_override("v_separation", 2)
 	body.add_child(grid)
-	_stat(grid, "SCORE", Style.group_int(run_score), Palette.EMBER_BRIGHT)
-	_stat(grid, "KILLS", str(run_kills), Palette.GOLD_BRIGHT)
-	_stat(grid, "STAGE", str(run_stage), Palette.CYAN_BRIGHT)
+	_stat(grid, "SCORE", Style.group_int(run_score), Palette.EMBER_DEEP)
+	_stat(grid, "BONKS", str(run_kills), Palette.GOLD_DIM)
+	_stat(grid, "STAGE", str(run_stage), Palette.CYAN_DEEP)
 	_stat(grid, "TIME", "%d:%02d" % [int(run_time) / 60, int(run_time) % 60], Palette.TX)
 
 	body.add_child(_hr())
@@ -39,7 +45,7 @@ func _build_body(body: VBoxContainer) -> void:
 	left.custom_minimum_size = Vector2(320, 0)
 	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	cols.add_child(left)
-	left.add_child(Style.display_label("SPOILS", 14, Palette.GOLD))
+	left.add_child(Style.display_label("GOODIE BAG", 14, Palette.GOLD_DIM))
 	_status_lbl = Style.body_label("Collecting rewards…", 13, Palette.TX_MUTE)
 	left.add_child(_status_lbl)
 	_drops_box = VBoxContainer.new()
@@ -52,7 +58,7 @@ func _build_body(body: VBoxContainer) -> void:
 	right.custom_minimum_size = Vector2(320, 0)
 	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	cols.add_child(right)
-	right.add_child(Style.display_label("SURVIVAL RANKINGS", 14, Palette.GOLD))
+	right.add_child(Style.display_label("STAMPEDE RANKINGS", 14, Palette.GOLD_DIM))
 	_board_box = VBoxContainer.new()
 	_board_box.add_theme_constant_override("separation", 3)
 	right.add_child(_board_box)
@@ -64,16 +70,19 @@ func _build_body(body: VBoxContainer) -> void:
 	actions.add_theme_constant_override("separation", 12)
 	actions.alignment = BoxContainer.ALIGNMENT_CENTER
 	body.add_child(actions)
-	var retry := Style.make_button("RETRY RUN", "ember", 13)
+	var retry := Style.make_button("TRY AGAIN", "ember", 13)
 	retry.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	retry.pressed.connect(func() -> void:
 		retry_requested.emit()
 		closed.emit()
 		queue_free())
 	actions.add_child(retry)
-	var ret := Style.make_button("RETURN TO DELVE", "ghost", 13)
+	var ret := Style.make_button("BACK TO LOADOUT", "ghost", 13)
 	ret.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	ret.pressed.connect(func() -> void: WindowManager.close(WindowManager.WIN_SURVIVAL))
+	ret.pressed.connect(func() -> void:
+		loadout_requested.emit()
+		closed.emit()
+		queue_free())
 	actions.add_child(ret)
 
 	call_deferred("_finalize")
@@ -108,7 +117,7 @@ func _finalize() -> void:
 		nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(nm)
 		var sc := int(e.get("score", e.get("survival", 0)))  # mock uses "score", server board "survival"
-		row.add_child(Style.pixel_label(Style.group_int(sc), 11, Palette.CYAN_BRIGHT))
+		row.add_child(Style.pixel_label(Style.group_int(sc), 11, Palette.CYAN_DEEP))
 		_board_box.add_child(row)
 	if your_rank > 0:
 		_board_box.add_child(Style.body_label("You: rank #%d" % your_rank, 12, Palette.EMBER_BRIGHT))

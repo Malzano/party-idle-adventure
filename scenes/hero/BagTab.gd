@@ -9,9 +9,10 @@ extends Control
 ##
 ## Pieces own a defined SHAPE (GameContent.item_shape_cells) — some are
 ## non-rectangular, so they interlock. A top-right preview shows the drag shape
-## of whatever piece is hovered. Grid layout is session-local; unequipping
-## (worn → grid) is a real, persisted change. This bag is what feeds the
-## bullet-hell Survival side mode.
+## of whatever piece is hovered. The grid layout PERSISTS: each placed piece is
+## stamped with a "bp" [x, y] cell on its item dict (saved with the bag), so the
+## packing survives sessions and feeds Star Stampede — only PACKED pieces (plus
+## their adjacency synergies) power a run once anything is packed.
 
 const GRID_W := 7
 const GRID_H := 6
@@ -239,21 +240,49 @@ func _on_equipment_changed() -> void:
 		_reload()
 
 
-## Fresh load: the grid is empty; the right list holds every owned piece —
-## bag pieces plus the ones worn on the paperdoll (flagged equipped).
+## Load: restore the persisted packing (items stamped with a "bp" cell go back
+## onto the grid); everything else lands in the right list — bag pieces plus the
+## ones worn on the paperdoll (flagged equipped).
 func _reload() -> void:
 	_clear_occ()
 	_placements.clear()
 	_loose.clear()
-	for it in GameState.bag_equipment:
-		_loose.append({"item": it, "equipped": false, "slot": -1})
+	for it_v in GameState.bag_equipment:
+		var it: Dictionary = it_v
+		var placed := false
+		if it.has("bp") and it["bp"] is Array and (it["bp"] as Array).size() == 2:
+			var pos := Vector2i(int(it["bp"][0]), int(it["bp"][1]))
+			var cells := GameContent.item_shape_cells(it)
+			if _fits(pos, cells):
+				_mark(pos, cells, true)
+				_placements.append({"item": it, "pos": pos, "size": GameContent.item_footprint(it), "cells": cells})
+				placed = true
+			else:
+				it.erase("bp")  # stale stamp (shape/grid drift) — drop it
+		if not placed:
+			_loose.append({"item": it, "equipped": false, "slot": -1})
 	for slot in GameState.equipped.size():
-		var it_v: Variant = GameState.equipped[slot]
-		if it_v != null:
-			_loose.append({"item": it_v, "equipped": true, "slot": slot})
+		var it_v2: Variant = GameState.equipped[slot]
+		if it_v2 != null:
+			_loose.append({"item": it_v2, "equipped": true, "slot": slot})
 	_rebuild_tiles()
 	_rebuild_loose()
 	_update_cap()
+
+
+## Persist the packing: stamp every placed piece's cell onto its item dict
+## ("bp" rides inside the saved bag), clear the stamp on loose pieces, save.
+## This is what makes the backpack a real pre-run loadout for Star Stampede.
+func _persist_packing() -> void:
+	for p in _placements:
+		var it: Dictionary = p["item"]
+		var pos: Vector2i = p["pos"]
+		it["bp"] = [pos.x, pos.y]
+	for e in _loose:
+		if not bool(e["equipped"]):
+			(e["item"] as Dictionary).erase("bp")
+	SaveManager.save_game()
+	EventBus.loadout_changed.emit()
 
 
 ## Auto-sort: pack the BAG pieces (placed + loose, never the worn ones) into the
@@ -284,6 +313,7 @@ func _auto_sort() -> void:
 	_rebuild_tiles()
 	_rebuild_loose()
 	_update_cap()
+	_persist_packing()
 
 
 func _update_cap() -> void:
@@ -317,6 +347,7 @@ func _try_move(pidx: int, target: Vector2i) -> bool:
 	p["pos"] = target
 	_mark(target, cells, true)
 	_rebuild_tiles()
+	_persist_packing()
 	return true
 
 
@@ -345,6 +376,7 @@ func _try_place_loose(lidx: int, target: Vector2i) -> bool:
 	_rebuild_tiles()
 	_rebuild_loose()
 	_update_cap()
+	_persist_packing()
 	return true
 
 
@@ -369,6 +401,7 @@ func _unplace(pidx: int) -> void:
 	_rebuild_tiles()
 	_rebuild_loose()
 	_update_cap()
+	_persist_packing()
 
 
 # --- rendering --------------------------------------------------------------

@@ -28,16 +28,20 @@ const MAX_ENEMIES := 130
 ## Crownfall-style: a marked mini-boss roams the map and rewards an upgrade.
 const BOSS_DELAY := 45.0
 
-## Enemy archetypes. Stat multipliers over the stage-scaled base; the spawn
-## director (below) weights them by elapsed stage so the swarm gains variety and
-## threat. Adapted from the MIT references — DarkRewar/SurvivorsStarterKit's
-## EnemyManager difficulty progression + rcanpahali/pathfinder's timed spawn
-## waves (both MIT). `tint` is a hex colour the renderer reads.
+## Enemy archetypes (BinkBonk squishies). Stat multipliers over the stage-scaled
+## base; the spawn director (below) weights them by elapsed stage so the swarm
+## gains variety and threat. Adapted from the MIT references — DarkRewar/
+## SurvivorsStarterKit's EnemyManager difficulty progression + rcanpahali/
+## pathfinder's timed spawn waves (both MIT). `tint` is a hex colour and `name`
+## a display label the renderer reads.
 const ENEMY_KINDS := {
-	"swarmer": {"hp": 0.5, "spd": 1.55, "r": 15.0, "dmg": 0.7, "tint": "c75c4e"},
-	"grunt": {"hp": 1.0, "spd": 1.0, "r": 22.0, "dmg": 1.0, "tint": "a83a33"},
-	"brute": {"hp": 2.7, "spd": 0.58, "r": 31.0, "dmg": 1.9, "tint": "7e2a66"},
+	"swarmer": {"hp": 0.5, "spd": 1.55, "r": 15.0, "dmg": 0.7, "tint": "ff9aa8", "name": "Puffling"},
+	"grunt": {"hp": 1.0, "spd": 1.0, "r": 22.0, "dmg": 1.0, "tint": "e06868", "name": "Gloop"},
+	"brute": {"hp": 2.7, "spd": 0.58, "r": 31.0, "dmg": 1.9, "tint": "b46ef5", "name": "Chonk"},
 }
+
+## The world boss's display name (banner + minimap tooltips).
+const BOSS_NAME := "Grumble King"
 
 # --- run config (derived from the hero's gear in _init) ---------------------
 var rng := RandomNumberGenerator.new()
@@ -84,12 +88,21 @@ var stage := 1
 var stage_time := 0.0
 var score := 0
 var kills := 0
-var level := 1
 var alive := true
 var awaiting_upgrade := false
 var aim := 0.0          # current aim angle (render draws the aura toward it)
 var aura_flash := 0.0   # >0 briefly after a melee swing (render hint)
 var upgrades_taken: Array[String] = []
+
+# Real XP levelling (VS-style): gems grant XP; each level needs 8 + level·4.
+# A level-up gives +4% damage, heals 10%, and flashes the XP bar + a gold ring.
+var level := 1
+var xp := 0
+var level_flash := 0.0   # >0 just after a level-up (render: bar flash + ring)
+
+# Screen shake magnitude 0..~1.4 (render applies offset shake²·11 px, world-only).
+# Set on player hits (scaled by damage), boss kills (0.8), and death (1.4).
+var shake := 0.0
 
 # World boss (Crownfall-style): one roams the map at a time, marked on the
 # minimap. Killing it opens a bonus upgrade draft. The boss lives in `enemies`
@@ -126,7 +139,7 @@ func _init(profile: Dictionary = {}, p_class := "", seed_val: int = 0) -> void:
 	# bullet-hell stays tunable/fun rather than inheriting the huge idle numbers.
 	var dmg_mult := 1.0 + 0.05 * float(lvl - 1) + _pct(mods, "Surge Damage")
 	base_hit = 12.0 * dmg_mult
-	max_hp = 100.0 + 12.0 * float(lvl - 1)
+	max_hp = (100.0 + 12.0 * float(lvl - 1)) * (1.0 + _pct(mods, "Cozy Vitality"))
 	hp = max_hp
 	move_speed = 340.0 * (1.0 + float(derived.get("movement_speed", 0.0)) + _pct(mods, "Dash Charge") * 0.5)
 	fire_interval = 0.85 / (1.0 + float(derived.get("attack_speed", 0.0)) + _pct(mods, "Fire Rate"))
@@ -147,14 +160,23 @@ func _init(profile: Dictionary = {}, p_class := "", seed_val: int = 0) -> void:
 	fire_interval = clampf(fire_interval, 0.12, 1.2)
 
 
-## Sum the Survival-only "bh" affixes across the bag + equipped loadout into a
-## {affix_name: total_percent_as_fraction} dict (e.g. {"Surge Damage": 0.42}).
+## Sum the Survival-only "bh" affixes into {affix_name: fraction}
+## (e.g. {"Surge Damage": 0.42}).
+##
+## Star Stampede packing rule: when the player has PACKED pieces into the
+## backpack grid (BagTab stamps a "bp" cell on each; the layout persists in the
+## save), ONLY those pieces contribute — plus their adjacency SYNERGIES
+## (GameContent.BAG_SYNERGIES). With nothing packed, every bag + equipped piece
+## counts (the out-of-the-box behavior; packing is the optimization minigame).
 func _gear_survival_mods() -> Dictionary:
 	var out: Dictionary = {}
-	var sources: Array = GameState.bag_equipment.duplicate()
-	for it in GameState.equipped:
-		if it != null:
-			sources.append(it)
+	var packed := GameContent.survival_packed_items()
+	var sources: Array = packed
+	if packed.is_empty():
+		sources = GameState.bag_equipment.duplicate()
+		for it in GameState.equipped:
+			if it != null:
+				sources.append(it)
 	for it_v in sources:
 		if it_v == null:
 			continue
@@ -162,6 +184,11 @@ func _gear_survival_mods() -> Dictionary:
 			var nm := String(pair[0])
 			var num := float(String(pair[1]).replace("+", "").replace("%", ""))
 			out[nm] = float(out.get(nm, 0.0)) + num / 100.0
+	if not packed.is_empty():
+		for syn_v in GameContent.survival_synergies(packed):
+			var syn: Dictionary = syn_v
+			var af: Array = syn["affix"]
+			out[String(af[0])] = float(out.get(String(af[0]), 0.0)) + float(af[1]) / 100.0
 	return out
 
 
@@ -182,6 +209,8 @@ func tick(delta: float, input: Vector2) -> void:
 	stage_time += delta
 	_iframe = maxf(0.0, _iframe - delta)
 	aura_flash = maxf(0.0, aura_flash - delta)
+	level_flash = maxf(0.0, level_flash - delta)
+	shake = maxf(0.0, shake - delta * 3.2)
 
 	if input.length() > 0.01:
 		# Vampire-survivors movement: the delver roams freely and the camera
@@ -252,7 +281,7 @@ func _spawn_boss() -> void:
 		"pos": pos, "hp": bhp, "max": bhp,
 		"spd": 52.0 + float(stage) * 2.0,
 		"r": 54.0, "dmg": 22.0 + float(stage) * 2.0,
-		"kind": "boss", "tint": "e0455e",
+		"kind": "boss", "tint": "e0455e", "wob": 0.0,
 	})
 	boss_alive = true
 	boss_spawns += 1
@@ -284,7 +313,7 @@ func _spawn_enemy(kind := "grunt", ang := -1.0) -> void:
 		"pos": pos, "hp": ehp, "max": ehp,
 		"spd": (66.0 + float(stage) * 4.0 + rng.randf() * 18.0) * float(k["spd"]),
 		"r": float(k["r"]), "dmg": (7.0 + float(stage) * 1.2) * float(k["dmg"]),
-		"kind": kind, "tint": String(k["tint"]),
+		"kind": kind, "tint": String(k["tint"]), "wob": rng.randf() * TAU,
 	})
 
 
@@ -294,12 +323,15 @@ func _advance_enemies(delta: float) -> void:
 		var d := to.length()
 		if d > 0.5:
 			e["pos"] = (e["pos"] as Vector2) + to / d * float(e["spd"]) * delta
+		e["wob"] = float(e.get("wob", 0.0)) + delta * 6.0  # squishy breathing phase
 		if d <= PLAYER_R + float(e["r"]) and _iframe <= 0.0:
 			hp -= float(e["dmg"])
 			_iframe = 0.55
+			shake = minf(1.0, 0.5 + float(e["dmg"]) / 40.0)  # thump scaled by the hit
 			if hp <= 0.0:
 				hp = 0.0
 				alive = false
+				shake = 1.4  # the big KO thump
 				return
 
 
@@ -425,6 +457,7 @@ func _kill_enemy(e: Dictionary) -> void:
 		bosses_slain += 1
 		score += 1500
 		hp = minf(max_hp, hp + max_hp * 0.4)
+		shake = maxf(shake, 0.8)  # boss-kill thump
 		_boss_acc = 0.0
 		for i in 6:  # a gem burst + a bonus upgrade draft — the boss reward
 			gems.append({"pos": (e["pos"] as Vector2) + Vector2.RIGHT.rotated(TAU * float(i) / 6.0) * 42.0, "xp": 3})
@@ -473,11 +506,28 @@ func _advance_gems(delta: float) -> void:
 			g["pos"] = (g["pos"] as Vector2) + to.normalized() * 520.0 * delta  # magnet pull
 		if d <= PLAYER_R + 8.0:
 			score += 10
-			level = 1 + kills / 12
 			hp = minf(max_hp, hp + 0.6)
+			gain_xp(int(g.get("xp", 1)))
 			continue
 		live.append(g)
 	gems = live
+
+
+## XP needed to climb out of [param lv] (VS-style ramp).
+static func xp_need(lv: int) -> int:
+	return 8 + lv * 4
+
+
+## Real XP levelling: gems feed this; each level gives +4% damage, a 10% heal,
+## and a level_flash the HUD renders as a gold bar-flash + expanding ring.
+func gain_xp(n: int) -> void:
+	xp += n
+	while xp >= xp_need(level):
+		xp -= xp_need(level)
+		level += 1
+		base_hit *= 1.04
+		hp = minf(max_hp, hp + max_hp * 0.1)
+		level_flash = 1.1
 
 
 func _nearest_enemy() -> Variant:
@@ -498,20 +548,20 @@ func _nearest_enemy() -> Variant:
 ## The full enhancement pool. `once` upgrades leave the pool after being taken;
 ## the rest stack. `kind` lets render tint the cards.
 const UPGRADES: Array[Dictionary] = [
-	{"id": "double", "name": "Double Strike", "desc": "+1 projectile / wider swing", "kind": "shape"},
-	{"id": "diagonal", "name": "Diagonal Volley", "desc": "Adds diagonal attacks", "kind": "shape", "once": true},
-	{"id": "backside", "name": "Rearguard", "desc": "Also attacks behind you", "kind": "shape", "once": true},
-	{"id": "pierce", "name": "Piercing", "desc": "Attacks pass through +1 foe", "kind": "shape"},
-	{"id": "dmg", "name": "Honed Edge", "desc": "+25% damage", "kind": "power"},
-	{"id": "atk_speed", "name": "Frenzy", "desc": "+18% attack speed", "kind": "power"},
-	{"id": "area", "name": "Wide Arc", "desc": "+25% area / projectile size", "kind": "power"},
-	{"id": "proj_speed", "name": "Velocity", "desc": "+25% projectile speed", "kind": "power"},
-	{"id": "crit", "name": "Deadeye", "desc": "+8% crit chance", "kind": "power"},
-	{"id": "move", "name": "Fleetfoot", "desc": "+15% move speed", "kind": "util"},
-	{"id": "max_hp", "name": "Vitality", "desc": "+20% max HP & heal", "kind": "util"},
-	{"id": "pickup", "name": "Lodestone", "desc": "+40% pickup radius", "kind": "util"},
-	{"id": "orbs", "name": "Warding Orbs", "desc": "Orbiting orbs strike nearby foes", "kind": "weapon"},
-	{"id": "nova", "name": "Pyre Nova", "desc": "A blast erupts around you periodically", "kind": "weapon"},
+	{"id": "double", "name": "Twin Bonk", "desc": "+1 sparkle bolt / wider swing", "kind": "shape"},
+	{"id": "diagonal", "name": "Sideways Sprinkle", "desc": "Adds diagonal bolts", "kind": "shape", "once": true},
+	{"id": "backside", "name": "Bonk Behind", "desc": "Also fires behind you", "kind": "shape", "once": true},
+	{"id": "pierce", "name": "Punch-Through", "desc": "Bolts pass through +1 foe", "kind": "shape"},
+	{"id": "dmg", "name": "Extra Oomph", "desc": "+25% damage", "kind": "power"},
+	{"id": "atk_speed", "name": "Zoomies", "desc": "+18% attack speed", "kind": "power"},
+	{"id": "area", "name": "Big Splash", "desc": "+25% bolt size / swing area", "kind": "power"},
+	{"id": "proj_speed", "name": "Whoosh!", "desc": "+25% bolt speed", "kind": "power"},
+	{"id": "crit", "name": "Lucky Hit", "desc": "+8% crit chance", "kind": "power"},
+	{"id": "move", "name": "Skippy Feet", "desc": "+15% move speed", "kind": "util"},
+	{"id": "max_hp", "name": "Snack Break", "desc": "+20% max HP & a heal", "kind": "util"},
+	{"id": "pickup", "name": "Sticky Fingers", "desc": "+40% pickup radius", "kind": "util"},
+	{"id": "orbs", "name": "Twinkle Buddies", "desc": "Orbiting stars bonk nearby foes", "kind": "weapon"},
+	{"id": "nova", "name": "Star Burst", "desc": "A burst erupts around you", "kind": "weapon"},
 ]
 
 

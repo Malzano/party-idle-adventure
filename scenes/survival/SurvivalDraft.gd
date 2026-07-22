@@ -12,7 +12,7 @@ var _picked := false
 
 
 func _build_body(body: VBoxContainer) -> void:
-	var sub_text := "A world boss falls — claim a reward enhancement" if boss_reward else "Stage %d cleared — choose an enhancement" % stage_cleared
+	var sub_text := "The big grump is down — pick a bonus treat!" if boss_reward else "Stage %d cleared — pick an upgrade!" % stage_cleared
 	var sub := Style.body_label(sub_text, 14, Palette.TX_MUTE)
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	body.add_child(sub)
@@ -25,21 +25,31 @@ func _build_body(body: VBoxContainer) -> void:
 		row.add_child(_make_card(c as Dictionary))
 
 
+## Card tints by upgrade kind (design DRAFT_TINT — deep inks on cream).
+const _KIND_TINT := {
+	"shape": Color("2a7fd6"), "power": Color("e06428"),
+	"util": Color("c98212"), "weapon": Color("9c4de0"),
+}
+
+
 func _make_card(c: Dictionary) -> Control:
 	var kind := String(c.get("kind", "power"))
-	var tint := {"shape": Palette.CYAN_BRIGHT, "power": Palette.EMBER_BRIGHT, "util": Palette.GOLD_BRIGHT}.get(kind, Palette.EMBER_BRIGHT) as Color
+	var tint: Color = _KIND_TINT.get(kind, Color("e06428"))
 
 	var card := PanelContainer.new()
 	card.custom_minimum_size = Vector2(264, 250)
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color("17120c")
-	sb.set_border_width_all(1)
+	sb.bg_color = Palette.BG_3
+	sb.set_border_width_all(3)
 	sb.border_color = tint
-	sb.set_corner_radius_all(6)
+	sb.set_corner_radius_all(14)
 	sb.content_margin_left = 16
 	sb.content_margin_right = 16
 	sb.content_margin_top = 18
 	sb.content_margin_bottom = 16
+	sb.shadow_color = Palette.with_alpha(tint, 0.3 * Palette.GLOW)
+	sb.shadow_size = int(10 * Palette.GLOW)
+	sb.shadow_offset = Vector2(0, 3)
 	card.add_theme_stylebox_override("panel", sb)
 
 	var col := VBoxContainer.new()
@@ -48,15 +58,15 @@ func _make_card(c: Dictionary) -> Control:
 
 	var chip := Style.pixel_label(kind.to_upper(), 8, tint)
 	col.add_child(chip)
-	var nm := Style.display_label(String(c["name"]), 21, Palette.GOLD_BRIGHT, true)
+	var nm := Style.display_label(String(c["name"]), 21, Palette.TX, true)
 	nm.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	col.add_child(nm)
-	var desc := Style.body_label(String(c["desc"]), 13, Palette.TX_MUTE)
+	var desc := Style.body_label(String(c["desc"]), 13, Palette.TX_DIM)
 	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	desc.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	col.add_child(desc)
 
-	var take := Style.make_button("CHOOSE", "ember", 12)
+	var take := Style.make_button("PICK ME!", "ember", 12)
 	take.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	take.pressed.connect(func() -> void: _pick(String(c["id"])))
 	col.add_child(take)
