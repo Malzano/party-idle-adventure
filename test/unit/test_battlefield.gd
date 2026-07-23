@@ -374,7 +374,7 @@ func test_wave_monster_count_authored_default_and_boss() -> void:
 		"an un-authored stage auto-generates the default monster count")
 	var wps := Balance.inum("enemy.waves_per_stage", 5)
 	assert_eq(Balance.wave_monster_count(1, 10, wps), 1, "a floor-boss wave is a single token")
-	assert_eq(Balance.stage_theme(1, 1), "Reliquary Steps", "authored theme is read from stages.json")
+	assert_eq(Balance.stage_theme(1, 1), "Buttercup Steps", "authored theme is read from stages.json")
 
 
 func test_wave_plan_assembles_named_monsters_with_times() -> void:

@@ -414,15 +414,15 @@ func _build_party_finder() -> void:
 	})
 	actions.add_child(finder)
 
-	var survival := Style.make_button("⚔ SURVIVAL", "ember", 10)
+	var survival := Style.make_button("★ STAR STAMPEDE", "ember", 10)
 	survival.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	survival.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	survival.pressed.connect(func() -> void: WindowManager.open(WindowManager.WIN_SURVIVAL))
 	Tip.attach(survival, {
-		"name": "Survival Mode",
-		"type": "Bullet-hell · V",
+		"name": "Star Stampede",
+		"type": "Bullet-heaven · Rumble (4)",
 		"rarity": "legendary",
-		"flavor": "Take your equipped gear into a vampire-survivors gauntlet. (Mock for now.)",
+		"flavor": "Pack your charm backpack, then steer your hero through a starlit meadow stampede!",
 	})
 	actions.add_child(survival)
 
