@@ -1,26 +1,10 @@
 {
 	"anims": {
-		"idle": {
-			"dirs": [
-				"se"
-			],
-			"fps": 3,
-			"frames": 2,
-			"loop": true,
-			"sheet": "idle.png"
-		},
-		"walk": {
-			"dirs": [
-				"se"
-			],
-			"fps": 7,
-			"frames": 4,
-			"loop": true,
-			"sheet": "walk.png"
-		}
+		"idle": { "dirs": ["se"], "fps": 3, "frames": 1, "loop": true, "sheet": "idle.png" },
+		"walk": { "dirs": ["se"], "fps": 7, "frames": 1, "loop": true, "sheet": "walk.png" }
 	},
-	"frame_h": 56,
-	"frame_w": 44,
+	"frame_h": 1254,
+	"frame_w": 1254,
 	"id": "enemy.elite",
 	"kind": "enemy"
 }
