@@ -23,7 +23,7 @@ const _MAX_FLOATERS := 18
 
 # --- 2D layout (fractions of the rect) ---
 const GROUND_Y := 0.66                  # feet line for the center lane
-const FLOOR_SURF := 0.73                # bg.reliquary floor.png: walking-surface fraction (maps to GROUND_Y)
+const FLOOR_SURF := 0.35                # bg.reliquary floor.png: the dirt path (walking surface) sits ~1/3 down the new meadow art, not 0.73 — pin it to GROUND_Y
 const HERO_X := 0.20                    # the delver holds here
 const CLASH_X := 0.28                   # enemies stop here to fight (right up against the hero at HERO_X)
 const SPAWN_X := 1.10                   # enter from off the right edge

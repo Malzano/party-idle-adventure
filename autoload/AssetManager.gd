@@ -286,8 +286,6 @@ func _build_sprite_frames(bundle_id: String, b: Dictionary) -> SpriteFrames:
 	var anims: Dictionary = meta.get("anims", {})
 	if anims.is_empty():
 		return null
-	var fw := int(meta.get("frame_w", 64))
-	var fh := int(meta.get("frame_h", 64))
 	var sf := SpriteFrames.new()
 	if sf.has_animation("default"):
 		sf.remove_animation("default")
@@ -298,6 +296,12 @@ func _build_sprite_frames(bundle_id: String, b: Dictionary) -> SpriteFrames:
 			continue
 		var dirs: Array = a.get("dirs", ["se"])
 		var frames := int(a.get("frames", 1))
+		# Derive the frame box from the ACTUAL texture + declared grid, so a
+		# re-rendered sheet (new PNG size) is never cropped to a stale
+		# meta frame_w/frame_h. For an N×M contiguous strip this equals the
+		# authored frame size; for a single figure it's the whole image.
+		var fw := maxi(1, tex.get_width() / maxi(1, frames))
+		var fh := maxi(1, tex.get_height() / maxi(1, dirs.size()))
 		for row in dirs.size():
 			var anim_name := String(action) if dirs.size() == 1 else "%s_%s" % [action, dirs[row]]
 			sf.add_animation(anim_name)
